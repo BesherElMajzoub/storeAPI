@@ -1,0 +1,234 @@
+{
+  "info": {
+    "name": "Store API v1",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000" },
+    { "key": "token", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test User\",\n  \"email\": \"test@test.com\",\n  \"password\": \"password\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/auth/register"
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@test.com\",\n  \"password\": \"password\"\n}"
+            },
+            "url": "{{base_url}}/api/v1/auth/login"
+          }
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{base_url}}/api/v1/auth/me"
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{base_url}}/api/v1/auth/logout"
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Public Store",
+      "item": [
+        {
+          "name": "Categories",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/categories"
+          }
+        },
+        {
+          "name": "Category by Slug",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/categories/{slug}"
+          }
+        },
+        {
+          "name": "Products",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/products"
+          }
+        },
+        {
+          "name": "Product by Slug",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/products/{slug}"
+          }
+        },
+        {
+          "name": "Product Reviews",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/products/{id}/reviews"
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "User Orders",
+      "item": [
+        {
+          "name": "Create Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shipping_address\": \"Damascus\",\n  \"items\": [\n    { \"product_id\": 1, \"quantity\": 2 }\n  ]\n}"
+            },
+            "url": "{{base_url}}/api/v1/orders"
+          }
+        },
+        {
+          "name": "My Orders",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{base_url}}/api/v1/orders"
+          }
+        },
+        {
+          "name": "Order Details",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{base_url}}/api/v1/orders/{id}"
+          }
+        },
+        {
+          "name": "Cancel Order",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{base_url}}/api/v1/orders/{id}/cancel"
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{base_url}}/api/v1/admin/dashboard"
+          }
+        },
+        {
+          "name": "Admin Products",
+          "item": [
+            {
+              "name": "List",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": "{{base_url}}/api/v1/admin/products"
+              }
+            },
+            {
+              "name": "Create",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"New Product\",\n  \"price\": 100,\n  \"category_id\": 1\n}"
+                },
+                "url": "{{base_url}}/api/v1/admin/products"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin Categories",
+          "item": [
+            {
+              "name": "List",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": "{{base_url}}/api/v1/admin/categories"
+              }
+            },
+            {
+              "name": "Reorder",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": "{{base_url}}/api/v1/admin/categories/reorder"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin Orders",
+          "item": [
+            {
+              "name": "List",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+                "url": "{{base_url}}/api/v1/admin/orders"
+              }
+            },
+            {
+              "name": "Update Status",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{ \"status\": \"shipped\" }"
+                },
+                "url": "{{base_url}}/api/v1/admin/orders/{id}/status"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
