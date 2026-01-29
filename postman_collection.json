@@ -4,8 +4,103 @@
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "base_url", "value": "http://localhost:8000" },
-    { "key": "token", "value": "" }
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "admin_token",
+      "value": ""
+    },
+    {
+      "key": "refresh_token",
+      "value": ""
+    },
+    {
+      "key": "category_id",
+      "value": ""
+    },
+    {
+      "key": "category_slug",
+      "value": ""
+    },
+    {
+      "key": "product_id",
+      "value": ""
+    },
+    {
+      "key": "product_slug",
+      "value": ""
+    },
+    {
+      "key": "variant_id",
+      "value": ""
+    },
+    {
+      "key": "order_id",
+      "value": ""
+    },
+    {
+      "key": "created_email",
+      "value": ""
+    },
+    {
+      "key": "created_password",
+      "value": "Password123!"
+    },
+    {
+      "key": "new_password",
+      "value": "Password123!New"
+    },
+    {
+      "key": "admin_email",
+      "value": "admin@example.com"
+    },
+    {
+      "key": "admin_password",
+      "value": "Password123!"
+    },
+    {
+      "key": "otp_code",
+      "value": ""
+    },
+    {
+      "key": "reset_token",
+      "value": ""
+    },
+    {
+      "key": "product_sku",
+      "value": ""
+    },
+    {
+      "key": "variant_sku",
+      "value": ""
+    },
+    {
+      "key": "timestamp",
+      "value": ""
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.collectionVariables.set('timestamp', Date.now());",
+          "if (!pm.collectionVariables.get('created_password')) {",
+          "  pm.collectionVariables.set('created_password', 'Password123!');",
+          "}",
+          "if (!pm.collectionVariables.get('new_password')) {",
+          "  pm.collectionVariables.set('new_password', 'Password123!New');",
+          "}"
+        ]
+      }
+    }
   ],
   "item": [
     {
@@ -15,86 +110,783 @@
           "name": "Register",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/auth/register",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Test User\",\n  \"email\": \"test@test.com\",\n  \"password\": \"password\"\n}"
+              "raw": "{\n  \"name\": \"QA User\",\n  \"email\": \"{{created_email}}\",\n  \"password\": \"{{created_password}}\",\n  \"password_confirmation\": \"{{created_password}}\",\n  \"device_name\": \"postman\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ts = Date.now();",
+                  "pm.collectionVariables.set('timestamp', ts);",
+                  "pm.collectionVariables.set('created_email', `test+${ts}@example.com`);",
+                  "if (!pm.collectionVariables.get('created_password')) {",
+                  "  pm.collectionVariables.set('created_password', 'Password123!');",
+                  "}"
+                ]
+              }
             },
-            "url": "{{base_url}}/api/v1/auth/register"
-          }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has success wrapper', () => pm.expect(json).to.have.property('success'));",
+                  "const token = json.data && json.data.access_token ? json.data.access_token : null;",
+                  "if (token) { pm.collectionVariables.set('token', token); }",
+                  "if (json.data && json.data.user && json.data.user.id) { pm.collectionVariables.set('user_id', json.data.user.id); }"
+                ]
+              }
+            }
+          ]
         },
         {
-          "name": "Login",
+          "name": "Login (User)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/auth/login",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"test@test.com\",\n  \"password\": \"password\"\n}"
-            },
-            "url": "{{base_url}}/api/v1/auth/login"
-          }
+              "raw": "{\n  \"email\": \"{{created_email}}\",\n  \"password\": \"{{created_password}}\",\n  \"device_name\": \"postman\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "const token = (json.data && json.data.access_token) || json.access_token;",
+                  "pm.test('Token present', () => pm.expect(token).to.be.ok);",
+                  "if (token) { pm.collectionVariables.set('token', token); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\",\n  \"device_name\": \"postman-admin\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "const token = (json.data && json.data.access_token) || json.access_token;",
+                  "pm.test('Admin token present', () => pm.expect(token).to.be.ok);",
+                  "if (token) { pm.collectionVariables.set('admin_token', token); }"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Me",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": "{{base_url}}/api/v1/auth/me"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has success wrapper', () => pm.expect(json).to.have.property('success'));",
+                  "pm.test('Has user', () => pm.expect(json.data).to.have.property('id'))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/auth/refresh",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_name\": \"postman\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "const token = json.data && json.data.access_token ? json.data.access_token : null;",
+                  "pm.test('New token present', () => pm.expect(token).to.be.ok);",
+                  "if (token) { pm.collectionVariables.set('token', token); }"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Logout",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": "{{base_url}}/api/v1/auth/logout"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has success wrapper', () => pm.expect(json).to.have.property('success'))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/auth/forgot-password",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{created_email}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has success wrapper', () => pm.expect(json).to.have.property('success'))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "OTP Send",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/auth/otp/send",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{created_email}}\",\n  \"purpose\": \"password_reset\",\n  \"channel\": \"email\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 or 429', () => pm.expect([200,429]).to.include(pm.response.code));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has success wrapper', () => pm.expect(json).to.have.property('success'))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "OTP Verify",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/auth/otp/verify",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{created_email}}\",\n  \"otp\": \"{{otp_code}}\",\n  \"purpose\": \"password_reset\",\n  \"channel\": \"email\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 or 422', () => pm.expect([200,422]).to.include(pm.response.code));",
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.reset_token) { pm.collectionVariables.set('reset_token', json.data.reset_token); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/auth/reset-password",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{created_email}}\",\n  \"token\": \"{{reset_token}}\",\n  \"password\": \"{{new_password}}\",\n  \"password_confirmation\": \"{{new_password}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 or 422', () => pm.expect([200,422]).to.include(pm.response.code));",
+                  "const json = pm.response.json();",
+                  "if (pm.response.code === 200) { pm.test('Has success wrapper', () => pm.expect(json).to.have.property('success')); }"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
-
     {
-      "name": "Public Store",
+      "name": "Admin (General)",
+      "item": [
+        {
+          "name": "Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/admin/dashboard"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has success wrapper', () => pm.expect(json).to.have.property('success'))"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Categories (Admin)",
+      "item": [
+        {
+          "name": "Create",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/admin/categories",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Category {{timestamp}}\",\n  \"slug\": \"{{category_slug}}\",\n  \"is_active\": true,\n  \"sort_order\": 0\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ts = pm.collectionVariables.get('timestamp');",
+                  "pm.collectionVariables.set('category_slug', `category-${ts}`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has success wrapper', () => pm.expect(json).to.have.property('success'));",
+                  "const data = json.data || {};",
+                  "if (data.id) { pm.collectionVariables.set('category_id', data.id); }",
+                  "if (data.slug) { pm.collectionVariables.set('category_slug', data.slug); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/admin/categories"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has success wrapper', () => pm.expect(json).to.have.property('success'))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/admin/categories/{{category_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Category Updated {{timestamp}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has success wrapper', () => pm.expect(json).to.have.property('success'))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reorder",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/admin/categories/reorder",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categories\": [\n    {\n      \"id\": {{category_id}},\n      \"parent_id\": null,\n      \"sort_order\": 0\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has success wrapper', () => pm.expect(json).to.have.property('success'))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/admin/categories/{{category_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has success wrapper', () => pm.expect(json).to.have.property('success'))"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Products (Admin)",
+      "item": [
+        {
+          "name": "Create",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/admin/products",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Product {{timestamp}}\",\n  \"slug\": \"{{product_slug}}\",\n  \"price\": 100,\n  \"discount_price\": 80,\n  \"sku\": \"{{product_sku}}\",\n  \"stock_qty\": 10,\n  \"status\": \"published\",\n  \"category_id\": {{category_id}},\n  \"options\": [\"Color\", \"Size\"],\n  \"is_featured\": false,\n  \"in_stock\": true,\n  \"images\": [\"https://example.com/img1.jpg\"],\n  \"variants\": [\n    {\n      \"name\": \"Red / M\",\n      \"sku\": \"{{variant_sku}}\",\n      \"price\": 90,\n      \"stock_qty\": 5,\n      \"attributes\": {\"Color\": \"Red\", \"Size\": \"M\"}\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ts = pm.collectionVariables.get('timestamp');",
+                  "pm.collectionVariables.set('product_slug', `product-${ts}`);",
+                  "pm.collectionVariables.set('product_sku', `SKU-${ts}`);",
+                  "pm.collectionVariables.set('variant_sku', `VSKU-${ts}`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has success wrapper', () => pm.expect(json).to.have.property('success'));",
+                  "const data = json.data || {};",
+                  "if (data.id) { pm.collectionVariables.set('product_id', data.id); }",
+                  "if (data.slug) { pm.collectionVariables.set('product_slug', data.slug); }",
+                  "if (data.variants && data.variants.length) { pm.collectionVariables.set('variant_id', data.variants[0].id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/admin/products"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has success wrapper', () => pm.expect(json).to.have.property('success'))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/admin/products/{{product_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Product Updated {{timestamp}}\",\n  \"price\": 120\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has success wrapper', () => pm.expect(json).to.have.property('success'))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/admin/products/{{product_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has success wrapper', () => pm.expect(json).to.have.property('success'))"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Categories (Public)",
       "item": [
         {
           "name": "Categories",
           "request": {
             "method": "GET",
+            "header": [],
             "url": "{{base_url}}/api/v1/categories"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has data array', () => pm.expect(json).to.have.property('data'))"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Category by Slug",
           "request": {
             "method": "GET",
-            "url": "{{base_url}}/api/v1/categories/{slug}"
-          }
-        },
+            "header": [],
+            "url": "{{base_url}}/api/v1/categories/{{category_slug}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has id', () => pm.expect(json).to.have.property('id'))"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Products (Public)",
+      "item": [
         {
           "name": "Products",
           "request": {
             "method": "GET",
-            "url": "{{base_url}}/api/v1/products"
-          }
+            "header": [],
+            "url": "{{base_url}}/api/v1/products?sort=price_asc&price_min=50&price_max=200"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has data array', () => pm.expect(json).to.have.property('data'))"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Product by Slug",
           "request": {
             "method": "GET",
-            "url": "{{base_url}}/api/v1/products/{slug}"
-          }
+            "header": [],
+            "url": "{{base_url}}/api/v1/products/{{product_slug}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has id', () => pm.expect(json).to.have.property('id'))"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Product Reviews",
           "request": {
             "method": "GET",
-            "url": "{{base_url}}/api/v1/products/{id}/reviews"
-          }
+            "header": [],
+            "url": "{{base_url}}/api/v1/products/{{product_id}}/reviews"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has data array', () => pm.expect(json).to.have.property('data'))"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
-
     {
       "name": "User Orders",
       "item": [
@@ -103,127 +895,391 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
+            "url": "{{base_url}}/api/v1/orders",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"shipping_address\": \"Damascus\",\n  \"items\": [\n    { \"product_id\": 1, \"quantity\": 2 }\n  ]\n}"
-            },
-            "url": "{{base_url}}/api/v1/orders"
-          }
+              "raw": "{\n  \"shipping_address\": {\n    \"name\": \"QA User\",\n    \"phone\": \"+10000000000\",\n    \"line1\": \"123 Main St\",\n    \"city\": \"Testville\",\n    \"country\": \"US\"\n  },\n  \"items\": [\n    { \"product_id\": {{product_id}}, \"quantity\": 1 }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 or 201', () => pm.expect([200,201]).to.include(pm.response.code));",
+                  "const json = pm.response.json();",
+                  "const data = json.data || json;",
+                  "if (data.id) { pm.collectionVariables.set('order_id', data.id); }"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "My Orders",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": "{{base_url}}/api/v1/orders"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Order Details",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": "{{base_url}}/api/v1/orders/{id}"
-          }
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/orders/{{order_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Cancel Order",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": "{{base_url}}/api/v1/orders/{id}/cancel"
-          }
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/orders/{{order_id}}/cancel"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
-
     {
-      "name": "Admin",
+      "name": "Admin Orders",
       "item": [
         {
-          "name": "Dashboard",
+          "name": "List",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": "{{base_url}}/api/v1/admin/dashboard"
-          }
-        },
-        {
-          "name": "Admin Products",
-          "item": [
-            {
-              "name": "List",
-              "request": {
-                "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": "{{base_url}}/api/v1/admin/products"
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
               }
-            },
+            ],
+            "url": "{{base_url}}/api/v1/admin/orders"
+          },
+          "event": [
             {
-              "name": "Create",
-              "request": {
-                "method": "POST",
-                "header": [
-                  { "key": "Authorization", "value": "Bearer {{token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"name\": \"New Product\",\n  \"price\": 100,\n  \"category_id\": 1\n}"
-                },
-                "url": "{{base_url}}/api/v1/admin/products"
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has success wrapper', () => pm.expect(json).to.have.property('success'))"
+                ]
               }
             }
           ]
         },
         {
-          "name": "Admin Categories",
-          "item": [
-            {
-              "name": "List",
-              "request": {
-                "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": "{{base_url}}/api/v1/admin/categories"
+          "name": "Show",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
               }
-            },
+            ],
+            "url": "{{base_url}}/api/v1/admin/orders/{{order_id}}"
+          },
+          "event": [
             {
-              "name": "Reorder",
-              "request": {
-                "method": "POST",
-                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": "{{base_url}}/api/v1/admin/categories/reorder"
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has success wrapper', () => pm.expect(json).to.have.property('success'))"
+                ]
               }
             }
           ]
         },
         {
-          "name": "Admin Orders",
-          "item": [
-            {
-              "name": "List",
-              "request": {
-                "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-                "url": "{{base_url}}/api/v1/admin/orders"
+          "name": "Update Status",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
               }
-            },
+            ],
+            "url": "{{base_url}}/api/v1/admin/orders/{{order_id}}/status",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"processing\"\n}"
+            }
+          },
+          "event": [
             {
-              "name": "Update Status",
-              "request": {
-                "method": "POST",
-                "header": [
-                  { "key": "Authorization", "value": "Bearer {{token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{ \"status\": \"shipped\" }"
-                },
-                "url": "{{base_url}}/api/v1/admin/orders/{id}/status"
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200 or 409', () => pm.expect([200,409]).to.include(pm.response.code));",
+                  "const json = pm.response.json();",
+                  "pm.test('Has success wrapper', () => pm.expect(json).to.have.property('success'))"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Negative Tests",
+      "item": [
+        {
+          "name": "Admin Categories Without Token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/admin/categories"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin Categories Wrong Role",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/admin/categories"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Category Validation Error",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/admin/categories",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slug\": \"bad-{{timestamp}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 422', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register Duplicate Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA User\",\n  \"email\": \"{{created_email}}\",\n  \"password\": \"{{created_password}}\",\n  \"password_confirmation\": \"{{created_password}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 422', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login Wrong Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{created_email}}\",\n  \"password\": \"wrong-password\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Product Duplicate SKU",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/admin/products",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Duplicate SKU\",\n  \"price\": 50,\n  \"sku\": \"{{product_sku}}\",\n  \"category_id\": {{category_id}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 422 or 409', () => pm.expect([422,409]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "OTP Verify Invalid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/auth/otp/verify",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{created_email}}\",\n  \"otp\": \"000000\",\n  \"purpose\": \"password_reset\",\n  \"channel\": \"email\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 422', () => pm.response.to.have.status(422));"
+                ]
               }
             }
           ]

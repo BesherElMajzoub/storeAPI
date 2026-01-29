@@ -17,14 +17,17 @@ Route::prefix('v1')->group(function () {
     // --- AUTH ---
     Route::prefix('auth')->group(function () {
         Route::post('register', [AuthController::class, 'register']);
-        Route::post('login', [AuthController::class, 'login']);
+        Route::post('login', [AuthController::class, 'login'])->middleware('throttle:login');
+        Route::post('forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:forgot-password');
+        Route::post('reset-password', [AuthController::class, 'resetPassword']);
+        Route::post('otp/send', [AuthController::class, 'sendOtp'])->middleware('throttle:otp');
+        Route::post('otp/verify', [AuthController::class, 'verifyOtp'])->middleware('throttle:otp');
         Route::post('google', [AuthController::class, 'googleLogin']);
-        Route::post('phone/send-otp', [AuthController::class, 'sendOtp']);
-        Route::post('phone/verify-otp', [AuthController::class, 'verifyOtp']);
         
         Route::middleware('auth:sanctum')->group(function () {
             Route::get('me', [AuthController::class, 'me']);
             Route::post('logout', [AuthController::class, 'logout']);
+            Route::post('refresh', [AuthController::class, 'refresh']);
         });
     });
 

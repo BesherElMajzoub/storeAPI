@@ -62,6 +62,8 @@ class Product extends Model
 
     public function scopeFilter(Builder $query, array $filters)
     {
+        $finalPriceExpr = self::finalPriceExpression();
+
         $query->when($filters['search'] ?? null, function ($q, $search) {
             $q->where(function($sub) use ($search) {
                 $sub->where('name', 'like', "%{$search}%")
@@ -70,28 +72,43 @@ class Product extends Model
         });
 
         $query->when($filters['category'] ?? null, function ($q, $slug) {
+            if (is_numeric($slug)) {
+                $q->where('category_id', (int) $slug);
+                return;
+            }
             $q->whereHas('category', fn($c) => $c->where('slug', $slug));
         });
 
-        $query->when($filters['price_min'] ?? null, fn($q, $v) => $q->where('discount_price', '>=', $v)->orWhere(function($sq) use($v){
-            $sq->whereNull('discount_price')->where('price', '>=', $v);
-        })); // Simplified logic, ideally check final_price
+        $query->when($filters['price_min'] ?? null, function ($q, $v) use ($finalPriceExpr) {
+            $q->whereRaw("{$finalPriceExpr} >= ?", [(float) $v]);
+        });
 
-        $query->when($filters['price_max'] ?? null, fn($q, $v) => $q->where('price', '<=', $v));
+        $query->when($filters['price_max'] ?? null, function ($q, $v) use ($finalPriceExpr) {
+            $q->whereRaw("{$finalPriceExpr} <= ?", [(float) $v]);
+        });
 
         $query->when($filters['rating'] ?? null, fn($q, $v) => $q->where('rating', '>=', $v));
 
-        $query->when(isset($filters['in_stock']) && $filters['in_stock'] == '1', fn($q) => $q->where('in_stock', true));
+        $query->when(isset($filters['in_stock']), function ($q) use ($filters) {
+            $flag = filter_var($filters['in_stock'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($flag === true) {
+                $q->where('stock_qty', '>', 0);
+            } elseif ($flag === false) {
+                $q->where('stock_qty', '<=', 0);
+            }
+        });
     }
     
     public function scopeSort(Builder $query, $sort)
     {
+        $finalPriceExpr = self::finalPriceExpression();
+
         switch ($sort) {
             case 'price_asc':
-                $query->orderBy('price', 'asc');
+                $query->orderByRaw("{$finalPriceExpr} asc");
                 break;
             case 'price_desc':
-                $query->orderBy('price', 'desc');
+                $query->orderByRaw("{$finalPriceExpr} desc");
                 break;
             case 'top_rated':
                 $query->orderBy('rating', 'desc');
@@ -107,5 +124,10 @@ class Product extends Model
                 $query->latest();
                 break;
         }
+    }
+
+    protected static function finalPriceExpression(): string
+    {
+        return 'CASE WHEN products.discount_price IS NOT NULL AND products.discount_price < products.price THEN products.discount_price ELSE products.price END';
     }
 }

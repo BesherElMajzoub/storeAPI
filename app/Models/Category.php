@@ -17,6 +17,8 @@ class Category extends Model
 
     protected $casts = [
         'is_active' => 'boolean',
+        'parent_id' => 'integer',
+        'sort_order' => 'integer',
     ];
 
     public function parent()

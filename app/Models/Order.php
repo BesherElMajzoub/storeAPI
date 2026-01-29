@@ -20,6 +20,9 @@ class Order extends Model
         'shipping_address' => 'array',
         'billing_address' => 'array',
         'subtotal' => 'decimal:2',
+        'tax' => 'decimal:2',
+        'shipping_cost' => 'decimal:2',
+        'discount' => 'decimal:2',
         'total' => 'decimal:2',
     ];
 
@@ -36,5 +39,52 @@ class Order extends Model
     public function payment()
     {
         return $this->hasOne(Payment::class);
+    }
+
+    public function scopeStatus($query, $status)
+    {
+        if (is_array($status)) {
+            return $query->whereIn('status', $status);
+        }
+
+        if (is_string($status) && str_contains($status, ',')) {
+            return $query->whereIn('status', array_map('trim', explode(',', $status)));
+        }
+
+        return $query->where('status', $status);
+    }
+
+    public function scopePaymentStatus($query, $status)
+    {
+        if (is_array($status)) {
+            return $query->whereIn('payment_status', $status);
+        }
+
+        if (is_string($status) && str_contains($status, ',')) {
+            return $query->whereIn('payment_status', array_map('trim', explode(',', $status)));
+        }
+
+        return $query->where('payment_status', $status);
+    }
+
+    public function scopeSearch($query, ?string $term)
+    {
+        if (!$term) {
+            return $query;
+        }
+
+        return $query->where('order_number', 'like', '%' . $term . '%');
+    }
+
+    public function scopeDateRange($query, ?string $from, ?string $to)
+    {
+        if ($from) {
+            $query->whereDate('created_at', '>=', $from);
+        }
+        if ($to) {
+            $query->whereDate('created_at', '<=', $to);
+        }
+
+        return $query;
     }
 }
