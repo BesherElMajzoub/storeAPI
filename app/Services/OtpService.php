@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use App\Mail\OtpCodeMail;
 use App\Models\OtpCode;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class OtpService
 {
@@ -13,14 +15,18 @@ class OtpService
     private int $maxAttempts;
     private int $resendCooldownSeconds;
     private int $dailySendLimit;
+    private ?string $emailOverride;
+    private bool $logCodes;
 
     public function __construct()
     {
-        $this->length = 6;
-        $this->ttlMinutes = 10;
-        $this->maxAttempts = 5;
-        $this->resendCooldownSeconds = 60;
-        $this->dailySendLimit = 5;
+        $this->length = (int) config('otp.length', 6);
+        $this->ttlMinutes = (int) config('otp.ttl_minutes', 10);
+        $this->maxAttempts = (int) config('otp.max_attempts', 5);
+        $this->resendCooldownSeconds = (int) config('otp.resend_cooldown_seconds', 60);
+        $this->dailySendLimit = (int) config('otp.daily_send_limit', 5);
+        $this->emailOverride = config('otp.email_override');
+        $this->logCodes = (bool) config('otp.log_codes', false);
     }
 
     public function send(string $identifier, string $purpose, string $channel = 'email'): array
@@ -65,7 +71,9 @@ class OtpService
         $otp->consumed_at = null;
         $otp->save();
 
-        $this->sendStub($identifier, $code, $purpose, $channel);
+        if ($channel === 'email') {
+            $this->sendEmail($identifier, $code, $purpose);
+        }
 
         return [
             'status' => 'sent',
@@ -115,13 +123,29 @@ class OtpService
         return (string) random_int($min, $max);
     }
 
-    private function sendStub(string $identifier, string $code, string $purpose, string $channel): void
+    private function sendEmail(string $identifier, string $code, string $purpose): void
     {
-        Log::info('OTP code generated', [
-            'identifier' => $identifier,
-            'purpose' => $purpose,
-            'channel' => $channel,
-            'code' => $code,
-        ]);
+        $sendTo = $this->emailOverride ?: $identifier;
+        $sentToOverride = !empty($this->emailOverride) && $this->emailOverride !== $identifier;
+
+        Mail::to($sendTo)->send(new OtpCodeMail(
+            code: $code,
+            purpose: $purpose,
+            expiresInMinutes: $this->ttlMinutes,
+            intendedFor: $identifier,
+            deliveredTo: $sendTo,
+            sentToOverride: $sentToOverride
+        ));
+
+        if ($this->logCodes) {
+            Log::info('OTP code generated', [
+                'identifier' => $identifier,
+                'purpose' => $purpose,
+                'channel' => 'email',
+                'code' => $code,
+                'delivered_to' => $sendTo,
+                'sent_to_override' => $sentToOverride,
+            ]);
+        }
     }
 }

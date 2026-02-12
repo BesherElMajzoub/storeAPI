@@ -5,7 +5,6 @@ namespace Database\Seeders;
 use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
 
 class StoreContentSeeder extends Seeder
 {
@@ -15,13 +14,13 @@ class StoreContentSeeder extends Seeder
         $electronics = Category::create([
             'name' => 'Electronics',
             'slug' => 'electronics',
-            'is_active' => true
+            'is_active' => true,
         ]);
-        
+
         $clothing = Category::create([
             'name' => 'Clothing',
             'slug' => 'clothing',
-            'is_active' => true
+            'is_active' => true,
         ]);
 
         // Products
@@ -35,13 +34,13 @@ class StoreContentSeeder extends Seeder
             'stock_qty' => 50,
             'status' => 'published',
             'category_id' => $electronics->id,
-            'in_stock' => true
+            'in_stock' => true,
         ]);
-        
+
         $p1->images()->create([
-            'url' => 'https://placehold.co/600x400'
+            'url' => 'https://placehold.co/600x400',
         ]);
-        
+
         Product::create([
             'name' => 'Classic T-Shirt',
             'slug' => 'classic-t-shirt',
@@ -52,7 +51,7 @@ class StoreContentSeeder extends Seeder
             'status' => 'published',
             'category_id' => $clothing->id,
             'options' => ['Color' => ['Red', 'Blue'], 'Size' => ['M', 'L']],
-            'in_stock' => true
+            'in_stock' => true,
         ]);
     }
 }

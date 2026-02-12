@@ -13,12 +13,14 @@ use App\Models\Role;
 use App\Models\User;
 use App\Services\OtpService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\ResetPasswordMail;
+use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
@@ -54,11 +56,11 @@ class AuthController extends Controller
         $data = $request->validated();
         $user = User::query()->where('email', $data['email'])->first();
 
-        if (!$user || !Hash::check($data['password'], $user->password)) {
+        if (! $user || ! Hash::check($data['password'], $user->password)) {
             return $this->error('Invalid credentials.', 401);
         }
 
-        if (!$user->is_active) {
+        if (! $user->is_active) {
             return $this->error('Account is disabled.', 403);
         }
 
@@ -117,11 +119,28 @@ class AuthController extends Controller
         $data = $request->validated();
         $user = User::query()->where('email', $data['email'])->first();
 
-        if ($user) {
+        // 1. Silent Success standard (don't reveal if user exists)
+        if (!$user) {
+            // Optional: Fake delay to prevent timing attacks
+            // usleep(random_int(100000, 300000));
+            return $this->success(null, 'If the email exists, a reset token was sent.');
+        }
+
+        try {
+            // 2. Generate Token
             $token = $this->issuePasswordResetToken($user);
-            Log::info('Password reset token issued', [
+
+            // 3. SEND THE EMAIL (The missing part)
+            // Using a queueable mailable ensures this doesn't hang the API
+            Mail::to($user->email)->send(new ResetPasswordMail($token, $user->email));
+
+            Log::info('Password reset link sent', ['email' => $user->email]);
+
+        } catch (\Throwable $e) {
+            // 4. Log validation errors or mail failures, but keep API response 200
+            Log::error('Password reset failed', [
                 'email' => $user->email,
-                'token' => $token,
+                'error' => $e->getMessage()
             ]);
         }
 
@@ -132,12 +151,12 @@ class AuthController extends Controller
     {
         $data = $request->validated();
         $user = User::query()->where('email', $data['email'])->first();
-        if (!$user) {
+        if (! $user) {
             return $this->error('Invalid token or email.', 422);
         }
 
         $record = DB::table('password_reset_tokens')->where('email', $data['email'])->first();
-        if (!$record) {
+        if (! $record) {
             return $this->error('Invalid token or email.', 422);
         }
 
@@ -147,7 +166,7 @@ class AuthController extends Controller
             return $this->error('Reset token expired.', 422);
         }
 
-        if (!hash_equals($record->token, hash('sha256', $data['token']))) {
+        if (! hash_equals($record->token, hash('sha256', $data['token']))) {
             return $this->error('Invalid token or email.', 422);
         }
 
@@ -169,7 +188,9 @@ class AuthController extends Controller
 
         $user = User::query()->where('email', $email)->first();
         if ($user) {
+            Log::info('OTP send: before');
             $result = $otpService->send($email, $purpose, $channel);
+            Log::info('OTP send: after', $result);
             if ($result['status'] === 'cooldown' || $result['status'] === 'daily_limit') {
                 return $this->error('OTP rate limit exceeded. Try again later.', 429);
             }
@@ -192,7 +213,7 @@ class AuthController extends Controller
         }
 
         $user = User::query()->where('email', $email)->first();
-        if (!$user) {
+        if (! $user) {
             return $this->error('Invalid or expired OTP.', 422);
         }
 
@@ -208,16 +229,16 @@ class AuthController extends Controller
     public function googleLogin(Request $request)
     {
         $request->validate(['token' => 'required']);
-        
+
         // In real app: Validate token with Google, get email/name
         // $googleUser = Socialite::driver('google')->userFromToken($request->token);
-        
+
         // Mocking behavior
         $email = $request->input('email'); // Should come from token
-        if (!$email) {
-             return $this->error('Invalid token.', 400);
+        if (! $email) {
+            return $this->error('Invalid token.', 400);
         }
-        
+
         $user = User::firstOrCreate(
             ['email' => $email],
             ['name' => 'Google User', 'password' => Hash::make(str()->random(16))]
@@ -228,7 +249,7 @@ class AuthController extends Controller
         return $this->success([
             'access_token' => $token,
             'token_type' => 'Bearer',
-            'user' => $user
+            'user' => $user,
         ], 'Login successful.');
     }
 

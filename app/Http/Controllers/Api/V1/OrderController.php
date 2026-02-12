@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Resources\OrderResource;
 use App\Models\Order;
-use App\Models\OrderItem;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -34,30 +33,22 @@ class OrderController extends Controller
 
     public function store(StoreOrderRequest $request)
     {
-        // Logic to create order
-        // 1. Calculate totals
-        // 2. Create Order
-        // 3. Create Items
-        // 4. Handle Stock
-        
         $items = $request->items;
         $subtotal = 0;
         $orderItemsData = [];
 
         foreach ($items as $item) {
             $product = Product::findOrFail($item['product_id']);
-            // Check stock...
-            
             $price = $product->final_price;
             $startTotal = $price * $item['quantity'];
             $subtotal += $startTotal;
-            
+
             $orderItemsData[] = [
                 'product_id' => $product->id,
                 'product_name' => $product->name,
                 'price' => $price,
                 'quantity' => $item['quantity'],
-                'total' => $startTotal
+                'total' => $startTotal,
             ];
         }
 
@@ -65,7 +56,7 @@ class OrderController extends Controller
 
         $order = DB::transaction(function () use ($request, $subtotal, $total, $orderItemsData) {
             $order = Order::create([
-                'order_number' => 'ORD-' . strtoupper(Str::random(10)),
+                'order_number' => 'ORD-'.strtoupper(Str::random(10)),
                 'user_id' => $request->user()->id,
                 'status' => 'pending',
                 'payment_status' => 'unpaid',
@@ -78,7 +69,7 @@ class OrderController extends Controller
             foreach ($orderItemsData as $data) {
                 $order->items()->create($data);
             }
-            
+
             return $order;
         });
 
@@ -88,13 +79,13 @@ class OrderController extends Controller
     public function cancel(Request $request, $id)
     {
         $order = $request->user()->orders()->findOrFail($id);
-        
+
         if ($order->status !== 'pending') {
-             return response()->json(['message' => 'Cannot cancel order'], 400);
+            return response()->json(['message' => 'Cannot cancel order'], 400);
         }
-        
+
         $order->update(['status' => 'cancelled']);
-        
+
         return response()->json(['message' => 'Order cancelled']);
     }
 }
