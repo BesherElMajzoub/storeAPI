@@ -47,6 +47,14 @@ class Product extends Model
         return $this->hasMany(Review::class);
     }
 
+    /**
+     * Users who have this product in their wishlist.
+     */
+    public function wishlistedByUsers()
+    {
+        return $this->belongsToMany(User::class, 'wishlists')->withTimestamps();
+    }
+
     // Accessors & Scopes
     public function getFinalPriceAttribute()
     {

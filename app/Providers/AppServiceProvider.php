@@ -4,9 +4,12 @@ namespace App\Providers;
 
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
+use App\Models\Address;
+use App\Policies\AddressPolicy;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -39,11 +42,10 @@ class AppServiceProvider extends ServiceProvider
         });
 
         \Illuminate\Support\Facades\Gate::define('admin-access', function ($user) {
-            // Logic: User must have a role that is NOT just 'User'
-            // Or strictly: Admin, Owner, Manager, Support
-            // Assuming 'User' is the default customer role.
-            // Since we implemented hasRole in User model:
             return $user->roles()->whereIn('name', ['Admin', 'Owner', 'Manager', 'Support'])->exists();
         });
+
+        // Register Policies
+        Gate::policy(Address::class, AddressPolicy::class);
     }
 }

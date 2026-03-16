@@ -11,9 +11,32 @@ use App\Services\CategoryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use OpenApi\Attributes as OA;
 
 class CategoryController extends Controller
 {
+    #[OA\Get(
+        path: "/api/v1/admin/categories",
+        summary: "Admin List Categories",
+        description: "List all categories for admin",
+        security: [["bearerAuth" => []]],
+        tags: ["Admin Categories"]
+    )]
+    #[OA\Parameter(name: "depth", in: "query", schema: new OA\Schema(type: "integer", default: 2))]
+    #[OA\Response(
+        response: 200,
+        description: "Successful response",
+        content: new OA\JsonContent(
+            type: "object",
+            properties: [
+                new OA\Property(
+                    property: "data",
+                    type: "array",
+                    items: new OA\Items(ref: "#/components/schemas/Category")
+                )
+            ]
+        )
+    )]
     public function index(Request $request): JsonResponse
     {
         $depth = (int) $request->query('depth', 2);
@@ -32,6 +55,37 @@ class CategoryController extends Controller
         return $this->success($categories, 'Categories fetched.');
     }
 
+    #[OA\Post(
+        path: "/api/v1/admin/categories",
+        summary: "Admin Create Category",
+        description: "Create a new category",
+        security: [["bearerAuth" => []]],
+        tags: ["Admin Categories"]
+    )]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            required: ["name"],
+            properties: [
+                new OA\Property(property: "name", type: "string", example: "Electronics"),
+                new OA\Property(property: "slug", type: "string", example: "electronics"),
+                new OA\Property(property: "parent_id", type: "integer", nullable: true, example: null),
+                new OA\Property(property: "is_active", type: "boolean", example: true),
+                new OA\Property(property: "description", type: "string", nullable: true)
+            ]
+        )
+    )]
+    #[OA\Response(
+        response: 201,
+        description: "Category created",
+        content: new OA\JsonContent(
+            type: "object",
+            properties: [
+                new OA\Property(property: "data", ref: "#/components/schemas/Category")
+            ]
+        )
+    )]
+    #[OA\Response(response: 422, ref: "#/components/responses/ValidationErrorResponse")]
     public function store(StoreCategoryRequest $request, CategoryService $service): JsonResponse
     {
         $data = $request->validated();
@@ -43,6 +97,38 @@ class CategoryController extends Controller
         return $this->success($category, 'Category created.', 201);
     }
 
+    #[OA\Patch(
+        path: "/api/v1/admin/categories/{category}",
+        summary: "Admin Update Category",
+        description: "Update an existing category",
+        security: [["bearerAuth" => []]],
+        tags: ["Admin Categories"]
+    )]
+    #[OA\Parameter(name: "category", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            properties: [
+                new OA\Property(property: "name", type: "string"),
+                new OA\Property(property: "slug", type: "string"),
+                new OA\Property(property: "parent_id", type: "integer", nullable: true),
+                new OA\Property(property: "is_active", type: "boolean"),
+                new OA\Property(property: "description", type: "string", nullable: true)
+            ]
+        )
+    )]
+    #[OA\Response(
+        response: 200,
+        description: "Category updated",
+        content: new OA\JsonContent(
+            type: "object",
+            properties: [
+                new OA\Property(property: "data", ref: "#/components/schemas/Category")
+            ]
+        )
+    )]
+    #[OA\Response(response: 422, ref: "#/components/responses/ValidationErrorResponse")]
+    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
     public function update(UpdateCategoryRequest $request, int $id, CategoryService $service): JsonResponse
     {
         $category = Category::findOrFail($id);
@@ -57,6 +143,16 @@ class CategoryController extends Controller
         return $this->success($category->refresh(), 'Category updated.');
     }
 
+    #[OA\Delete(
+        path: "/api/v1/admin/categories/{category}",
+        summary: "Admin Delete Category",
+        description: "Delete a category",
+        security: [["bearerAuth" => []]],
+        tags: ["Admin Categories"]
+    )]
+    #[OA\Parameter(name: "category", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
+    #[OA\Response(response: 200, description: "Category deleted")]
+    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
     public function destroy(int $id): JsonResponse
     {
         $category = Category::findOrFail($id);
@@ -65,6 +161,34 @@ class CategoryController extends Controller
         return $this->success(null, 'Category deleted.');
     }
 
+    #[OA\Post(
+        path: "/api/v1/admin/categories/reorder",
+        summary: "Admin Reorder Categories",
+        description: "Reorder categories",
+        security: [["bearerAuth" => []]],
+        tags: ["Admin Categories"]
+    )]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            required: ["categories"],
+            properties: [
+                new OA\Property(
+                    property: "categories",
+                    type: "array",
+                    items: new OA\Items(
+                        type: "object",
+                        properties: [
+                            new OA\Property(property: "id", type: "integer"),
+                            new OA\Property(property: "parent_id", type: "integer", nullable: true),
+                            new OA\Property(property: "sort_order", type: "integer")
+                        ]
+                    )
+                )
+            ]
+        )
+    )]
+    #[OA\Response(response: 200, description: "Categories reordered")]
     public function reorder(ReorderCategoryRequest $request): JsonResponse
     {
         $data = $request->validated();
@@ -103,6 +227,32 @@ class CategoryController extends Controller
         $categories = $query->get();
 
         return $this->success($categories, 'Categories reordered.');
+    }
+
+    #[OA\Get(
+        path: "/api/v1/admin/categories/{category}",
+        summary: "Admin Show Category",
+        description: "Get a specific category for admin",
+        security: [["bearerAuth" => []]],
+        tags: ["Admin Categories"]
+    )]
+    #[OA\Parameter(name: "category", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
+    #[OA\Response(
+        response: 200,
+        description: "Successful response",
+        content: new OA\JsonContent(
+            type: "object",
+            properties: [
+                new OA\Property(property: "data", ref: "#/components/schemas/Category")
+            ]
+        )
+    )]
+    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
+    public function show(int $id): JsonResponse
+    {
+        // Adding the missing show logic directly, as it was in Postman mismatched list and route list.
+        $category = Category::findOrFail($id);
+        return $this->success($category, 'Category fetched.');
     }
 
     private function success($data, string $message, int $status = 200): JsonResponse

@@ -65,6 +65,22 @@ class User extends Authenticatable
         return $this->hasMany(Address::class);
     }
 
+    /**
+     * Alias for addresses() — used by the address management system.
+     */
+    public function userAddresses()
+    {
+        return $this->hasMany(Address::class);
+    }
+
+    /**
+     * Products in this user's wishlist (many-to-many via wishlists table).
+     */
+    public function wishlistProducts()
+    {
+        return $this->belongsToMany(Product::class, 'wishlists')->withTimestamps();
+    }
+
     public function orders()
     {
         return $this->hasMany(Order::class);

@@ -6,11 +6,15 @@ use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\CategoryController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\OrderController;
+use App\Http\Controllers\Api\V1\AddressController;
+use App\Http\Controllers\Api\V1\WishlistController;
 // Admin Imports
 use App\Http\Controllers\Api\V1\Admin\DashboardController;
 use App\Http\Controllers\Api\V1\Admin\ProductController as AdminProductController;
 use App\Http\Controllers\Api\V1\Admin\CategoryController as AdminCategoryController;
 use App\Http\Controllers\Api\V1\Admin\OrderController as AdminOrderController;
+use App\Http\Controllers\Api\V1\Admin\UserController as AdminUserController;
+use App\Http\Controllers\Api\V1\Admin\WishlistAnalyticsController;
 
 Route::prefix('v1')->group(function () {
     
@@ -46,27 +50,46 @@ Route::prefix('v1')->group(function () {
         Route::get('orders', [OrderController::class, 'index']);
         Route::get('orders/{id}', [OrderController::class, 'show']);
         Route::post('orders/{id}/cancel', [OrderController::class, 'cancel']);
-        
-        // Profile, Address, Notifications, etc. (Not implemented in this turn but routes placeholders)
-        // Route::get('profile', [ProfileController::class, 'show']);
+
+        // ----- My Addresses (Profile) -----
+        Route::prefix('profile')->group(function () {
+            Route::get('addresses', [AddressController::class, 'index']);
+            Route::post('addresses', [AddressController::class, 'store']);
+            Route::put('addresses/{id}', [AddressController::class, 'update']);
+            Route::delete('addresses/{id}', [AddressController::class, 'destroy']);
+            Route::post('addresses/{id}/default', [AddressController::class, 'setDefault']);
+        });
+
+        // ----- Wishlist -----
+        Route::get('wishlist', [WishlistController::class, 'index']);
+        Route::post('wishlist/{product}', [WishlistController::class, 'toggle']);
+        Route::delete('wishlist/{product}', [WishlistController::class, 'destroy']);
     });
 
     // --- ADMIN ---
-    Route::prefix('admin')->middleware(['auth:sanctum', 'can:admin-access'])->group(function () { // 'can:admin-access' needs Gate definition or custom middleware
+    Route::prefix('admin')->middleware(['auth:sanctum', 'can:admin-access'])->group(function () {
         Route::get('dashboard', [DashboardController::class, 'index']);
-        
+
         // Products
         Route::apiResource('products', AdminProductController::class);
-        
+
         // Categories
         Route::apiResource('categories', AdminCategoryController::class);
         Route::post('categories/reorder', [AdminCategoryController::class, 'reorder']);
-        
+
         // Orders
         Route::get('orders', [AdminOrderController::class, 'index']);
         Route::get('orders/{id}', [AdminOrderController::class, 'show']);
         Route::post('orders/{id}/status', [AdminOrderController::class, 'updateStatus']);
-        
-        // Users, Reviews, Coupons (Placeholders for now)
+
+        // Users (with Wishlist & Addresses tabs)
+        Route::get('users', [AdminUserController::class, 'index']);
+        Route::get('users/{id}', [AdminUserController::class, 'show']);
+        Route::get('users/{id}/wishlist', [AdminUserController::class, 'wishlist']);
+        Route::get('users/{id}/addresses', [AdminUserController::class, 'addresses']);
+
+        // Wishlist Analytics
+        Route::get('wishlist-analytics', [WishlistAnalyticsController::class, 'index']);
+        Route::get('wishlist-analytics/summary', [WishlistAnalyticsController::class, 'summary']);
     });
 });

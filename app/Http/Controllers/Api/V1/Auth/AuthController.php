@@ -21,11 +21,51 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\ResetPasswordMail;
 use Illuminate\Support\Str;
+use OpenApi\Attributes as OA;
 
 class AuthController extends Controller
 {
     private int $resetTokenTtlMinutes = 60;
 
+    #[OA\Post(
+        path: "/api/v1/auth/register",
+        summary: "User Register",
+        description: "Register a new user",
+        tags: ["Authentication"]
+    )]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            required: ["name", "email", "password", "password_confirmation"],
+            properties: [
+                new OA\Property(property: "name", type: "string", example: "John Doe"),
+                new OA\Property(property: "email", type: "string", format: "email", example: "john@example.com"),
+                new OA\Property(property: "phone", type: "string", example: "+123456789", nullable: true),
+                new OA\Property(property: "password", type: "string", format: "password", example: "password123"),
+                new OA\Property(property: "password_confirmation", type: "string", format: "password", example: "password123"),
+                new OA\Property(property: "device_name", type: "string", example: "web", nullable: true)
+            ]
+        )
+    )]
+    #[OA\Response(
+        response: 201,
+        description: "User registered",
+        content: new OA\JsonContent(
+            type: "object",
+            properties: [
+                new OA\Property(
+                    property: "data",
+                    type: "object",
+                    properties: [
+                        new OA\Property(property: "access_token", type: "string"),
+                        new OA\Property(property: "token_type", type: "string", example: "Bearer"),
+                        new OA\Property(property: "user", ref: "#/components/schemas/User")
+                    ]
+                )
+            ]
+        )
+    )]
+    #[OA\Response(response: 422, ref: "#/components/responses/ValidationErrorResponse")]
     public function register(RegisterRequest $request)
     {
         $data = $request->validated();
@@ -51,6 +91,43 @@ class AuthController extends Controller
         ], 'Registered successfully.', 201);
     }
 
+    #[OA\Post(
+        path: "/api/v1/auth/login",
+        summary: "User Login",
+        description: "Authenticate a user and return a token",
+        tags: ["Authentication"]
+    )]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            required: ["email", "password"],
+            properties: [
+                new OA\Property(property: "email", type: "string", format: "email", example: "user@example.com"),
+                new OA\Property(property: "password", type: "string", format: "password", example: "password"),
+                new OA\Property(property: "device_name", type: "string", example: "web", nullable: true)
+            ]
+        )
+    )]
+    #[OA\Response(
+        response: 200,
+        description: "Successful login",
+        content: new OA\JsonContent(
+            type: "object",
+            properties: [
+                new OA\Property(
+                    property: "data",
+                    type: "object",
+                    properties: [
+                        new OA\Property(property: "access_token", type: "string"),
+                        new OA\Property(property: "token_type", type: "string", example: "Bearer"),
+                        new OA\Property(property: "user", ref: "#/components/schemas/User")
+                    ]
+                )
+            ]
+        )
+    )]
+    #[OA\Response(response: 401, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 422, ref: "#/components/responses/ValidationErrorResponse")]
     public function login(LoginRequest $request)
     {
         $data = $request->validated();
@@ -81,11 +158,46 @@ class AuthController extends Controller
         ], 'Login successful.');
     }
 
+    #[OA\Get(
+        path: "/api/v1/auth/me",
+        summary: "Get Authenticated User",
+        description: "Returns the currently authenticated user's profile",
+        security: [["bearerAuth" => []]],
+        tags: ["Authentication"]
+    )]
+    #[OA\Response(
+        response: 200,
+        description: "Profile fetched",
+        content: new OA\JsonContent(
+            type: "object",
+            properties: [
+                new OA\Property(property: "data", ref: "#/components/schemas/User")
+            ]
+        )
+    )]
+    #[OA\Response(response: 401, ref: "#/components/responses/ErrorResponse")]
     public function me(Request $request)
     {
         return $this->success($request->user()->load('roles'), 'Profile fetched.');
     }
 
+    #[OA\Post(
+        path: "/api/v1/auth/logout",
+        summary: "User Logout",
+        description: "Log out the authenticated user",
+        security: [["bearerAuth" => []]],
+        tags: ["Authentication"]
+    )]
+    #[OA\RequestBody(
+        required: false,
+        content: new OA\JsonContent(
+            properties: [
+                new OA\Property(property: "all", type: "boolean", description: "If true, logs out from all devices", default: false)
+            ]
+        )
+    )]
+    #[OA\Response(response: 200, description: "Logged out successfully")]
+    #[OA\Response(response: 401, ref: "#/components/responses/ErrorResponse")]
     public function logout(Request $request)
     {
         $user = $request->user();
@@ -100,6 +212,39 @@ class AuthController extends Controller
         return $this->success(null, 'Logged out successfully.');
     }
 
+    #[OA\Post(
+        path: "/api/v1/auth/refresh",
+        summary: "Refresh Token",
+        description: "Refresh the current authentication token",
+        security: [["bearerAuth" => []]],
+        tags: ["Authentication"]
+    )]
+    #[OA\RequestBody(
+        required: false,
+        content: new OA\JsonContent(
+            properties: [
+                new OA\Property(property: "device_name", type: "string", example: "web")
+            ]
+        )
+    )]
+    #[OA\Response(
+        response: 200,
+        description: "Token refreshed",
+        content: new OA\JsonContent(
+            type: "object",
+            properties: [
+                new OA\Property(
+                    property: "data",
+                    type: "object",
+                    properties: [
+                        new OA\Property(property: "access_token", type: "string"),
+                        new OA\Property(property: "token_type", type: "string", example: "Bearer")
+                    ]
+                )
+            ]
+        )
+    )]
+    #[OA\Response(response: 401, ref: "#/components/responses/ErrorResponse")]
     public function refresh(Request $request)
     {
         $user = $request->user();
@@ -114,6 +259,23 @@ class AuthController extends Controller
         ], 'Token refreshed.');
     }
 
+    #[OA\Post(
+        path: "/api/v1/auth/forgot-password",
+        summary: "Forgot Password",
+        description: "Send a password reset token to the given email",
+        tags: ["Authentication"]
+    )]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            required: ["email"],
+            properties: [
+                new OA\Property(property: "email", type: "string", format: "email", example: "user@example.com")
+            ]
+        )
+    )]
+    #[OA\Response(response: 200, description: "Reset token sent")]
+    #[OA\Response(response: 422, ref: "#/components/responses/ValidationErrorResponse")]
     public function forgotPassword(ForgotPasswordRequest $request)
     {
         $data = $request->validated();
@@ -147,6 +309,26 @@ class AuthController extends Controller
         return $this->success(null, 'If the email exists, a reset token was sent.');
     }
 
+    #[OA\Post(
+        path: "/api/v1/auth/reset-password",
+        summary: "Reset Password",
+        description: "Reset user password using token",
+        tags: ["Authentication"]
+    )]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            required: ["email", "token", "password", "password_confirmation"],
+            properties: [
+                new OA\Property(property: "email", type: "string", format: "email", example: "user@example.com"),
+                new OA\Property(property: "token", type: "string"),
+                new OA\Property(property: "password", type: "string", format: "password"),
+                new OA\Property(property: "password_confirmation", type: "string", format: "password")
+            ]
+        )
+    )]
+    #[OA\Response(response: 200, description: "Password reset successfully")]
+    #[OA\Response(response: 422, ref: "#/components/responses/ValidationErrorResponse")]
     public function resetPassword(ResetPasswordRequest $request)
     {
         $data = $request->validated();
@@ -179,6 +361,26 @@ class AuthController extends Controller
         return $this->success(null, 'Password reset successfully.');
     }
 
+    #[OA\Post(
+        path: "/api/v1/auth/otp/send",
+        summary: "Send OTP",
+        description: "Send OTP to user's email",
+        tags: ["Authentication"]
+    )]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            required: ["email"],
+            properties: [
+                new OA\Property(property: "email", type: "string", format: "email", example: "user@example.com"),
+                new OA\Property(property: "purpose", type: "string", default: "password_reset"),
+                new OA\Property(property: "channel", type: "string", default: "email")
+            ]
+        )
+    )]
+    #[OA\Response(response: 200, description: "OTP sent")]
+    #[OA\Response(response: 429, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 422, ref: "#/components/responses/ValidationErrorResponse")]
     public function sendOtp(OtpSendRequest $request, OtpService $otpService)
     {
         $data = $request->validated();
@@ -199,6 +401,42 @@ class AuthController extends Controller
         return $this->success(null, 'If the email exists, an OTP was sent.');
     }
 
+    #[OA\Post(
+        path: "/api/v1/auth/otp/verify",
+        summary: "Verify OTP",
+        description: "Verify OTP sent to user",
+        tags: ["Authentication"]
+    )]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            required: ["email", "otp"],
+            properties: [
+                new OA\Property(property: "email", type: "string", format: "email"),
+                new OA\Property(property: "otp", type: "string"),
+                new OA\Property(property: "purpose", type: "string", default: "password_reset"),
+                new OA\Property(property: "channel", type: "string", default: "email")
+            ]
+        )
+    )]
+    #[OA\Response(
+        response: 200,
+        description: "OTP verified",
+        content: new OA\JsonContent(
+            type: "object",
+            properties: [
+                new OA\Property(
+                    property: "data",
+                    type: "object",
+                    properties: [
+                        new OA\Property(property: "reset_token", type: "string"),
+                        new OA\Property(property: "token_type", type: "string", example: "Reset")
+                    ]
+                )
+            ]
+        )
+    )]
+    #[OA\Response(response: 422, ref: "#/components/responses/ValidationErrorResponse")]
     public function verifyOtp(OtpVerifyRequest $request, OtpService $otpService)
     {
         $data = $request->validated();
@@ -226,6 +464,41 @@ class AuthController extends Controller
     }
 
     // Google Login - simplified mock/stub logic as we don't have Socialite installed
+    #[OA\Post(
+        path: "/api/v1/auth/google/login",
+        summary: "Google Login",
+        description: "Login via Google (mocked)",
+        tags: ["Authentication"]
+    )]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            required: ["token", "email"],
+            properties: [
+                new OA\Property(property: "token", type: "string"),
+                new OA\Property(property: "email", type: "string", format: "email")
+            ]
+        )
+    )]
+    #[OA\Response(
+        response: 200,
+        description: "Successful login",
+        content: new OA\JsonContent(
+            type: "object",
+            properties: [
+                new OA\Property(
+                    property: "data",
+                    type: "object",
+                    properties: [
+                        new OA\Property(property: "access_token", type: "string"),
+                        new OA\Property(property: "token_type", type: "string", example: "Bearer"),
+                        new OA\Property(property: "user", ref: "#/components/schemas/User")
+                    ]
+                )
+            ]
+        )
+    )]
+    #[OA\Response(response: 400, ref: "#/components/responses/ErrorResponse")]
     public function googleLogin(Request $request)
     {
         $request->validate(['token' => 'required']);

@@ -1,0 +1,57 @@
+Laravel API Routes: 52
+Postman API Routes: 39
+
+[ ] GET    api/documentation                        => \L5Swagger\Http\Controllers\SwaggerController@api
+[ ] GET    api/oauth2-callback                      => \L5Swagger\Http\Controllers\SwaggerController@oauth2Callback
+[X] POST   api/v1/auth/register                     => App\Http\Controllers\Api\V1\Auth\AuthController@register
+[X] POST   api/v1/auth/login                        => App\Http\Controllers\Api\V1\Auth\AuthController@login
+[X] POST   api/v1/auth/forgot-password              => App\Http\Controllers\Api\V1\Auth\AuthController@forgotPassword
+[X] POST   api/v1/auth/reset-password               => App\Http\Controllers\Api\V1\Auth\AuthController@resetPassword
+[X] POST   api/v1/auth/otp/send                     => App\Http\Controllers\Api\V1\Auth\AuthController@sendOtp
+[X] POST   api/v1/auth/otp/verify                   => App\Http\Controllers\Api\V1\Auth\AuthController@verifyOtp
+[ ] POST   api/v1/auth/google                       => App\Http\Controllers\Api\V1\Auth\AuthController@googleLogin
+[X] GET    api/v1/auth/me                           => App\Http\Controllers\Api\V1\Auth\AuthController@me
+[X] POST   api/v1/auth/logout                       => App\Http\Controllers\Api\V1\Auth\AuthController@logout
+[X] POST   api/v1/auth/refresh                      => App\Http\Controllers\Api\V1\Auth\AuthController@refresh
+[X] GET    api/v1/categories                        => App\Http\Controllers\Api\V1\CategoryController@index
+[X] GET    api/v1/categories/{slug}                 => App\Http\Controllers\Api\V1\CategoryController@show
+[X] GET    api/v1/products                          => App\Http\Controllers\Api\V1\ProductController@index
+[X] GET    api/v1/products/{slug}                   => App\Http\Controllers\Api\V1\ProductController@show
+[X] GET    api/v1/products/{id}/reviews             => App\Http\Controllers\Api\V1\ProductController@reviews
+[X] POST   api/v1/orders                            => App\Http\Controllers\Api\V1\OrderController@store
+[X] GET    api/v1/orders                            => App\Http\Controllers\Api\V1\OrderController@index
+[X] GET    api/v1/orders/{id}                       => App\Http\Controllers\Api\V1\OrderController@show
+[X] POST   api/v1/orders/{id}/cancel                => App\Http\Controllers\Api\V1\OrderController@cancel
+[ ] GET    api/v1/profile/addresses                 => App\Http\Controllers\Api\V1\AddressController@index
+[ ] POST   api/v1/profile/addresses                 => App\Http\Controllers\Api\V1\AddressController@store
+[ ] PUT    api/v1/profile/addresses/{id}            => App\Http\Controllers\Api\V1\AddressController@update
+[ ] DELETE api/v1/profile/addresses/{id}            => App\Http\Controllers\Api\V1\AddressController@destroy
+[ ] POST   api/v1/profile/addresses/{id}/default    => App\Http\Controllers\Api\V1\AddressController@setDefault
+[ ] GET    api/v1/wishlist                          => App\Http\Controllers\Api\V1\WishlistController@index
+[ ] POST   api/v1/wishlist/{product}                => App\Http\Controllers\Api\V1\WishlistController@toggle
+[ ] DELETE api/v1/wishlist/{product}                => App\Http\Controllers\Api\V1\WishlistController@destroy
+[X] GET    api/v1/admin/dashboard                   => App\Http\Controllers\Api\V1\Admin\DashboardController@index
+[X] GET    api/v1/admin/products                    => App\Http\Controllers\Api\V1\Admin\ProductController@index
+[X] POST   api/v1/admin/products                    => App\Http\Controllers\Api\V1\Admin\ProductController@store
+[ ] GET    api/v1/admin/products/{product}          => App\Http\Controllers\Api\V1\Admin\ProductController@show
+[ ] PUT    api/v1/admin/products/{product}          => App\Http\Controllers\Api\V1\Admin\ProductController@update
+[X] PATCH  api/v1/admin/products/{product}          => App\Http\Controllers\Api\V1\Admin\ProductController@update
+[X] DELETE api/v1/admin/products/{product}          => App\Http\Controllers\Api\V1\Admin\ProductController@destroy
+[X] GET    api/v1/admin/categories                  => App\Http\Controllers\Api\V1\Admin\CategoryController@index
+[X] POST   api/v1/admin/categories                  => App\Http\Controllers\Api\V1\Admin\CategoryController@store
+[ ] GET    api/v1/admin/categories/{category}       => App\Http\Controllers\Api\V1\Admin\CategoryController@show
+[ ] PUT    api/v1/admin/categories/{category}       => App\Http\Controllers\Api\V1\Admin\CategoryController@update
+[X] PATCH  api/v1/admin/categories/{category}       => App\Http\Controllers\Api\V1\Admin\CategoryController@update
+[X] DELETE api/v1/admin/categories/{category}       => App\Http\Controllers\Api\V1\Admin\CategoryController@destroy
+[X] POST   api/v1/admin/categories/reorder          => App\Http\Controllers\Api\V1\Admin\CategoryController@reorder
+[X] GET    api/v1/admin/orders                      => App\Http\Controllers\Api\V1\Admin\OrderController@index
+[X] GET    api/v1/admin/orders/{id}                 => App\Http\Controllers\Api\V1\Admin\OrderController@show
+[X] POST   api/v1/admin/orders/{id}/status          => App\Http\Controllers\Api\V1\Admin\OrderController@updateStatus
+[ ] GET    api/v1/admin/users                       => App\Http\Controllers\Api\V1\Admin\UserController@index
+[ ] GET    api/v1/admin/users/{id}                  => App\Http\Controllers\Api\V1\Admin\UserController@show
+[ ] GET    api/v1/admin/users/{id}/wishlist         => App\Http\Controllers\Api\V1\Admin\UserController@wishlist
+[ ] GET    api/v1/admin/users/{id}/addresses        => App\Http\Controllers\Api\V1\Admin\UserController@addresses
+[ ] GET    api/v1/admin/wishlist-analytics          => App\Http\Controllers\Api\V1\Admin\WishlistAnalyticsController@index
+[ ] GET    api/v1/admin/wishlist-analytics/summary  => App\Http\Controllers\Api\V1\Admin\WishlistAnalyticsController@summary
+
+--- Postman Routes NOT matched in Laravel ---

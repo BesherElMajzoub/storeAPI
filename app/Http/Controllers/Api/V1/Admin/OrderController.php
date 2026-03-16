@@ -7,9 +7,45 @@ use App\Http\Requests\Api\V1\Admin\UpdateOrderStatusRequest;
 use App\Models\Order;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use OpenApi\Attributes as OA;
 
 class OrderController extends Controller
 {
+    #[OA\Get(
+        path: "/api/v1/admin/orders",
+        summary: "Admin List Orders",
+        description: "List all orders with filtering",
+        security: [["bearerAuth" => []]],
+        tags: ["Admin Orders"]
+    )]
+    #[OA\Parameter(name: "per_page", in: "query", schema: new OA\Schema(type: "integer", default: 20))]
+    #[OA\Parameter(name: "status", in: "query", schema: new OA\Schema(type: "string"))]
+    #[OA\Parameter(name: "payment_status", in: "query", schema: new OA\Schema(type: "string"))]
+    #[OA\Parameter(name: "user_id", in: "query", schema: new OA\Schema(type: "integer"))]
+    #[OA\Parameter(name: "search", in: "query", schema: new OA\Schema(type: "string"))]
+    #[OA\Parameter(name: "date_from", in: "query", schema: new OA\Schema(type: "string", format: "date"))]
+    #[OA\Parameter(name: "date_to", in: "query", schema: new OA\Schema(type: "string", format: "date"))]
+    #[OA\Response(
+        response: 200,
+        description: "Orders fetched",
+        content: new OA\JsonContent(
+            type: "object",
+            properties: [
+                new OA\Property(
+                    property: "data",
+                    type: "object",
+                    properties: [
+                        new OA\Property(
+                            property: "data",
+                            type: "array",
+                            items: new OA\Items(ref: "#/components/schemas/Order")
+                        )
+                    ]
+                )
+            ]
+        )
+    )]
+    #[OA\Response(response: 401, ref: "#/components/responses/ErrorResponse")]
     public function index(Request $request)
     {
         $perPage = min(max((int) $request->get('per_page', 20), 1), 100);
@@ -27,6 +63,25 @@ class OrderController extends Controller
         return $this->success($orders, 'Orders fetched.');
     }
 
+    #[OA\Get(
+        path: "/api/v1/admin/orders/{id}",
+        summary: "Admin Show Order",
+        description: "Show details of a specific order",
+        security: [["bearerAuth" => []]],
+        tags: ["Admin Orders"]
+    )]
+    #[OA\Parameter(name: "id", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
+    #[OA\Response(
+        response: 200,
+        description: "Order fetched",
+        content: new OA\JsonContent(
+            type: "object",
+            properties: [
+                new OA\Property(property: "data", ref: "#/components/schemas/Order")
+            ]
+        )
+    )]
+    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
     public function show($id)
     {
         $order = Order::with(['items', 'user', 'payment'])->findOrFail($id);
@@ -34,6 +89,35 @@ class OrderController extends Controller
         return $this->success($order, 'Order fetched.');
     }
 
+    #[OA\Post(
+        path: "/api/v1/admin/orders/{id}/status",
+        summary: "Admin Update Order Status",
+        description: "Transition order status or payment status",
+        security: [["bearerAuth" => []]],
+        tags: ["Admin Orders"]
+    )]
+    #[OA\Parameter(name: "id", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            properties: [
+                new OA\Property(property: "status", type: "string", description: "pending, processing, shipped, delivered, cancelled", nullable: true),
+                new OA\Property(property: "payment_status", type: "string", description: "unpaid, paid, failed, refunded", nullable: true)
+            ]
+        )
+    )]
+    #[OA\Response(
+        response: 200,
+        description: "Order status updated",
+        content: new OA\JsonContent(
+            type: "object",
+            properties: [
+                new OA\Property(property: "data", ref: "#/components/schemas/Order")
+            ]
+        )
+    )]
+    #[OA\Response(response: 409, description: "Status transition not allowed")]
+    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
     public function updateStatus(UpdateOrderStatusRequest $request, $id)
     {
         $order = Order::findOrFail($id);

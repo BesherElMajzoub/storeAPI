@@ -11,11 +11,40 @@ use App\Services\ProductService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use OpenApi\Attributes as OA;
 
 class ProductController extends Controller
 {
     use \App\Traits\LogsActivity;
 
+    #[OA\Get(
+        path: "/api/v1/admin/products",
+        summary: "Admin List Products",
+        description: "List all products for admin, paginated",
+        security: [["bearerAuth" => []]],
+        tags: ["Admin Products"]
+    )]
+    #[OA\Parameter(name: "per_page", in: "query", schema: new OA\Schema(type: "integer", default: 20))]
+    #[OA\Response(
+        response: 200,
+        description: "Products fetched",
+        content: new OA\JsonContent(
+            type: "object",
+            properties: [
+                new OA\Property(
+                    property: "data",
+                    type: "object",
+                    properties: [
+                        new OA\Property(
+                            property: "data",
+                            type: "array",
+                            items: new OA\Items(ref: "#/components/schemas/Product")
+                        )
+                    ]
+                )
+            ]
+        )
+    )]
     public function index(Request $request): JsonResponse
     {
         $perPage = min(max((int) $request->get('per_page', 20), 1), 100);
@@ -24,6 +53,25 @@ class ProductController extends Controller
         return $this->success($products, 'Products fetched.');
     }
 
+    #[OA\Get(
+        path: "/api/v1/admin/products/{product}",
+        summary: "Admin Show Product",
+        description: "Show a single product's details",
+        security: [["bearerAuth" => []]],
+        tags: ["Admin Products"]
+    )]
+    #[OA\Parameter(name: "product", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
+    #[OA\Response(
+        response: 200,
+        description: "Product fetched",
+        content: new OA\JsonContent(
+            type: "object",
+            properties: [
+                new OA\Property(property: "data", ref: "#/components/schemas/Product")
+            ]
+        )
+    )]
+    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
     public function show(int $id): JsonResponse
     {
         $product = Product::with(['variants', 'images', 'category'])->findOrFail($id);
@@ -31,6 +79,53 @@ class ProductController extends Controller
         return $this->success($product, 'Product fetched.');
     }
 
+    #[OA\Post(
+        path: "/api/v1/admin/products",
+        summary: "Admin Create Product",
+        description: "Create a new product",
+        security: [["bearerAuth" => []]],
+        tags: ["Admin Products"]
+    )]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            required: ["name", "price", "category_id"],
+            properties: [
+                new OA\Property(property: "name", type: "string"),
+                new OA\Property(property: "slug", type: "string", nullable: true),
+                new OA\Property(property: "description", type: "string", nullable: true),
+                new OA\Property(property: "price", type: "number"),
+                new OA\Property(property: "category_id", type: "integer"),
+                new OA\Property(property: "sku", type: "string", nullable: true),
+                new OA\Property(property: "stock_qty", type: "integer", nullable: true),
+                new OA\Property(property: "in_stock", type: "boolean", nullable: true),
+                new OA\Property(property: "is_active", type: "boolean", nullable: true),
+                new OA\Property(
+                    property: "images",
+                    type: "array",
+                    items: new OA\Items(type: "string"),
+                    nullable: true
+                ),
+                new OA\Property(
+                    property: "variants",
+                    type: "array",
+                    items: new OA\Items(type: "object"),
+                    nullable: true
+                )
+            ]
+        )
+    )]
+    #[OA\Response(
+        response: 201,
+        description: "Product created",
+        content: new OA\JsonContent(
+            type: "object",
+            properties: [
+                new OA\Property(property: "data", ref: "#/components/schemas/Product")
+            ]
+        )
+    )]
+    #[OA\Response(response: 422, ref: "#/components/responses/ValidationErrorResponse")]
     public function store(StoreProductRequest $request, ProductService $service): JsonResponse
     {
         $data = $request->validated();
@@ -78,6 +173,54 @@ class ProductController extends Controller
         return $this->success($product, 'Product created.', 201);
     }
 
+    #[OA\Patch(
+        path: "/api/v1/admin/products/{product}",
+        summary: "Admin Update Product",
+        description: "Update an existing product",
+        security: [["bearerAuth" => []]],
+        tags: ["Admin Products"]
+    )]
+    #[OA\Parameter(name: "product", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            properties: [
+                new OA\Property(property: "name", type: "string"),
+                new OA\Property(property: "slug", type: "string", nullable: true),
+                new OA\Property(property: "description", type: "string", nullable: true),
+                new OA\Property(property: "price", type: "number"),
+                new OA\Property(property: "category_id", type: "integer"),
+                new OA\Property(property: "sku", type: "string", nullable: true),
+                new OA\Property(property: "stock_qty", type: "integer", nullable: true),
+                new OA\Property(property: "in_stock", type: "boolean", nullable: true),
+                new OA\Property(property: "is_active", type: "boolean", nullable: true),
+                new OA\Property(
+                    property: "images",
+                    type: "array",
+                    items: new OA\Items(type: "string"),
+                    nullable: true
+                ),
+                new OA\Property(
+                    property: "variants",
+                    type: "array",
+                    items: new OA\Items(type: "object"),
+                    nullable: true
+                )
+            ]
+        )
+    )]
+    #[OA\Response(
+        response: 200,
+        description: "Product updated",
+        content: new OA\JsonContent(
+            type: "object",
+            properties: [
+                new OA\Property(property: "data", ref: "#/components/schemas/Product")
+            ]
+        )
+    )]
+    #[OA\Response(response: 422, ref: "#/components/responses/ValidationErrorResponse")]
+    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
     public function update(UpdateProductRequest $request, int $id, ProductService $service): JsonResponse
     {
         $product = Product::findOrFail($id);
@@ -138,6 +281,16 @@ class ProductController extends Controller
         return $this->success($product, 'Product updated.');
     }
 
+    #[OA\Delete(
+        path: "/api/v1/admin/products/{product}",
+        summary: "Admin Delete Product",
+        description: "Delete a product",
+        security: [["bearerAuth" => []]],
+        tags: ["Admin Products"]
+    )]
+    #[OA\Parameter(name: "product", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
+    #[OA\Response(response: 200, description: "Product deleted")]
+    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
     public function destroy(int $id): JsonResponse
     {
         Product::findOrFail($id)->delete();
