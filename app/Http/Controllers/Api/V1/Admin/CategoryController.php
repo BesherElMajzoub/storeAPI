@@ -24,7 +24,7 @@ class CategoryController extends Controller
     )]
     #[OA\Parameter(name: "depth", in: "query", schema: new OA\Schema(type: "integer", default: 2))]
     #[OA\Response(
-        response: 200,
+        response: 200 ,
         description: "Successful response",
         content: new OA\JsonContent(
             type: "object",
