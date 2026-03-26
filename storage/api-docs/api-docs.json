@@ -1036,12 +1036,12 @@
                     "Admin Products"
                 ],
                 "summary": "Admin Create Product",
-                "description": "Create a new product",
+                "description": "Create a new product. Send as **multipart/form-data** to support image file uploads.",
                 "operationId": "40d234e149d493461a5a45e951c79b61",
                 "requestBody": {
                     "required": true,
                     "content": {
-                        "application/json": {
+                        "multipart/form-data": {
                             "schema": {
                                 "required": [
                                     "name",
@@ -1050,10 +1050,12 @@
                                 ],
                                 "properties": {
                                     "name": {
-                                        "type": "string"
+                                        "type": "string",
+                                        "example": "MacBook Pro"
                                     },
                                     "slug": {
                                         "type": "string",
+                                        "example": "macbook-pro",
                                         "nullable": true
                                     },
                                     "description": {
@@ -1061,10 +1063,18 @@
                                         "nullable": true
                                     },
                                     "price": {
-                                        "type": "number"
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 999.99
+                                    },
+                                    "discount_price": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "nullable": true
                                     },
                                     "category_id": {
-                                        "type": "integer"
+                                        "type": "integer",
+                                        "example": 1
                                     },
                                     "sku": {
                                         "type": "string",
@@ -1072,20 +1082,40 @@
                                     },
                                     "stock_qty": {
                                         "type": "integer",
+                                        "example": 50,
                                         "nullable": true
+                                    },
+                                    "status": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [
+                                            "draft",
+                                            "published",
+                                            "archived"
+                                        ]
                                     },
                                     "in_stock": {
                                         "type": "boolean",
                                         "nullable": true
                                     },
-                                    "is_active": {
+                                    "is_featured": {
                                         "type": "boolean",
                                         "nullable": true
                                     },
-                                    "images": {
+                                    "meta_title": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "meta_description": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "images[]": {
+                                        "description": "One or more image files (jpg/png/webp). Max 5 MB each.",
                                         "type": "array",
                                         "items": {
-                                            "type": "string"
+                                            "type": "string",
+                                            "format": "binary"
                                         },
                                         "nullable": true
                                     },
@@ -1173,44 +1203,13 @@
                     }
                 ]
             },
-            "delete": {
-                "tags": [
-                    "Admin Products"
-                ],
-                "summary": "Admin Delete Product",
-                "description": "Delete a product",
-                "operationId": "5b679d1be8cccb2c5bb7d1cbd21b98ed",
-                "parameters": [
-                    {
-                        "name": "product",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "integer"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Product deleted"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
-                    }
-                },
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ]
-            },
-            "patch": {
+            "post": {
                 "tags": [
                     "Admin Products"
                 ],
                 "summary": "Admin Update Product",
-                "description": "Update an existing product",
-                "operationId": "a47a5b707bf7b19097ef395d64dd9545",
+                "description": "Update an existing product. Send as **multipart/form-data** and include `_method=PATCH` field (required because browsers/HTTP clients don't support file uploads with PATCH).",
+                "operationId": "29c5d3c06eaa410deb161b2ad26307a6",
                 "parameters": [
                     {
                         "name": "product",
@@ -1224,11 +1223,20 @@
                 "requestBody": {
                     "required": true,
                     "content": {
-                        "application/json": {
+                        "multipart/form-data": {
                             "schema": {
                                 "properties": {
+                                    "_method": {
+                                        "description": "Method override required for multipart PATCH",
+                                        "type": "string",
+                                        "example": "PATCH",
+                                        "enum": [
+                                            "PATCH"
+                                        ]
+                                    },
                                     "name": {
-                                        "type": "string"
+                                        "type": "string",
+                                        "nullable": true
                                     },
                                     "slug": {
                                         "type": "string",
@@ -1239,10 +1247,18 @@
                                         "nullable": true
                                     },
                                     "price": {
-                                        "type": "number"
+                                        "type": "number",
+                                        "format": "float",
+                                        "nullable": true
+                                    },
+                                    "discount_price": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "nullable": true
                                     },
                                     "category_id": {
-                                        "type": "integer"
+                                        "type": "integer",
+                                        "nullable": true
                                     },
                                     "sku": {
                                         "type": "string",
@@ -1252,18 +1268,37 @@
                                         "type": "integer",
                                         "nullable": true
                                     },
+                                    "status": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [
+                                            "draft",
+                                            "published",
+                                            "archived"
+                                        ]
+                                    },
                                     "in_stock": {
                                         "type": "boolean",
                                         "nullable": true
                                     },
-                                    "is_active": {
+                                    "is_featured": {
                                         "type": "boolean",
                                         "nullable": true
                                     },
-                                    "images": {
+                                    "meta_title": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "meta_description": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "images[]": {
+                                        "description": "New image files to replace existing ones (jpg/png/webp). Max 5 MB each. Omit to keep existing images.",
                                         "type": "array",
                                         "items": {
-                                            "type": "string"
+                                            "type": "string",
+                                            "format": "binary"
                                         },
                                         "nullable": true
                                     },
@@ -1298,6 +1333,37 @@
                     },
                     "422": {
                         "$ref": "#/components/responses/ValidationErrorResponse"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/ErrorResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Admin Products"
+                ],
+                "summary": "Admin Delete Product",
+                "description": "Delete a product",
+                "operationId": "5b679d1be8cccb2c5bb7d1cbd21b98ed",
+                "parameters": [
+                    {
+                        "name": "product",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Product deleted"
                     },
                     "404": {
                         "$ref": "#/components/responses/ErrorResponse"
@@ -3122,35 +3188,52 @@
                     },
                     "description": {
                         "type": "string",
-                        "example": "High performance laptop"
+                        "example": "High performance laptop",
+                        "nullable": true
                     },
                     "price": {
                         "type": "number",
                         "format": "float",
                         "example": 1999.99
                     },
-                    "stock": {
+                    "discount_price": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 1799.99,
+                        "nullable": true
+                    },
+                    "final_price": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 1799.99
+                    },
+                    "stock_qty": {
                         "type": "integer",
                         "example": 10
                     },
                     "sku": {
                         "type": "string",
-                        "example": "APL-MBC-2023"
+                        "example": "APL-MBC-2023",
+                        "nullable": true
                     },
-                    "category_id": {
-                        "type": "integer",
-                        "example": 1
+                    "status": {
+                        "type": "string",
+                        "example": "published",
+                        "enum": [
+                            "draft",
+                            "published",
+                            "archived"
+                        ]
                     },
-                    "is_active": {
+                    "in_stock": {
                         "type": "boolean",
                         "example": true
                     },
-                    "image": {
-                        "type": "string",
-                        "example": "products/macbook.png",
-                        "nullable": true
+                    "is_featured": {
+                        "type": "boolean",
+                        "example": false
                     },
-                    "average_rating": {
+                    "rating": {
                         "type": "number",
                         "format": "float",
                         "example": 4.8
@@ -3158,6 +3241,37 @@
                     "reviews_count": {
                         "type": "integer",
                         "example": 15
+                    },
+                    "category_id": {
+                        "type": "integer",
+                        "example": 1,
+                        "nullable": true
+                    },
+                    "images": {
+                        "type": "array",
+                        "items": {
+                            "properties": {
+                                "id": {
+                                    "type": "integer",
+                                    "example": 1
+                                },
+                                "url": {
+                                    "type": "string",
+                                    "format": "uri",
+                                    "example": "http://localhost/storage/product-images/abc123.jpg"
+                                },
+                                "original_name": {
+                                    "type": "string",
+                                    "example": "photo.jpg"
+                                },
+                                "sort_order": {
+                                    "type": "integer",
+                                    "example": 0
+                                }
+                            },
+                            "type": "object"
+                        },
+                        "nullable": true
                     },
                     "created_at": {
                         "type": "string",

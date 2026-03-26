@@ -7,6 +7,35 @@ use Illuminate\Validation\Rule;
 
 class UpdateProductRequest extends BaseAdminRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $merge = [];
+
+        foreach (['in_stock', 'is_featured', 'is_active'] as $field) {
+            if ($this->has($field) && is_string($this->input($field))) {
+                $val = strtolower($this->input($field));
+                if ($val === 'true' || $val === '1') {
+                    $merge[$field] = true;
+                } elseif ($val === 'false' || $val === '0') {
+                    $merge[$field] = false;
+                }
+            }
+        }
+
+        foreach (['variants', 'options'] as $field) {
+            if ($this->has($field) && is_string($this->input($field))) {
+                $decoded = json_decode($this->input($field), true);
+                if (is_array($decoded)) {
+                    $merge[$field] = $decoded;
+                }
+            }
+        }
+
+        if (!empty($merge)) {
+            $this->merge($merge);
+        }
+    }
+
     public function rules(): array
     {
         $productId = (int) $this->route('id');
@@ -34,7 +63,7 @@ class UpdateProductRequest extends BaseAdminRequest
             'rating' => ['sometimes', 'numeric', 'min:0', 'max:5'],
             'reviews_count' => ['sometimes', 'integer', 'min:0'],
             'images' => ['sometimes', 'array'],
-            'images.*' => ['string', 'max:2048'],
+            'images.*' => ['file', 'image', 'max:5120'], // max 5 MB per image
             'variants' => ['sometimes', 'array'],
             'variants.*.name' => ['required_with:variants', 'string', 'max:255'],
             'variants.*.sku' => ['nullable', 'string', 'max:255'],

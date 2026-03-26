@@ -11,6 +11,7 @@ use App\Services\ProductService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use OpenApi\Attributes as OA;
 
 class ProductController extends Controller
@@ -82,37 +83,45 @@ class ProductController extends Controller
     #[OA\Post(
         path: "/api/v1/admin/products",
         summary: "Admin Create Product",
-        description: "Create a new product",
+        description: "Create a new product. Send as **multipart/form-data** to support image file uploads.",
         security: [["bearerAuth" => []]],
         tags: ["Admin Products"]
     )]
     #[OA\RequestBody(
         required: true,
-        content: new OA\JsonContent(
-            required: ["name", "price", "category_id"],
-            properties: [
-                new OA\Property(property: "name", type: "string"),
-                new OA\Property(property: "slug", type: "string", nullable: true),
-                new OA\Property(property: "description", type: "string", nullable: true),
-                new OA\Property(property: "price", type: "number"),
-                new OA\Property(property: "category_id", type: "integer"),
-                new OA\Property(property: "sku", type: "string", nullable: true),
-                new OA\Property(property: "stock_qty", type: "integer", nullable: true),
-                new OA\Property(property: "in_stock", type: "boolean", nullable: true),
-                new OA\Property(property: "is_active", type: "boolean", nullable: true),
-                new OA\Property(
-                    property: "images",
-                    type: "array",
-                    items: new OA\Items(type: "string"),
-                    nullable: true
-                ),
-                new OA\Property(
-                    property: "variants",
-                    type: "array",
-                    items: new OA\Items(type: "object"),
-                    nullable: true
-                )
-            ]
+        content: new OA\MediaType(
+            mediaType: "multipart/form-data",
+            schema: new OA\Schema(
+                required: ["name", "price", "category_id"],
+                properties: [
+                    new OA\Property(property: "name", type: "string", example: "MacBook Pro"),
+                    new OA\Property(property: "slug", type: "string", nullable: true, example: "macbook-pro"),
+                    new OA\Property(property: "description", type: "string", nullable: true),
+                    new OA\Property(property: "price", type: "number", format: "float", example: 999.99),
+                    new OA\Property(property: "discount_price", type: "number", format: "float", nullable: true),
+                    new OA\Property(property: "category_id", type: "integer", example: 1),
+                    new OA\Property(property: "sku", type: "string", nullable: true),
+                    new OA\Property(property: "stock_qty", type: "integer", nullable: true, example: 50),
+                    new OA\Property(property: "status", type: "string", enum: ["draft", "published", "archived"], nullable: true),
+                    new OA\Property(property: "in_stock", type: "boolean", nullable: true),
+                    new OA\Property(property: "is_featured", type: "boolean", nullable: true),
+                    new OA\Property(property: "meta_title", type: "string", nullable: true),
+                    new OA\Property(property: "meta_description", type: "string", nullable: true),
+                    new OA\Property(
+                        property: "images[]",
+                        description: "One or more image files (jpg/png/webp). Max 5 MB each.",
+                        type: "array",
+                        items: new OA\Items(type: "string", format: "binary"),
+                        nullable: true
+                    ),
+                    new OA\Property(
+                        property: "variants",
+                        type: "array",
+                        items: new OA\Items(type: "object"),
+                        nullable: true
+                    )
+                ]
+            )
         )
     )]
     #[OA\Response(
@@ -136,24 +145,14 @@ class ProductController extends Controller
             $data['in_stock'] = (int) $data['stock_qty'] > 0;
         }
 
-        $images = $data['images'] ?? [];
+        $uploadedImages = $request->file('images') ?? [];
         $variants = $data['variants'] ?? [];
         unset($data['images'], $data['variants']);
 
-        $product = DB::transaction(function () use ($data, $images, $variants) {
+        $product = DB::transaction(function () use ($data, $uploadedImages, $variants) {
             $product = Product::create($data);
 
-            if ($images) {
-                $rows = [];
-                foreach ($images as $index => $url) {
-                    $rows[] = [
-                        'product_id' => $product->id,
-                        'url' => $url,
-                        'sort_order' => $index,
-                    ];
-                }
-                ProductImage::insert($rows);
-            }
+            $this->syncImages($product, $uploadedImages);
 
             if ($variants) {
                 foreach ($variants as $variant) {
@@ -173,40 +172,49 @@ class ProductController extends Controller
         return $this->success($product, 'Product created.', 201);
     }
 
-    #[OA\Patch(
+    #[OA\Post(
         path: "/api/v1/admin/products/{product}",
         summary: "Admin Update Product",
-        description: "Update an existing product",
+        description: "Update an existing product. Send as **multipart/form-data** and include `_method=PATCH` field (required because browsers/HTTP clients don't support file uploads with PATCH).",
         security: [["bearerAuth" => []]],
         tags: ["Admin Products"]
     )]
     #[OA\Parameter(name: "product", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
     #[OA\RequestBody(
         required: true,
-        content: new OA\JsonContent(
-            properties: [
-                new OA\Property(property: "name", type: "string"),
-                new OA\Property(property: "slug", type: "string", nullable: true),
-                new OA\Property(property: "description", type: "string", nullable: true),
-                new OA\Property(property: "price", type: "number"),
-                new OA\Property(property: "category_id", type: "integer"),
-                new OA\Property(property: "sku", type: "string", nullable: true),
-                new OA\Property(property: "stock_qty", type: "integer", nullable: true),
-                new OA\Property(property: "in_stock", type: "boolean", nullable: true),
-                new OA\Property(property: "is_active", type: "boolean", nullable: true),
-                new OA\Property(
-                    property: "images",
-                    type: "array",
-                    items: new OA\Items(type: "string"),
-                    nullable: true
-                ),
-                new OA\Property(
-                    property: "variants",
-                    type: "array",
-                    items: new OA\Items(type: "object"),
-                    nullable: true
-                )
-            ]
+        content: new OA\MediaType(
+            mediaType: "multipart/form-data",
+            schema: new OA\Schema(
+                properties: [
+                    new OA\Property(property: "_method", type: "string", enum: ["PATCH"], example: "PATCH", description: "Method override required for multipart PATCH"),
+                    new OA\Property(property: "name", type: "string", nullable: true),
+                    new OA\Property(property: "slug", type: "string", nullable: true),
+                    new OA\Property(property: "description", type: "string", nullable: true),
+                    new OA\Property(property: "price", type: "number", format: "float", nullable: true),
+                    new OA\Property(property: "discount_price", type: "number", format: "float", nullable: true),
+                    new OA\Property(property: "category_id", type: "integer", nullable: true),
+                    new OA\Property(property: "sku", type: "string", nullable: true),
+                    new OA\Property(property: "stock_qty", type: "integer", nullable: true),
+                    new OA\Property(property: "status", type: "string", enum: ["draft", "published", "archived"], nullable: true),
+                    new OA\Property(property: "in_stock", type: "boolean", nullable: true),
+                    new OA\Property(property: "is_featured", type: "boolean", nullable: true),
+                    new OA\Property(property: "meta_title", type: "string", nullable: true),
+                    new OA\Property(property: "meta_description", type: "string", nullable: true),
+                    new OA\Property(
+                        property: "images[]",
+                        description: "New image files to replace existing ones (jpg/png/webp). Max 5 MB each. Omit to keep existing images.",
+                        type: "array",
+                        items: new OA\Items(type: "string", format: "binary"),
+                        nullable: true
+                    ),
+                    new OA\Property(
+                        property: "variants",
+                        type: "array",
+                        items: new OA\Items(type: "object"),
+                        nullable: true
+                    )
+                ]
+            )
         )
     )]
     #[OA\Response(
@@ -235,26 +243,23 @@ class ProductController extends Controller
             $data['in_stock'] = (int) $data['stock_qty'] > 0;
         }
 
-        $images = $data['images'] ?? null;
+        $uploadedImages = $request->hasFile('images') ? $request->file('images') : null;
         $variants = $data['variants'] ?? null;
         unset($data['images'], $data['variants']);
 
-        $product = DB::transaction(function () use ($product, $data, $images, $variants) {
+        $product = DB::transaction(function () use ($product, $data, $uploadedImages, $variants) {
             $product->update($data);
 
-            if (is_array($images)) {
+            if ($uploadedImages !== null) {
+                // Delete old files from disk before replacing
+                foreach ($product->images as $oldImage) {
+                    if ($oldImage->path) {
+                        Storage::disk('public')->delete($oldImage->path);
+                    }
+                }
                 $product->images()->delete();
-                $rows = [];
-                foreach ($images as $index => $url) {
-                    $rows[] = [
-                        'product_id' => $product->id,
-                        'url' => $url,
-                        'sort_order' => $index,
-                    ];
-                }
-                if ($rows) {
-                    ProductImage::insert($rows);
-                }
+
+                $this->syncImages($product, $uploadedImages);
             }
 
             if (is_array($variants)) {
@@ -295,6 +300,27 @@ class ProductController extends Controller
     {
         Product::findOrFail($id)->delete();
         return $this->success(null, 'Product deleted.');
+    }
+
+    /**
+     * Store uploaded image files and create ProductImage records.
+     *
+     * @param  Product  $product
+     * @param  array<\Illuminate\Http\UploadedFile>  $files
+     */
+    private function syncImages(Product $product, array $files): void
+    {
+        foreach ($files as $index => $file) {
+            $path = $file->store('product-images', 'public');
+
+            ProductImage::create([
+                'product_id'    => $product->id,
+                'path'          => $path,
+                'mime_type'     => $file->getMimeType(),
+                'original_name' => $file->getClientOriginalName(),
+                'sort_order'    => $index,
+            ]);
+        }
     }
 
     private function success($data, string $message, int $status = 200): JsonResponse
