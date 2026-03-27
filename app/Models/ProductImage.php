@@ -15,10 +15,9 @@ class ProductImage extends Model
         'sort_order',
     ];
 
-    // Expose a public URL so API consumers can access the image directly
     public function getUrlAttribute(): ?string
     {
-        return $this->path ? Storage::disk('public')->url($this->path) : null;
+        return $this->path ? asset('storage/' . $this->path) : null;
     }
 
     public function product()

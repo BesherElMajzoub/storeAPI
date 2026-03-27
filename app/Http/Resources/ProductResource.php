@@ -32,7 +32,16 @@ class ProductResource extends JsonResource
                     'sort_order'    => $img->sort_order,
                 ]);
             }),
-            'variants'       => $this->whenLoaded('variants'),
+            'variants'       => $this->whenLoaded('variants', function () {
+                return $this->variants->map(fn ($variant) => [
+                    'id'         => $variant->id,
+                    'name'       => $variant->name,
+                    'sku'        => $variant->sku,
+                    'price'      => (float) $variant->price,
+                    'stock_qty'  => $variant->stock_qty,
+                    'attributes' => $variant->attributes,
+                ]);
+            }),
             'attributes'     => $this->options,
         ];
     }

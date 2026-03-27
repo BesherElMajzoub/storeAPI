@@ -54,7 +54,7 @@ class ProductController extends Controller
 
         $products = Product::query()
             ->published()
-            ->with(['category', 'images'])
+            ->with(['category', 'images', 'variants'])
             ->filter($filters)
             ->sort($request->get('sort', 'newest'))
             ->paginate($perPage);
