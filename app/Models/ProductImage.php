@@ -15,6 +15,8 @@ class ProductImage extends Model
         'sort_order',
     ];
 
+    protected $appends = ['url'];
+
     public function getUrlAttribute(): ?string
     {
         return $this->path ? asset('storage/' . $this->path) : null;

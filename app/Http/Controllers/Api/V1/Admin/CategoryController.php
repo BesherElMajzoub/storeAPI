@@ -58,21 +58,25 @@ class CategoryController extends Controller
     #[OA\Post(
         path: "/api/v1/admin/categories",
         summary: "Admin Create Category",
-        description: "Create a new category",
+        description: "Create a new category. Send as **multipart/form-data** to support image file uploads.",
         security: [["bearerAuth" => []]],
         tags: ["Admin Categories"]
     )]
     #[OA\RequestBody(
         required: true,
-        content: new OA\JsonContent(
-            required: ["name"],
-            properties: [
-                new OA\Property(property: "name", type: "string", example: "Electronics"),
-                new OA\Property(property: "slug", type: "string", example: "electronics"),
-                new OA\Property(property: "parent_id", type: "integer", nullable: true, example: null),
-                new OA\Property(property: "is_active", type: "boolean", example: true),
-                new OA\Property(property: "description", type: "string", nullable: true)
-            ]
+        content: new OA\MediaType(
+            mediaType: "multipart/form-data",
+            schema: new OA\Schema(
+                required: ["name"],
+                properties: [
+                    new OA\Property(property: "name", type: "string", example: "Electronics"),
+                    new OA\Property(property: "slug", type: "string", example: "electronics"),
+                    new OA\Property(property: "parent_id", type: "integer", nullable: true, example: null),
+                    new OA\Property(property: "is_active", type: "boolean", example: true),
+                    new OA\Property(property: "description", type: "string", nullable: true),
+                    new OA\Property(property: "image", type: "string", format: "binary", nullable: true, description: "Category image file (max 5MB)")
+                ]
+            )
         )
     )]
     #[OA\Response(
@@ -92,29 +96,38 @@ class CategoryController extends Controller
         $slugSource = $data['slug'] ?? $data['name'];
         $data['slug'] = $service->generateUniqueSlug($slugSource);
 
+        if ($request->hasFile('image')) {
+            $data['image'] = $request->file('image')->store('category-images', 'public');
+        }
+
         $category = Category::create($data);
 
         return $this->success($category, 'Category created.', 201);
     }
 
-    #[OA\Patch(
+    #[OA\Post(
         path: "/api/v1/admin/categories/{category}",
         summary: "Admin Update Category",
-        description: "Update an existing category",
+        description: "Update an existing category. Send as **multipart/form-data** and include `_method=PATCH` field to support file uploads.",
         security: [["bearerAuth" => []]],
         tags: ["Admin Categories"]
     )]
     #[OA\Parameter(name: "category", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
     #[OA\RequestBody(
         required: true,
-        content: new OA\JsonContent(
-            properties: [
-                new OA\Property(property: "name", type: "string"),
-                new OA\Property(property: "slug", type: "string"),
-                new OA\Property(property: "parent_id", type: "integer", nullable: true),
-                new OA\Property(property: "is_active", type: "boolean"),
-                new OA\Property(property: "description", type: "string", nullable: true)
-            ]
+        content: new OA\MediaType(
+            mediaType: "multipart/form-data",
+            schema: new OA\Schema(
+                properties: [
+                    new OA\Property(property: "_method", type: "string", enum: ["PATCH"], example: "PATCH", description: "Method override required for multipart PATCH"),
+                    new OA\Property(property: "name", type: "string"),
+                    new OA\Property(property: "slug", type: "string"),
+                    new OA\Property(property: "parent_id", type: "integer", nullable: true),
+                    new OA\Property(property: "is_active", type: "boolean"),
+                    new OA\Property(property: "description", type: "string", nullable: true),
+                    new OA\Property(property: "image", type: "string", format: "binary", nullable: true, description: "Category image file (max 5MB)")
+                ]
+            )
         )
     )]
     #[OA\Response(
@@ -136,6 +149,14 @@ class CategoryController extends Controller
 
         if (array_key_exists('slug', $data)) {
             $data['slug'] = $service->generateUniqueSlug($data['slug'], $category->id);
+        }
+
+        if ($request->hasFile('image')) {
+            $oldImage = $category->getRawOriginal('image');
+            if ($oldImage && !str_starts_with($oldImage, 'http')) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($oldImage);
+            }
+            $data['image'] = $request->file('image')->store('category-images', 'public');
         }
 
         $category->update($data);

@@ -19,7 +19,7 @@ class UpdateCategoryRequest extends BaseAdminRequest
                 'integer',
                 Rule::exists('categories', 'id')->whereNull('deleted_at'),
             ],
-            'image' => ['sometimes', 'nullable', 'string', 'max:2048'],
+            'image' => ['sometimes', 'nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg,webp', 'max:5120'],
             'is_active' => ['sometimes', 'boolean'],
             'sort_order' => ['sometimes', 'integer', 'min:0'],
             'meta_title' => ['sometimes', 'nullable', 'string', 'max:255'],

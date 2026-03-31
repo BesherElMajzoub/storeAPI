@@ -13,6 +13,27 @@ abstract class BaseAdminRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $this->merge($this->transformData($this->all()));
+    }
+
+    private function transformData(array $data): array
+    {
+        foreach ($data as $key => $value) {
+            if (is_array($value)) {
+                $data[$key] = $this->transformData($value);
+            } elseif ($value === 'true') {
+                $data[$key] = true;
+            } elseif ($value === 'false') {
+                $data[$key] = false;
+            } elseif ($value === 'null' || $value === 'undefined') {
+                $data[$key] = null;
+            }
+        }
+        return $data;
+    }
+
     protected function failedValidation(Validator $validator): void
     {
         $response = response()->json([

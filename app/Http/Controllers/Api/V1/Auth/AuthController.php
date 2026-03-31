@@ -320,10 +320,10 @@ class AuthController extends Controller
         content: new OA\JsonContent(
             required: ["email", "token", "password", "password_confirmation"],
             properties: [
-                new OA\Property(property: "email", type: "string", format: "email", example: "user@example.com"),
+                new OA\Property(property: "email", type: "string", format: "email", example: "admin@store.com"),
                 new OA\Property(property: "token", type: "string"),
-                new OA\Property(property: "password", type: "string", format: "password"),
-                new OA\Property(property: "password_confirmation", type: "string", format: "password")
+                new OA\Property(property: "password", type: "string", format: "password123"),
+                new OA\Property(property: "password_confirmation", type: "string", format: "password123")
             ]
         )
     )]

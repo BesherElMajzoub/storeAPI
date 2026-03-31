@@ -428,12 +428,12 @@
                     "Admin Categories"
                 ],
                 "summary": "Admin Create Category",
-                "description": "Create a new category",
+                "description": "Create a new category. Send as **multipart/form-data** to support image file uploads.",
                 "operationId": "ab5ff56942d867e660ac42c379acccf9",
                 "requestBody": {
                     "required": true,
                     "content": {
-                        "application/json": {
+                        "multipart/form-data": {
                             "schema": {
                                 "required": [
                                     "name"
@@ -458,6 +458,12 @@
                                     },
                                     "description": {
                                         "type": "string",
+                                        "nullable": true
+                                    },
+                                    "image": {
+                                        "description": "Category image file (max 5MB)",
+                                        "type": "string",
+                                        "format": "binary",
                                         "nullable": true
                                     }
                                 },
@@ -537,44 +543,13 @@
                     }
                 ]
             },
-            "delete": {
-                "tags": [
-                    "Admin Categories"
-                ],
-                "summary": "Admin Delete Category",
-                "description": "Delete a category",
-                "operationId": "75eccfb8117846a724f4624692b4bf8a",
-                "parameters": [
-                    {
-                        "name": "category",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "integer"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Category deleted"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
-                    }
-                },
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ]
-            },
-            "patch": {
+            "post": {
                 "tags": [
                     "Admin Categories"
                 ],
                 "summary": "Admin Update Category",
-                "description": "Update an existing category",
-                "operationId": "65dd35909dab6c2b742f0efdf39ff955",
+                "description": "Update an existing category. Send as **multipart/form-data** and include `_method=PATCH` field to support file uploads.",
+                "operationId": "20002b071ef997033b5ec6ad693d2216",
                 "parameters": [
                     {
                         "name": "category",
@@ -588,9 +563,17 @@
                 "requestBody": {
                     "required": true,
                     "content": {
-                        "application/json": {
+                        "multipart/form-data": {
                             "schema": {
                                 "properties": {
+                                    "_method": {
+                                        "description": "Method override required for multipart PATCH",
+                                        "type": "string",
+                                        "example": "PATCH",
+                                        "enum": [
+                                            "PATCH"
+                                        ]
+                                    },
                                     "name": {
                                         "type": "string"
                                     },
@@ -606,6 +589,12 @@
                                     },
                                     "description": {
                                         "type": "string",
+                                        "nullable": true
+                                    },
+                                    "image": {
+                                        "description": "Category image file (max 5MB)",
+                                        "type": "string",
+                                        "format": "binary",
                                         "nullable": true
                                     }
                                 },
@@ -632,6 +621,37 @@
                     },
                     "422": {
                         "$ref": "#/components/responses/ValidationErrorResponse"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/ErrorResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Admin Categories"
+                ],
+                "summary": "Admin Delete Category",
+                "description": "Delete a category",
+                "operationId": "75eccfb8117846a724f4624692b4bf8a",
+                "parameters": [
+                    {
+                        "name": "category",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Category deleted"
                     },
                     "404": {
                         "$ref": "#/components/responses/ErrorResponse"
@@ -1996,18 +2016,18 @@
                                     "email": {
                                         "type": "string",
                                         "format": "email",
-                                        "example": "user@example.com"
+                                        "example": "admin@store.com"
                                     },
                                     "token": {
                                         "type": "string"
                                     },
                                     "password": {
                                         "type": "string",
-                                        "format": "password"
+                                        "format": "password123"
                                     },
                                     "password_confirmation": {
                                         "type": "string",
-                                        "format": "password"
+                                        "format": "password123"
                                     }
                                 },
                                 "type": "object"

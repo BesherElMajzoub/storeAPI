@@ -9,18 +9,9 @@ class UpdateProductRequest extends BaseAdminRequest
 {
     protected function prepareForValidation(): void
     {
-        $merge = [];
+        parent::prepareForValidation();
 
-        foreach (['in_stock', 'is_featured', 'is_active'] as $field) {
-            if ($this->has($field) && is_string($this->input($field))) {
-                $val = strtolower($this->input($field));
-                if ($val === 'true' || $val === '1') {
-                    $merge[$field] = true;
-                } elseif ($val === 'false' || $val === '0') {
-                    $merge[$field] = false;
-                }
-            }
-        }
+        $merge = [];
 
         foreach (['variants', 'options'] as $field) {
             if ($this->has($field) && is_string($this->input($field))) {

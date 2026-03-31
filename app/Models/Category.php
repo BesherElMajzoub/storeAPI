@@ -21,6 +21,14 @@ class Category extends Model
         'sort_order' => 'integer',
     ];
 
+    public function getImageAttribute($value)
+    {
+        if ($value && !str_starts_with($value, 'http')) {
+            return asset('storage/' . $value);
+        }
+        return $value;
+    }
+
     public function parent()
     {
         return $this->belongsTo(Category::class, 'parent_id');

@@ -16,7 +16,7 @@ class StoreCategoryRequest extends BaseAdminRequest
                 'integer',
                 Rule::exists('categories', 'id')->whereNull('deleted_at'),
             ],
-            'image' => ['nullable', 'string', 'max:2048'],
+            'image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg,webp', 'max:5120'],
             'is_active' => ['nullable', 'boolean'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'meta_title' => ['nullable', 'string', 'max:255'],
