@@ -49,7 +49,7 @@ class ProductController extends Controller
     public function index(Request $request): JsonResponse
     {
         $perPage = min(max((int) $request->get('per_page', 20), 1), 100);
-        $products = Product::with('category')->latest()->paginate($perPage);
+        $products = Product::with(['category', 'images', 'variants'])->latest()->paginate($perPage);
 
         return $this->success($products, 'Products fetched.');
     }
