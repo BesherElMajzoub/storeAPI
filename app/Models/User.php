@@ -74,11 +74,11 @@ class User extends Authenticatable
     }
 
     /**
-     * Products in this user's wishlist (many-to-many via wishlists table).
+     * Items in this user's wishlist
      */
-    public function wishlistProducts()
+    public function wishlistItems()
     {
-        return $this->belongsToMany(Product::class, 'wishlists')->withTimestamps();
+        return $this->hasMany(WishlistItem::class);
     }
 
     public function orders()

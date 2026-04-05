@@ -52,7 +52,7 @@ class Product extends Model
      */
     public function wishlistedByUsers()
     {
-        return $this->belongsToMany(User::class, 'wishlists')->withTimestamps();
+        return $this->belongsToMany(User::class, 'wishlist_items')->withTimestamps();
     }
 
     // Accessors & Scopes

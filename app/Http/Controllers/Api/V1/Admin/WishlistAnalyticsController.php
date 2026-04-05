@@ -40,8 +40,8 @@ class WishlistAnalyticsController extends Controller
         $perPage = min(max((int) $request->get('per_page', 20), 1), 100);
 
         $products = Product::select('products.*')
-            ->addSelect(DB::raw('COUNT(wishlists.id) as wishlist_count'))
-            ->leftJoin('wishlists', 'wishlists.product_id', '=', 'products.id')
+            ->addSelect(DB::raw('COUNT(wishlist_items.id) as wishlist_count'))
+            ->leftJoin('wishlist_items', 'wishlist_items.product_id', '=', 'products.id')
             ->whereNull('products.deleted_at')  // respect soft deletes
             ->groupBy('products.id')
             ->orderByDesc('wishlist_count')
@@ -90,13 +90,13 @@ class WishlistAnalyticsController extends Controller
     )]
     public function summary(): JsonResponse
     {
-        $totalWishlists = DB::table('wishlists')->count();
-        $uniqueProducts = DB::table('wishlists')->distinct('product_id')->count();
-        $uniqueUsers    = DB::table('wishlists')->distinct('user_id')->count();
+        $totalWishlists = DB::table('wishlist_items')->count();
+        $uniqueProducts = DB::table('wishlist_items')->distinct('product_id')->count();
+        $uniqueUsers    = DB::table('wishlist_items')->distinct('user_id')->count();
 
         $topProduct = Product::select('products.*')
-            ->addSelect(DB::raw('COUNT(wishlists.id) as wishlist_count'))
-            ->leftJoin('wishlists', 'wishlists.product_id', '=', 'products.id')
+            ->addSelect(DB::raw('COUNT(wishlist_items.id) as wishlist_count'))
+            ->leftJoin('wishlist_items', 'wishlist_items.product_id', '=', 'products.id')
             ->whereNull('products.deleted_at')
             ->groupBy('products.id')
             ->orderByDesc('wishlist_count')

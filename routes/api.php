@@ -8,6 +8,8 @@ use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\AddressController;
 use App\Http\Controllers\Api\V1\WishlistController;
+use App\Http\Controllers\Api\V1\ContactMessageController;
+use App\Http\Controllers\Api\V1\InspiredLeadController;
 // Admin Imports
 use App\Http\Controllers\Api\V1\Admin\DashboardController;
 use App\Http\Controllers\Api\V1\Admin\ProductController as AdminProductController;
@@ -15,6 +17,8 @@ use App\Http\Controllers\Api\V1\Admin\CategoryController as AdminCategoryControl
 use App\Http\Controllers\Api\V1\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Api\V1\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Api\V1\Admin\WishlistAnalyticsController;
+use App\Http\Controllers\Api\V1\Admin\ContactMessageController as AdminContactMessageController;
+use App\Http\Controllers\Api\V1\Admin\InspiredLeadController as AdminInspiredLeadController;
 
 Route::prefix('v1')->group(function () {
     
@@ -36,6 +40,9 @@ Route::prefix('v1')->group(function () {
     });
 
     // --- PUBLIC STORE ---
+    Route::post('contact-messages', [ContactMessageController::class, 'store']);
+    Route::post('inspired-leads', [InspiredLeadController::class, 'store']);
+
     Route::get('categories', [CategoryController::class, 'index']);
     Route::get('categories/{slug}', [CategoryController::class, 'show']);
 
@@ -62,8 +69,10 @@ Route::prefix('v1')->group(function () {
 
         // ----- Wishlist -----
         Route::get('wishlist', [WishlistController::class, 'index']);
-        Route::post('wishlist/{product}', [WishlistController::class, 'toggle']);
-        Route::delete('wishlist/{product}', [WishlistController::class, 'destroy']);
+        Route::post('wishlist', [WishlistController::class, 'store']);
+        Route::get('wishlist/count', [WishlistController::class, 'count']);
+        Route::get('wishlist/check/{productId}', [WishlistController::class, 'check']);
+        Route::delete('wishlist/{productId}', [WishlistController::class, 'destroy']);
     });
 
     // --- ADMIN ---
@@ -91,5 +100,12 @@ Route::prefix('v1')->group(function () {
         // Wishlist Analytics
         Route::get('wishlist-analytics', [WishlistAnalyticsController::class, 'index']);
         Route::get('wishlist-analytics/summary', [WishlistAnalyticsController::class, 'summary']);
+
+        // Contact Messages
+        Route::apiResource('contact-messages', AdminContactMessageController::class)->except(['store']);
+        Route::patch('contact-messages/{id}/status', [AdminContactMessageController::class, 'updateStatus']);
+
+        // Inspired Leads
+        Route::apiResource('inspired-leads', AdminInspiredLeadController::class)->except(['store']);
     });
 });

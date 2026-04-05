@@ -22,7 +22,7 @@ class AddressController extends Controller
         summary: "List user addresses",
         description: "List all addresses of the authenticated user, ordered by default first.",
         security: [["bearerAuth" => []]],
-        tags: ["Profile", "Addresses"]
+        tags: ["Profile"]
     )]
     #[OA\Response(
         response: 200,
@@ -62,7 +62,7 @@ class AddressController extends Controller
         summary: "Create Address",
         description: "Create a new address for the authenticated user",
         security: [["bearerAuth" => []]],
-        tags: ["Profile", "Addresses"]
+        tags: ["Profile"]
     )]
     #[OA\RequestBody(
         required: true,
@@ -124,7 +124,7 @@ class AddressController extends Controller
         summary: "Update Address",
         description: "Update an existing user address",
         security: [["bearerAuth" => []]],
-        tags: ["Profile", "Addresses"]
+        tags: ["Profile"]
     )]
     #[OA\Parameter(name: "id", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
     #[OA\RequestBody(
@@ -181,7 +181,7 @@ class AddressController extends Controller
         summary: "Delete Address",
         description: "Delete an existing user address",
         security: [["bearerAuth" => []]],
-        tags: ["Profile", "Addresses"]
+        tags: ["Profile"]
     )]
     #[OA\Parameter(name: "id", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
     #[OA\Response(
@@ -223,7 +223,7 @@ class AddressController extends Controller
         summary: "Set Default Address",
         description: "Set a specific user address as the default",
         security: [["bearerAuth" => []]],
-        tags: ["Profile", "Addresses"]
+        tags: ["Profile"]
     )]
     #[OA\Parameter(name: "id", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
     #[OA\Response(

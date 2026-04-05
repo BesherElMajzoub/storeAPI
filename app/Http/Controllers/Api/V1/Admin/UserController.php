@@ -112,18 +112,23 @@ class UserController extends Controller
     {
         $user = User::findOrFail($id);
 
-        $wishlist = $user->wishlistProducts()
-            ->with('images')
+        $wishlist = $user->wishlistItems()
+            ->with(['product.images'])
             ->get()
-            ->map(fn ($product) => [
-                'id'        => $product->id,
-                'name'      => $product->name,
-                'slug'      => $product->slug,
-                'price'     => (float) $product->price,
-                'final_price' => (float) $product->final_price,
-                'image'     => $product->images->first()?->url,
-                'added_at'  => $product->pivot->created_at?->toISOString(),
-            ]);
+            ->map(function ($item) {
+                $product = $item->product;
+                if (!$product) return null;
+                
+                return [
+                    'id'        => $product->id,
+                    'name'      => $product->name,
+                    'slug'      => $product->slug,
+                    'price'     => (float) $product->price,
+                    'final_price' => (float) $product->final_price,
+                    'image'     => $product->images->first()?->url,
+                    'added_at'  => $item->created_at?->toISOString(),
+                ];
+            })->filter()->values();
 
         return $this->success([
             'user' => [

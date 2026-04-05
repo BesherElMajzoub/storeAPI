@@ -18,8 +18,7 @@
         "/api/v1/profile/addresses": {
             "get": {
                 "tags": [
-                    "Profile",
-                    "Addresses"
+                    "Profile"
                 ],
                 "summary": "List user addresses",
                 "description": "List all addresses of the authenticated user, ordered by default first.",
@@ -63,8 +62,7 @@
             },
             "post": {
                 "tags": [
-                    "Profile",
-                    "Addresses"
+                    "Profile"
                 ],
                 "summary": "Create Address",
                 "description": "Create a new address for the authenticated user",
@@ -164,8 +162,7 @@
         "/api/v1/profile/addresses/{id}": {
             "put": {
                 "tags": [
-                    "Profile",
-                    "Addresses"
+                    "Profile"
                 ],
                 "summary": "Update Address",
                 "description": "Update an existing user address",
@@ -267,8 +264,7 @@
             },
             "delete": {
                 "tags": [
-                    "Profile",
-                    "Addresses"
+                    "Profile"
                 ],
                 "summary": "Delete Address",
                 "description": "Delete an existing user address",
@@ -325,8 +321,7 @@
         "/api/v1/profile/addresses/{id}/default": {
             "post": {
                 "tags": [
-                    "Profile",
-                    "Addresses"
+                    "Profile"
                 ],
                 "summary": "Set Default Address",
                 "description": "Set a specific user address as the default",
@@ -717,6 +712,231 @@
                 ]
             }
         },
+        "/api/v1/admin/contact-messages": {
+            "get": {
+                "tags": [
+                    "Admin Contact Messages"
+                ],
+                "summary": "Admin List Contact Messages",
+                "description": "List all contact messages for admin",
+                "operationId": "ac5a5d48bca4c3ed3f5296cd632f37f5",
+                "parameters": [
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 15
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Messages fetched",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Contact messages retrieved."
+                                        },
+                                        "data": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/contact-messages/{id}": {
+            "get": {
+                "tags": [
+                    "Admin Contact Messages"
+                ],
+                "summary": "Admin Show Contact Message",
+                "description": "Show a single contact message. This action automatically marks a 'new' status message as 'read'.",
+                "operationId": "3d1bfcd00c3d50785d38383a6b937f46",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Message fetched",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Message retrieved."
+                                        },
+                                        "data": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Admin Contact Messages"
+                ],
+                "summary": "Admin Delete Contact Message",
+                "description": "Delete a contact message permanently.",
+                "operationId": "f51f874ac378099c47c47f4c3c92d5e0",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Message deleted",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Message deleted successfully."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/contact-messages/{id}/status": {
+            "patch": {
+                "tags": [
+                    "Admin Contact Messages"
+                ],
+                "summary": "Admin Update Contact Message Status",
+                "description": "Update the status and optionally internal notes of a contact message.",
+                "operationId": "bb23030592d67af5b8707d4734dbe666",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "status"
+                                ],
+                                "properties": {
+                                    "status": {
+                                        "type": "string",
+                                        "example": "replied",
+                                        "enum": [
+                                            "new",
+                                            "read",
+                                            "replied",
+                                            "archived"
+                                        ]
+                                    },
+                                    "notes": {
+                                        "type": "string",
+                                        "example": "User contacted back via email.",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Message updated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Message status updated."
+                                        },
+                                        "data": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/admin/dashboard": {
             "get": {
                 "tags": [
@@ -781,6 +1001,236 @@
                     },
                     "403": {
                         "$ref": "#/components/responses/ErrorResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/inspired-leads": {
+            "get": {
+                "tags": [
+                    "Admin Inspired Leads"
+                ],
+                "summary": "Admin List Inspired Leads",
+                "description": "List all phone leads/subscribers for admin",
+                "operationId": "00e042f0515d16c1386121083c6f4012",
+                "parameters": [
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 15
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Leads fetched",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Leads retrieved successfully."
+                                        },
+                                        "data": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/inspired-leads/{id}": {
+            "get": {
+                "tags": [
+                    "Admin Inspired Leads"
+                ],
+                "summary": "Admin Show Inspired Lead",
+                "description": "Show a single inspired lead details.",
+                "operationId": "09e921831ea64c20d20b253cc6126f15",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lead fetched",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Lead retrieved."
+                                        },
+                                        "data": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Admin Inspired Leads"
+                ],
+                "summary": "Admin Update Inspired Lead",
+                "description": "Update the status, notes, or info of a lead.",
+                "operationId": "72de36d0327a7fe0aae3267eeba55a9b",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "status": {
+                                        "type": "string",
+                                        "example": "contacted",
+                                        "enum": [
+                                            "new",
+                                            "contacted",
+                                            "converted",
+                                            "closed"
+                                        ]
+                                    },
+                                    "notes": {
+                                        "type": "string",
+                                        "example": "Called them, left voicemail.",
+                                        "nullable": true
+                                    },
+                                    "name": {
+                                        "type": "string",
+                                        "example": "John Doe",
+                                        "nullable": true
+                                    },
+                                    "phone": {
+                                        "type": "string",
+                                        "example": "+1234567890",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Lead updated",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Lead updated successfully."
+                                        },
+                                        "data": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Admin Inspired Leads"
+                ],
+                "summary": "Admin Delete Inspired Lead",
+                "description": "Delete an inspired lead permanently.",
+                "operationId": "fc43b1ec4f145714dc81ef21f8ab3914",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lead deleted",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Lead deleted successfully."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
                     }
                 },
                 "security": [
@@ -2300,6 +2750,177 @@
                 }
             }
         },
+        "/api/v1/contact-messages": {
+            "post": {
+                "tags": [
+                    "Public"
+                ],
+                "summary": "Submit Contact Us Form",
+                "description": "Saves a new contact us message.",
+                "operationId": "406d94d9b4292aa01e2846e879e8c2dd",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "name",
+                                    "email",
+                                    "message"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "example": "John Doe"
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "example": "john@example.com"
+                                    },
+                                    "phone": {
+                                        "type": "string",
+                                        "example": "+1234567890",
+                                        "nullable": true
+                                    },
+                                    "subject": {
+                                        "type": "string",
+                                        "example": "Inquiry about product",
+                                        "nullable": true
+                                    },
+                                    "message": {
+                                        "type": "string",
+                                        "example": "I have a question about my order."
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Message sent successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Your message has been sent successfully."
+                                        },
+                                        "data": {
+                                            "nullable": true
+                                        },
+                                        "errors": {
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ErrorResponse"
+                    }
+                }
+            }
+        },
+        "/api/v1/inspired-leads": {
+            "post": {
+                "tags": [
+                    "Public"
+                ],
+                "summary": "Submit Stay Inspired Form (Phone)",
+                "description": "Saves a new phone lead. If phone is already registered, returns a graceful success message.",
+                "operationId": "c43df26ae6f4924f13314937501444ba",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "phone"
+                                ],
+                                "properties": {
+                                    "phone": {
+                                        "type": "string",
+                                        "example": "+1234567890"
+                                    },
+                                    "name": {
+                                        "type": "string",
+                                        "example": "John Doe",
+                                        "nullable": true
+                                    },
+                                    "source": {
+                                        "type": "string",
+                                        "example": "stay_inspired",
+                                        "default": "stay_inspired"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Lead saved successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Your phone number has been saved successfully."
+                                        },
+                                        "data": {
+                                            "nullable": true
+                                        },
+                                        "errors": {
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Lead already exists",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Your phone number is already registered. We will be in touch!"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ErrorResponse"
+                    }
+                }
+            }
+        },
         "/api/v1/orders": {
             "get": {
                 "tags": [
@@ -2701,10 +3322,6 @@
                                             "type": "boolean",
                                             "example": true
                                         },
-                                        "message": {
-                                            "type": "string",
-                                            "example": "Wishlist fetched."
-                                        },
                                         "data": {
                                             "type": "array",
                                             "items": {
@@ -2726,19 +3343,79 @@
                         "bearerAuth": []
                     }
                 ]
-            }
-        },
-        "/api/v1/wishlist/{product}": {
+            },
             "post": {
                 "tags": [
                     "Wishlist"
                 ],
-                "summary": "Toggle Wishlist Product",
-                "description": "Toggle a product in the user's wishlist (add if not present, remove if present)",
-                "operationId": "e90fd688b8c4830599c2e67e69c9bfee",
+                "summary": "Add Product to Wishlist",
+                "description": "Add a product to the user's wishlist",
+                "operationId": "f7c48be564db5eeceb5bef318fb7c93f",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "product_id"
+                                ],
+                                "properties": {
+                                    "product_id": {
+                                        "type": "integer",
+                                        "example": 1
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Product added to wishlist",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Product added to wishlist."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/ErrorResponse"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ErrorResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/wishlist/{productId}": {
+            "delete": {
+                "tags": [
+                    "Wishlist"
+                ],
+                "summary": "Remove Wishlist Product",
+                "description": "Explicitly remove a product from the user's wishlist",
+                "operationId": "98b47f6e98b90e215246cfd021948885",
                 "parameters": [
                     {
-                        "name": "product",
+                        "name": "productId",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -2760,15 +3437,6 @@
                                         "message": {
                                             "type": "string",
                                             "example": "Product removed from wishlist."
-                                        },
-                                        "data": {
-                                            "properties": {
-                                                "in_wishlist": {
-                                                    "type": "boolean",
-                                                    "example": false
-                                                }
-                                            },
-                                            "type": "object"
                                         }
                                     },
                                     "type": "object"
@@ -2776,8 +3444,38 @@
                             }
                         }
                     },
-                    "201": {
-                        "description": "Product added to wishlist",
+                    "404": {
+                        "$ref": "#/components/responses/ErrorResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/wishlist/check/{productId}": {
+            "get": {
+                "tags": [
+                    "Wishlist"
+                ],
+                "summary": "Check if product is in wishlist",
+                "description": "Returns a boolean indicating if the product exists in wishlist",
+                "operationId": "22f66296288b9a00c359572f1e6fd06c",
+                "parameters": [
+                    {
+                        "name": "productId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Check status fetched",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -2785,10 +3483,6 @@
                                         "success": {
                                             "type": "boolean",
                                             "example": true
-                                        },
-                                        "message": {
-                                            "type": "string",
-                                            "example": "Product added to wishlist."
                                         },
                                         "data": {
                                             "properties": {
@@ -2804,12 +3498,6 @@
                                 }
                             }
                         }
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/ErrorResponse"
                     }
                 },
                 "security": [
@@ -2817,27 +3505,19 @@
                         "bearerAuth": []
                     }
                 ]
-            },
-            "delete": {
+            }
+        },
+        "/api/v1/wishlist/count": {
+            "get": {
                 "tags": [
                     "Wishlist"
                 ],
-                "summary": "Remove Wishlist Product",
-                "description": "Explicitly remove a product from the user's wishlist",
-                "operationId": "6e6fb9aaab4d79c2254d99ec526dfea6",
-                "parameters": [
-                    {
-                        "name": "product",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "integer"
-                        }
-                    }
-                ],
+                "summary": "Get Wishlist Count",
+                "description": "Returns the total count of items in the wishlist",
+                "operationId": "c8b58ce93e7d8494b615796aaa73d3b0",
                 "responses": {
                     "200": {
-                        "description": "Product removed from wishlist",
+                        "description": "Count fetched",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -2846,15 +3526,11 @@
                                             "type": "boolean",
                                             "example": true
                                         },
-                                        "message": {
-                                            "type": "string",
-                                            "example": "Product removed from wishlist."
-                                        },
                                         "data": {
                                             "properties": {
-                                                "in_wishlist": {
-                                                    "type": "boolean",
-                                                    "example": false
+                                                "count": {
+                                                    "type": "integer",
+                                                    "example": 5
                                                 }
                                             },
                                             "type": "object"
@@ -2864,12 +3540,6 @@
                                 }
                             }
                         }
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/ErrorResponse"
                     }
                 },
                 "security": [
@@ -3427,16 +4097,20 @@
             "description": "Profile"
         },
         {
-            "name": "Addresses",
-            "description": "Addresses"
-        },
-        {
             "name": "Admin Categories",
             "description": "Admin Categories"
         },
         {
+            "name": "Admin Contact Messages",
+            "description": "Admin Contact Messages"
+        },
+        {
             "name": "Admin Dashboard",
             "description": "Admin Dashboard"
+        },
+        {
+            "name": "Admin Inspired Leads",
+            "description": "Admin Inspired Leads"
         },
         {
             "name": "Admin Orders",
@@ -3461,6 +4135,10 @@
         {
             "name": "Categories",
             "description": "Categories"
+        },
+        {
+            "name": "Public",
+            "description": "Public"
         },
         {
             "name": "Orders",
