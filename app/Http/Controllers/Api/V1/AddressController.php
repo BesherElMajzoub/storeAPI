@@ -68,17 +68,21 @@ class AddressController extends Controller
         required: true,
         content: new OA\JsonContent(
             required: ["title", "address_line_1", "city", "state", "postal_code", "country", "phone"],
-            properties: [
-                new OA\Property(property: "title", type: "string", example: "Home"),
-                new OA\Property(property: "address_line_1", type: "string", example: "123 Main St"),
-                new OA\Property(property: "address_line_2", type: "string", example: "Apt 4B"),
-                new OA\Property(property: "city", type: "string", example: "New York"),
-                new OA\Property(property: "state", type: "string", example: "NY"),
-                new OA\Property(property: "postal_code", type: "string", example: "10001"),
-                new OA\Property(property: "country", type: "string", example: "USA"),
-                new OA\Property(property: "phone", type: "string", example: "123-456-7890"),
-                new OA\Property(property: "is_default", type: "boolean", example: true)
-            ]
+        properties: [
+    new OA\Property(property: "label", type: "string", example: "work"),
+    new OA\Property(property: "full_name", type: "string", example: "John Doe"),
+    new OA\Property(property: "phone", type: "string", example: "+1234567890"),
+    new OA\Property(property: "country", type: "string", example: "United Arab Emirates"),
+    new OA\Property(property: "city", type: "string", example: "Dubai"),
+    new OA\Property(property: "area", type: "string", example: "Downtown"),
+    new OA\Property(property: "street", type: "string", example: "Sheikh Zayed Road"),
+    new OA\Property(property: "building", type: "string", example: "Burj Khalifa"),
+    new OA\Property(property: "floor", type: "string", example: "42"),
+    new OA\Property(property: "apartment", type: "string", example: "4205"),
+    new OA\Property(property: "postal_code", type: "string", example: "00000"),
+    new OA\Property(property: "notes", type: "string", example: "Please leave packages at the reception"),
+    new OA\Property(property: "is_default", type: "boolean", example: true),
+]
         )
     )]
     #[OA\Response(
