@@ -99,6 +99,10 @@ class AddressController extends Controller
         $data = $request->validated();
         $user = $request->user();
 
+        // Backward compatibility for legacy address fields
+        $data['name'] = $data['full_name'] ?? 'Unknown';
+        $data['line1'] = $data['street'] ?? 'Unknown';
+
         // First address → auto default
         $hasAddresses = $user->addresses()->exists();
         if (!$hasAddresses) {
@@ -162,6 +166,15 @@ class AddressController extends Controller
         $address = $this->findOwnAddress($request, $id);
 
         $data = $request->validated();
+        
+        // Backward compatibility for legacy address fields
+        if (isset($data['full_name'])) {
+            $data['name'] = $data['full_name'];
+        }
+        if (isset($data['street'])) {
+            $data['line1'] = $data['street'];
+        }
+
         $address->update($data);
 
         // If user wants to set this as default
