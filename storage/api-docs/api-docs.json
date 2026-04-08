@@ -82,37 +82,53 @@
                                     "phone"
                                 ],
                                 "properties": {
-                                    "title": {
+                                    "label": {
                                         "type": "string",
-                                        "example": "Home"
+                                        "example": "work"
                                     },
-                                    "address_line_1": {
+                                    "full_name": {
                                         "type": "string",
-                                        "example": "123 Main St"
-                                    },
-                                    "address_line_2": {
-                                        "type": "string",
-                                        "example": "Apt 4B"
-                                    },
-                                    "city": {
-                                        "type": "string",
-                                        "example": "New York"
-                                    },
-                                    "state": {
-                                        "type": "string",
-                                        "example": "NY"
-                                    },
-                                    "postal_code": {
-                                        "type": "string",
-                                        "example": "10001"
-                                    },
-                                    "country": {
-                                        "type": "string",
-                                        "example": "USA"
+                                        "example": "John Doe"
                                     },
                                     "phone": {
                                         "type": "string",
-                                        "example": "123-456-7890"
+                                        "example": "+1234567890"
+                                    },
+                                    "country": {
+                                        "type": "string",
+                                        "example": "United Arab Emirates"
+                                    },
+                                    "city": {
+                                        "type": "string",
+                                        "example": "Dubai"
+                                    },
+                                    "area": {
+                                        "type": "string",
+                                        "example": "Downtown"
+                                    },
+                                    "street": {
+                                        "type": "string",
+                                        "example": "Sheikh Zayed Road"
+                                    },
+                                    "building": {
+                                        "type": "string",
+                                        "example": "Burj Khalifa"
+                                    },
+                                    "floor": {
+                                        "type": "string",
+                                        "example": "42"
+                                    },
+                                    "apartment": {
+                                        "type": "string",
+                                        "example": "4205"
+                                    },
+                                    "postal_code": {
+                                        "type": "string",
+                                        "example": "00000"
+                                    },
+                                    "notes": {
+                                        "type": "string",
+                                        "example": "Please leave packages at the reception"
                                     },
                                     "is_default": {
                                         "type": "boolean",
@@ -2296,6 +2312,76 @@
                     },
                     "401": {
                         "$ref": "#/components/responses/ErrorResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Update My Profile",
+                "description": "Update the authenticated user's profile information. All fields are optional.",
+                "operationId": "82dde267a70d6c731ea2935e94dc1a8a",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "example": "John Doe"
+                                    },
+                                    "phone": {
+                                        "type": "string",
+                                        "example": "+123456789",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Profile updated successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Profile updated successfully."
+                                        },
+                                        "data": {
+                                            "$ref": "#/components/schemas/User"
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/ErrorResponse"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationErrorResponse"
                     }
                 },
                 "security": [

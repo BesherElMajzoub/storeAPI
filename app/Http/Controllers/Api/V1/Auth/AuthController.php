@@ -9,6 +9,7 @@ use App\Http\Requests\Api\V1\Auth\OtpSendRequest;
 use App\Http\Requests\Api\V1\Auth\OtpVerifyRequest;
 use App\Http\Requests\Api\V1\Auth\RegisterRequest;
 use App\Http\Requests\Api\V1\Auth\ResetPasswordRequest;
+use App\Http\Requests\Api\V1\Auth\UpdateProfileRequest;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\OtpService;
@@ -179,6 +180,56 @@ class AuthController extends Controller
     public function me(Request $request)
     {
         return $this->success($request->user()->load('roles'), 'Profile fetched.');
+    }
+
+    #[OA\Put(
+        path: "/api/v1/auth/me",
+        summary: "Update My Profile",
+        description: "Update the authenticated user's profile information. All fields are optional.",
+        security: [["bearerAuth" => []]],
+        tags: ["Authentication"]
+    )]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            properties: [
+                new OA\Property(property: "name",     type: "string",  example: "John Doe"),
+                // new OA\Property(property: "email",    type: "string",  format: "email", example: "john@example.com"),
+                new OA\Property(property: "phone",    type: "string",  example: "+123456789", nullable: true),
+                // new OA\Property(property: "password", type: "string",  format: "password", example: "newPassword123"),
+                // new OA\Property(property: "password_confirmation", type: "string", format: "password", example: "newPassword123"),
+            ]
+        )
+    )]
+    #[OA\Response(
+        response: 200,
+        description: "Profile updated successfully",
+        content: new OA\JsonContent(
+            type: "object",
+            properties: [
+                new OA\Property(property: "success", type: "boolean", example: true),
+                new OA\Property(property: "message", type: "string",  example: "Profile updated successfully."),
+                new OA\Property(property: "data",    ref: "#/components/schemas/User"),
+                new OA\Property(property: "errors",  type: "object",  nullable: true, example: null),
+            ]
+        )
+    )]
+    #[OA\Response(response: 401, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 422, ref: "#/components/responses/ValidationErrorResponse")]
+    public function updateProfile(UpdateProfileRequest $request)
+    {
+        $user = $request->user();
+        $data = $request->validated();
+
+        // Only update fields that were actually sent in the request
+        if (isset($data['name']))     $user->name     = $data['name'];
+        if (isset($data['email']))    $user->email    = $data['email'];
+        if (isset($data['phone']))    $user->phone    = $data['phone'] ?? null;
+        if (isset($data['password'])) $user->password = $data['password'];  // auto-hashed by cast
+
+        $user->save();
+
+        return $this->success($user->fresh()->load('roles'), 'Profile updated successfully.');
     }
 
     #[OA\Post(
