@@ -3,10 +3,11 @@
 namespace App\Mail;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
 
-class OtpCodeMail extends Mailable
+class OtpCodeMail extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
@@ -31,6 +32,11 @@ class OtpCodeMail extends Mailable
             ->view('emails.otp')
             ->with([
                 'purposeLabel' => $purposeLabel,
+                'code' => $this->code,
+                'expiresInMinutes' => $this->expiresInMinutes,
+                'intendedFor' => $this->intendedFor,
+                'deliveredTo' => $this->deliveredTo,
+                'sentToOverride' => $this->sentToOverride,
             ]);
     }
 }

@@ -3,52 +3,33 @@
 namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Product;
+use App\Services\WishlistAnalyticsService;
+use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use OpenApi\Attributes as OA;
 
 class WishlistAnalyticsController extends Controller
 {
-    /**
-     * GET /admin/wishlist-analytics
-     * 
-     * Admin > Wishlist Analytics
-     * Returns all products sorted by their wishlist count (highest first).
-     */
+    use ApiResponseTrait;
+
+    public function __construct(private readonly WishlistAnalyticsService $analyticsService) {}
+
     #[OA\Get(
-        path: "/api/v1/admin/wishlist-analytics",
-        summary: "Admin Wishlist Analytics",
-        description: "Returns all products sorted by their wishlist count",
-        security: [["bearerAuth" => []]],
-        tags: ["Admin Wishlist"]
+        path: '/api/v1/admin/wishlist-analytics',
+        summary: 'Admin Wishlist Analytics',
+        description: 'Returns all products sorted by their current wishlist count',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Wishlist']
     )]
-    #[OA\Parameter(name: "per_page", in: "query", schema: new OA\Schema(type: "integer", default: 20))]
-    #[OA\Response(
-        response: 200,
-        description: "Analytics fetched",
-        content: new OA\JsonContent(
-            type: "object",
-            properties: [
-                new OA\Property(property: "data", type: "object")
-            ]
-        )
-    )]
+    #[OA\Parameter(name: 'per_page', in: 'query', schema: new OA\Schema(type: 'integer', default: 20))]
+    #[OA\Response(response: 200, description: 'Analytics fetched')]
     public function index(Request $request): JsonResponse
     {
-        $perPage = min(max((int) $request->get('per_page', 20), 1), 100);
+        $perPage  = min(max((int) $request->get('per_page', 20), 1), 100);
+        $products = $this->analyticsService->getProductsByWishlistCount($perPage);
 
-        $products = Product::select('products.*')
-            ->addSelect(DB::raw('COUNT(wishlist_items.id) as wishlist_count'))
-            ->leftJoin('wishlist_items', 'wishlist_items.product_id', '=', 'products.id')
-            ->whereNull('products.deleted_at')  // respect soft deletes
-            ->groupBy('products.id')
-            ->orderByDesc('wishlist_count')
-            ->with('images')
-            ->paginate($perPage);
-
-        $formatted = $products->through(fn ($product) => [
+        $formatted = $products->through(fn($product) => [
             'id'             => $product->id,
             'name'           => $product->name,
             'slug'           => $product->slug,
@@ -58,66 +39,87 @@ class WishlistAnalyticsController extends Controller
             'wishlist_count' => (int) $product->wishlist_count,
         ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Wishlist analytics fetched.',
-            'data'    => $formatted,
-            'errors'  => null,
-        ]);
+        return $this->success($formatted, 'Wishlist analytics fetched.');
     }
 
-    /**
-     * GET /admin/wishlist-analytics/summary
-     * 
-     * Quick summary stats for the dashboard.
-     */
     #[OA\Get(
-        path: "/api/v1/admin/wishlist-analytics/summary",
-        summary: "Admin Wishlist Summary",
-        description: "Quick summary stats of wishlists for the dashboard",
-        security: [["bearerAuth" => []]],
-        tags: ["Admin Wishlist"]
+        path: '/api/v1/admin/wishlist-analytics/summary',
+        summary: 'Admin Wishlist Summary',
+        description: 'Enhanced summary stats with week-over-week trend data',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Wishlist']
     )]
-    #[OA\Response(
-        response: 200,
-        description: "Summary fetched",
-        content: new OA\JsonContent(
-            type: "object",
-            properties: [
-                new OA\Property(property: "data", type: "object")
-            ]
-        )
-    )]
+    #[OA\Response(response: 200, description: 'Summary fetched')]
     public function summary(): JsonResponse
     {
-        $totalWishlists = DB::table('wishlist_items')->count();
-        $uniqueProducts = DB::table('wishlist_items')->distinct('product_id')->count();
-        $uniqueUsers    = DB::table('wishlist_items')->distinct('user_id')->count();
+        return $this->success(
+            $this->analyticsService->getSummary(),
+            'Wishlist summary fetched.'
+        );
+    }
 
-        $topProduct = Product::select('products.*')
-            ->addSelect(DB::raw('COUNT(wishlist_items.id) as wishlist_count'))
-            ->leftJoin('wishlist_items', 'wishlist_items.product_id', '=', 'products.id')
-            ->whereNull('products.deleted_at')
-            ->groupBy('products.id')
-            ->orderByDesc('wishlist_count')
-            ->with('images')
-            ->first();
+    #[OA\Get(
+        path: '/api/v1/admin/wishlist-analytics/trending',
+        summary: 'Admin Wishlist Trending',
+        description: 'Products trending by wishlist adds in the last N days',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Wishlist']
+    )]
+    #[OA\Parameter(name: 'days', in: 'query', schema: new OA\Schema(type: 'integer', default: 7))]
+    #[OA\Parameter(name: 'per_page', in: 'query', schema: new OA\Schema(type: 'integer', default: 20))]
+    #[OA\Response(response: 200, description: 'Trending products fetched')]
+    public function trending(Request $request): JsonResponse
+    {
+        $days    = min(max((int) $request->get('days', 7), 1), 90);
+        $perPage = min(max((int) $request->get('per_page', 20), 1), 100);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Wishlist summary fetched.',
-            'data'    => [
-                'total_wishlist_entries' => $totalWishlists,
-                'unique_wishlisted_products' => $uniqueProducts,
-                'users_with_wishlist' => $uniqueUsers,
-                'top_product' => $topProduct ? [
-                    'id'             => $topProduct->id,
-                    'name'           => $topProduct->name,
-                    'wishlist_count' => (int) $topProduct->wishlist_count,
-                    'image'          => $topProduct->images->first()?->url,
-                ] : null,
-            ],
-            'errors'  => null,
+        $products = $this->analyticsService->getTrending($days, $perPage);
+
+        $formatted = $products->through(fn($product) => [
+            'id'          => $product->id,
+            'name'        => $product->name,
+            'slug'        => $product->slug,
+            'price'       => (float) $product->price,
+            'final_price' => (float) $product->final_price,
+            'image'       => $product->images->first()?->url,
+            'recent_adds' => (int) $product->recent_adds,
         ]);
+
+        return $this->success($formatted, "Trending products in the last {$days} days.");
+    }
+
+    #[OA\Get(
+        path: '/api/v1/admin/wishlist-analytics/conversions',
+        summary: 'Admin Wishlist Conversions',
+        description: 'Products with wishlist-to-purchase conversion data',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Wishlist']
+    )]
+    #[OA\Parameter(name: 'per_page', in: 'query', schema: new OA\Schema(type: 'integer', default: 20))]
+    #[OA\Response(response: 200, description: 'Conversion data fetched')]
+    public function conversions(Request $request): JsonResponse
+    {
+        $perPage  = min(max((int) $request->get('per_page', 20), 1), 100);
+        $products = $this->analyticsService->getConversions($perPage);
+
+        $formatted = $products->through(function ($product) {
+            $wishlisted = (int) $product->total_wishlisted;
+            $converted  = (int) $product->total_converted;
+
+            return [
+                'id'               => $product->id,
+                'name'             => $product->name,
+                'slug'             => $product->slug,
+                'price'            => (float) $product->price,
+                'image'            => $product->images->first()?->url,
+                'total_wishlisted' => $wishlisted,
+                'total_converted'  => $converted,
+                'conversion_rate'  => $wishlisted > 0
+                    ? round(($converted / $wishlisted) * 100, 1)
+                    : 0,
+            ];
+        });
+
+        return $this->success($formatted, 'Wishlist conversion data fetched.');
     }
 }

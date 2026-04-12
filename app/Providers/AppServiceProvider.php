@@ -2,14 +2,21 @@
 
 namespace App\Providers;
 
+use App\Events\WishlistItemAdded;
+use App\Events\WishlistItemRemoved;
+use App\Listeners\RecordWishlistEvent;
+use App\Models\Address;
+use App\Models\Review;
+use App\Observers\ReviewObserver;
+use App\Policies\AddressPolicy;
+use App\Policies\ReviewPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
-use App\Models\Address;
-use App\Policies\AddressPolicy;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -26,6 +33,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // ─── Rate Limiters ────────────────────────────────────────────────────────
         RateLimiter::for('login', function (Request $request) {
             $email = Str::lower((string) $request->input('email'));
             return Limit::perMinute(5)->by($email . '|' . $request->ip());
@@ -41,11 +49,21 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(3)->by($email . '|' . $request->ip());
         });
 
-        \Illuminate\Support\Facades\Gate::define('admin-access', function ($user) {
+        // ─── Gates ────────────────────────────────────────────────────────────────
+        Gate::define('admin-access', function ($user) {
             return $user->roles()->whereIn('name', ['Admin', 'Owner', 'Manager', 'Support'])->exists();
         });
 
-        // Register Policies
+        // ─── Policies ─────────────────────────────────────────────────────────────
         Gate::policy(Address::class, AddressPolicy::class);
+        Gate::policy(Review::class, ReviewPolicy::class);
+
+        // ─── Observers ────────────────────────────────────────────────────────────
+        Review::observe(ReviewObserver::class);
+
+        // ─── Event Listeners ──────────────────────────────────────────────────────
+        $listener = new RecordWishlistEvent();
+        Event::listen(WishlistItemAdded::class,   [$listener, 'handleAdded']);
+        Event::listen(WishlistItemRemoved::class, [$listener, 'handleRemoved']);
     }
 }

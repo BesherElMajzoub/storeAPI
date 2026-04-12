@@ -18,15 +18,17 @@ class ResetPasswordMail extends Mailable implements ShouldQueue
 
     public function build()
     {
-        // Construct the frontend reset URL
-        // Ensure FRONTEND_URL is set in your .env (e.g., http://localhost:3000)
-        // If not set, it defaults to localhost:3000
-        $baseUrl = config('app.frontend_url', 'http://localhost:3000');
-        $url = rtrim($baseUrl, '/') 
-             . "/reset-password?token={$this->token}&email=" . urlencode($this->email);
+        $baseUrl = config('app.frontend_url', 'http://localhost:8000');
+
+        $url = rtrim($baseUrl, '/')
+            .'/reset-password?token='.urlencode($this->token)
+            .'&email='.urlencode($this->email);
 
         return $this->subject('Reset Your Password')
-                    ->view('emails.reset')
-                    ->with(['url' => $url]);
+            ->view('emails.reset')
+            ->with([
+                'url' => $url,
+                'email' => $this->email,
+            ]);
     }
 }

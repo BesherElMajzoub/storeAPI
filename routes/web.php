@@ -39,3 +39,8 @@ Route::post('/stripe/checkout', function (Request $request) {
 
 Route::get('/stripe/success', fn () => 'تم الدفع بنجاح ✅');
 Route::get('/stripe/cancel', fn () => 'تم إلغاء الدفع ❌');
+
+Route::get('/google-test', function () {
+    return view('google-auth');
+});
+

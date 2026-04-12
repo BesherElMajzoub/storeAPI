@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\CategoryController;
 use App\Http\Controllers\Api\V1\ProductController;
+use App\Http\Controllers\Api\V1\ReviewController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\AddressController;
 use App\Http\Controllers\Api\V1\WishlistController;
@@ -19,6 +20,7 @@ use App\Http\Controllers\Api\V1\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Api\V1\Admin\WishlistAnalyticsController;
 use App\Http\Controllers\Api\V1\Admin\ContactMessageController as AdminContactMessageController;
 use App\Http\Controllers\Api\V1\Admin\InspiredLeadController as AdminInspiredLeadController;
+use App\Http\Controllers\Api\V1\Admin\ReviewController as AdminReviewController;
 
 Route::prefix('v1')->group(function () {
     
@@ -30,7 +32,7 @@ Route::prefix('v1')->group(function () {
         Route::post('reset-password', [AuthController::class, 'resetPassword']);
         Route::post('otp/send', [AuthController::class, 'sendOtp'])->middleware('throttle:otp');
         Route::post('otp/verify', [AuthController::class, 'verifyOtp'])->middleware('throttle:otp');
-        Route::post('google', [AuthController::class, 'googleLogin']);
+        Route::post('google', [AuthController::class, 'googleLogin'])->middleware('throttle:login');
         
         Route::middleware('auth:sanctum')->group(function () {
             Route::get('me', [AuthController::class, 'me']);
@@ -58,6 +60,12 @@ Route::prefix('v1')->group(function () {
         Route::get('orders', [OrderController::class, 'index']);
         Route::get('orders/{id}', [OrderController::class, 'show']);
         Route::post('orders/{id}/cancel', [OrderController::class, 'cancel']);
+
+        // Reviews (auth user CRUD)
+        Route::post('products/{product}/reviews', [ReviewController::class, 'store']);
+        Route::get('products/{product}/my-review', [ReviewController::class, 'myReview']);
+        Route::put('products/{product}/reviews/{review}', [ReviewController::class, 'update']);
+        Route::delete('products/{product}/reviews/{review}', [ReviewController::class, 'destroy']);
 
         // ----- My Addresses (Profile) -----
         Route::prefix('profile')->group(function () {
@@ -101,6 +109,8 @@ Route::prefix('v1')->group(function () {
         // Wishlist Analytics
         Route::get('wishlist-analytics', [WishlistAnalyticsController::class, 'index']);
         Route::get('wishlist-analytics/summary', [WishlistAnalyticsController::class, 'summary']);
+        Route::get('wishlist-analytics/trending', [WishlistAnalyticsController::class, 'trending']);
+        Route::get('wishlist-analytics/conversions', [WishlistAnalyticsController::class, 'conversions']);
 
         // Contact Messages
         Route::apiResource('contact-messages', AdminContactMessageController::class)->except(['store']);
@@ -108,5 +118,11 @@ Route::prefix('v1')->group(function () {
 
         // Inspired Leads
         Route::apiResource('inspired-leads', AdminInspiredLeadController::class)->except(['store']);
+
+        // Reviews Moderation
+        Route::get('reviews', [AdminReviewController::class, 'index']);
+        Route::get('reviews/{review}', [AdminReviewController::class, 'show']);
+        Route::patch('reviews/{review}/moderate', [AdminReviewController::class, 'moderate']);
+        Route::delete('reviews/{review}', [AdminReviewController::class, 'destroy']);
     });
 });

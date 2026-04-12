@@ -22,6 +22,7 @@ class User extends Authenticatable
         'email',
         'password',
         'phone',
+        'avatar_url',
     ];
 
     /**
@@ -53,6 +54,14 @@ class User extends Authenticatable
     public function roles()
     {
         return $this->belongsToMany(Role::class);
+    }
+
+    /**
+     * Social accounts linked to this user (Google, Apple, etc.)
+     */
+    public function socialAccounts()
+    {
+        return $this->hasMany(SocialAccount::class);
     }
 
     public function hasRole($role)

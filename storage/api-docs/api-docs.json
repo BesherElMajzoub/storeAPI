@@ -1862,6 +1862,173 @@
                 ]
             }
         },
+        "/api/v1/admin/reviews": {
+            "get": {
+                "tags": [
+                    "Admin Reviews"
+                ],
+                "summary": "Admin - List Reviews",
+                "description": "Get all reviews with filters. Admin only.",
+                "operationId": "7afe9fddf9cb00d79047fdd1a211126e",
+                "parameters": [
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "pending",
+                                "approved",
+                                "rejected"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "product_id",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 20
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Reviews fetched"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/reviews/{review}": {
+            "get": {
+                "tags": [
+                    "Admin Reviews"
+                ],
+                "summary": "Admin - Get Review",
+                "description": "Get a single review by ID. Admin only.",
+                "operationId": "14e0f07070d37cc09aa834c0dcb9721e",
+                "parameters": [
+                    {
+                        "name": "review",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Review fetched"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Admin Reviews"
+                ],
+                "summary": "Admin - Delete Review",
+                "description": "Permanently delete a review. Admin only.",
+                "operationId": "608282d1aecc5d91c19decc9aff0bfaa",
+                "parameters": [
+                    {
+                        "name": "review",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Review deleted"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/reviews/{review}/moderate": {
+            "patch": {
+                "tags": [
+                    "Admin Reviews"
+                ],
+                "summary": "Admin - Moderate Review",
+                "description": "Approve or reject a review. Updates product rating automatically.",
+                "operationId": "62741d3a3b2b5196653fe70b052371a5",
+                "parameters": [
+                    {
+                        "name": "review",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "action"
+                                ],
+                                "properties": {
+                                    "action": {
+                                        "type": "string",
+                                        "example": "approve",
+                                        "enum": [
+                                            "approve",
+                                            "reject"
+                                        ]
+                                    },
+                                    "admin_note": {
+                                        "type": "string",
+                                        "example": "Review violates content policy."
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Review moderated"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationErrorResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/admin/users": {
             "get": {
                 "tags": [
@@ -2053,7 +2220,7 @@
                     "Admin Wishlist"
                 ],
                 "summary": "Admin Wishlist Analytics",
-                "description": "Returns all products sorted by their wishlist count",
+                "description": "Returns all products sorted by their current wishlist count",
                 "operationId": "da55bb86233e7899b81949bd6c111d35",
                 "parameters": [
                     {
@@ -2067,19 +2234,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Analytics fetched",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "properties": {
-                                        "data": {
-                                            "type": "object"
-                                        }
-                                    },
-                                    "type": "object"
-                                }
-                            }
-                        }
+                        "description": "Analytics fetched"
                     }
                 },
                 "security": [
@@ -2095,23 +2250,79 @@
                     "Admin Wishlist"
                 ],
                 "summary": "Admin Wishlist Summary",
-                "description": "Quick summary stats of wishlists for the dashboard",
+                "description": "Enhanced summary stats with week-over-week trend data",
                 "operationId": "72622b0639f90833e876cca9f0686c93",
                 "responses": {
                     "200": {
-                        "description": "Summary fetched",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "properties": {
-                                        "data": {
-                                            "type": "object"
-                                        }
-                                    },
-                                    "type": "object"
-                                }
-                            }
+                        "description": "Summary fetched"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/wishlist-analytics/trending": {
+            "get": {
+                "tags": [
+                    "Admin Wishlist"
+                ],
+                "summary": "Admin Wishlist Trending",
+                "description": "Products trending by wishlist adds in the last N days",
+                "operationId": "92d22235a2c0b3327dd83cee5007253d",
+                "parameters": [
+                    {
+                        "name": "days",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 7
                         }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 20
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Trending products fetched"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/wishlist-analytics/conversions": {
+            "get": {
+                "tags": [
+                    "Admin Wishlist"
+                ],
+                "summary": "Admin Wishlist Conversions",
+                "description": "Products with wishlist-to-purchase conversion data",
+                "operationId": "ed5c14dd772660430da770b6861b76d0",
+                "parameters": [
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 20
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Conversion data fetched"
                     }
                 },
                 "security": [
@@ -2700,30 +2911,31 @@
                 }
             }
         },
-        "/api/v1/auth/google/login": {
+        "/api/v1/auth/google": {
             "post": {
                 "tags": [
                     "Authentication"
                 ],
                 "summary": "Google Login",
-                "description": "Login via Google (mocked)",
-                "operationId": "534c1ec633822d7bfa2087467171c65c",
+                "description": "Login or register via a verified Google ID token. Handles account linking automatically.",
+                "operationId": "0d4ce33a2fb7520fe7ab2ad10861750f",
                 "requestBody": {
                     "required": true,
                     "content": {
                         "application/json": {
                             "schema": {
                                 "required": [
-                                    "token",
-                                    "email"
+                                    "id_token"
                                 ],
                                 "properties": {
-                                    "token": {
+                                    "id_token": {
+                                        "description": "Google ID token from client-side Google Sign-In",
                                         "type": "string"
                                     },
-                                    "email": {
+                                    "device_name": {
                                         "type": "string",
-                                        "format": "email"
+                                        "example": "web",
+                                        "nullable": true
                                     }
                                 },
                                 "type": "object"
@@ -2733,7 +2945,7 @@
                 },
                 "responses": {
                     "200": {
-                        "description": "Successful login",
+                        "description": "Login successful",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -2749,6 +2961,9 @@
                                                 },
                                                 "user": {
                                                     "$ref": "#/components/schemas/User"
+                                                },
+                                                "is_new_user": {
+                                                    "type": "boolean"
                                                 }
                                             },
                                             "type": "object"
@@ -2759,8 +2974,14 @@
                             }
                         }
                     },
-                    "400": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                    "401": {
+                        "description": "Invalid Google token"
+                    },
+                    "403": {
+                        "description": "Account is disabled"
+                    },
+                    "503": {
+                        "description": "Cannot reach Google verification service"
                     }
                 }
             }
@@ -3387,6 +3608,200 @@
                         "$ref": "#/components/responses/ErrorResponse"
                     }
                 }
+            }
+        },
+        "/api/v1/products/{product}/reviews": {
+            "post": {
+                "tags": [
+                    "Reviews"
+                ],
+                "summary": "Create Review",
+                "description": "Submit a review for a product. One review per user per product.",
+                "operationId": "4612bd3acb30854e0cb4f1c4b9e129cf",
+                "parameters": [
+                    {
+                        "name": "product",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "rating"
+                                ],
+                                "properties": {
+                                    "rating": {
+                                        "type": "integer",
+                                        "example": 4,
+                                        "maximum": 5,
+                                        "minimum": 1
+                                    },
+                                    "comment": {
+                                        "type": "string",
+                                        "example": "Great product, highly recommend!"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Review submitted successfully"
+                    },
+                    "409": {
+                        "description": "Already reviewed this product"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationErrorResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/products/{product}/my-review": {
+            "get": {
+                "tags": [
+                    "Reviews"
+                ],
+                "summary": "Get My Review",
+                "description": "Get the authenticated user's review for a specific product",
+                "operationId": "be79136f7eca0026004e34005cd12e7d",
+                "parameters": [
+                    {
+                        "name": "product",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Review fetched"
+                    },
+                    "404": {
+                        "description": "No review found"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/products/{product}/reviews/{review}": {
+            "put": {
+                "tags": [
+                    "Reviews"
+                ],
+                "summary": "Update Review",
+                "description": "Update your own review. Edit window is 30 days from creation.",
+                "operationId": "61f3e5bed904223d4ab93429a1678bf7",
+                "parameters": [
+                    {
+                        "name": "product",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "review",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "rating": {
+                                        "type": "integer",
+                                        "maximum": 5,
+                                        "minimum": 1
+                                    },
+                                    "comment": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Review updated"
+                    },
+                    "403": {
+                        "description": "Not authorized or edit window expired"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Reviews"
+                ],
+                "summary": "Delete Review",
+                "description": "Delete your own review.",
+                "operationId": "be56e84acee0a4e3b6959b5a3912d016",
+                "parameters": [
+                    {
+                        "name": "product",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "review",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Review deleted"
+                    },
+                    "403": {
+                        "description": "Not authorized"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
             }
         },
         "/api/v1/wishlist": {
@@ -4205,6 +4620,10 @@
         {
             "name": "Admin Products",
             "description": "Admin Products"
+        },
+        {
+            "name": "Admin Reviews",
+            "description": "Admin Reviews"
         },
         {
             "name": "Admin Users",

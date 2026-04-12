@@ -2,15 +2,19 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Events\WishlistItemAdded;
+use App\Events\WishlistItemRemoved;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\WishlistItemResource;
 use App\Models\Product;
+use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 
 class WishlistController extends Controller
 {
+    use ApiResponseTrait;
     #[OA\Get(
         path: "/api/v1/wishlist",
         summary: "Get Wishlist",
@@ -107,6 +111,9 @@ class WishlistController extends Controller
             'product_id' => $productId
         ]);
 
+        // Dispatch event for analytics tracking
+        WishlistItemAdded::dispatch($user, $product);
+
         return response()->json([
             'success' => true,
             'message' => 'Product added to wishlist.'
@@ -143,6 +150,12 @@ class WishlistController extends Controller
                 'success' => false,
                 'message' => 'Product not found in wishlist.'
             ], 404);
+        }
+
+        // Dispatch event for analytics tracking
+        $product = Product::find($productId);
+        if ($product) {
+            WishlistItemRemoved::dispatch($user, $product);
         }
 
         return response()->json([
