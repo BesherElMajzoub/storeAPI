@@ -3,7 +3,8 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\ProductResource;
+use App\Http\Resources\ProductCardResource;
+use App\Http\Resources\ProductDetailResource;
 use App\Http\Resources\ReviewResource;
 use App\Models\Product;
 use Illuminate\Http\Request;
@@ -54,12 +55,12 @@ class ProductController extends Controller
 
         $products = Product::query()
             ->published()
-            ->with(['category', 'images', 'variants'])
+            ->with(['category', 'media'])
             ->filter($filters)
             ->sort($request->get('sort', 'newest'))
             ->paginate($perPage);
 
-        return ProductResource::collection($products);
+        return ProductCardResource::collection($products);
     }
 
     #[OA\Get(
@@ -85,8 +86,8 @@ class ProductController extends Controller
         $product = Product::where('slug', $slug)
             ->published()
             ->with([
-                'category',
-                'images',
+                'category.media',
+                'media',
                 'variants',
                 'reviews' => function ($query) {
                     $query->where('is_approved', true)->with('user');
@@ -94,7 +95,7 @@ class ProductController extends Controller
             ])
             ->firstOrFail();
 
-        return new ProductResource($product);
+        return new ProductDetailResource($product);
     }
 
     #[OA\Get(

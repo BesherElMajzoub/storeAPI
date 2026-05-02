@@ -3,7 +3,8 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\CategoryResource;
+use App\Http\Resources\CategoryCardResource;
+use App\Http\Resources\CategoryDetailResource;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
@@ -34,11 +35,11 @@ class CategoryController extends Controller
     {
         $categories = Category::where('is_active', true)
             ->whereNull('parent_id')
-            ->with('children')
+            ->with(['media'])
             ->orderBy('sort_order')
             ->get();
 
-        return CategoryResource::collection($categories);
+        return CategoryCardResource::collection($categories);
     }
 
     #[OA\Get(
@@ -69,8 +70,9 @@ class CategoryController extends Controller
     {
         $category = Category::where('slug', $slug)
             ->where('is_active', true)
+            ->with('media')
             ->firstOrFail();
 
-        return new CategoryResource($category);
+        return new CategoryDetailResource($category);
     }
 }

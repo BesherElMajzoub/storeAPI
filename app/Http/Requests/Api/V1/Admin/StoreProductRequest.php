@@ -50,7 +50,7 @@ class StoreProductRequest extends BaseAdminRequest
             'rating' => ['nullable', 'numeric', 'min:0', 'max:5'],
             'reviews_count' => ['nullable', 'integer', 'min:0'],
             'images' => ['sometimes', 'array'],
-            'images.*' => ['file', 'image', 'max:5120'], // max 5 MB per image
+            'images.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'], // max 5 MB per image
             'variants' => ['sometimes', 'array'],
             'variants.*.name' => ['required_with:variants', 'string', 'max:255'],
             'variants.*.sku' => ['nullable', 'string', 'max:255', Rule::unique('product_variants', 'sku')],

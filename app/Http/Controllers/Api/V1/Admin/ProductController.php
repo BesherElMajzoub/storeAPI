@@ -5,13 +5,12 @@ namespace App\Http\Controllers\Api\V1\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Admin\StoreProductRequest;
 use App\Http\Requests\Api\V1\Admin\UpdateProductRequest;
+use App\Http\Resources\ProductDetailResource;
 use App\Models\Product;
-use App\Models\ProductImage;
 use App\Services\ProductService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use OpenApi\Attributes as OA;
 
 class ProductController extends Controller
@@ -49,9 +48,12 @@ class ProductController extends Controller
     public function index(Request $request): JsonResponse
     {
         $perPage = min(max((int) $request->get('per_page', 20), 1), 100);
-        $products = Product::with(['category', 'images', 'variants'])->latest()->paginate($perPage);
+        $products = Product::with(['category.media', 'media', 'variants'])->latest()->paginate($perPage);
 
-        return $this->success($products, 'Products fetched.');
+        return $this->success(
+            ProductDetailResource::collection($products)->response()->getData(true),
+            'Products fetched.'
+        );
     }
 
     #[OA\Get(
@@ -75,9 +77,9 @@ class ProductController extends Controller
     #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
     public function show(int $id): JsonResponse
     {
-        $product = Product::with(['variants', 'images', 'category'])->findOrFail($id);
+        $product = Product::with(['variants', 'media', 'category.media'])->findOrFail($id);
 
-        return $this->success($product, 'Product fetched.');
+        return $this->success(new ProductDetailResource($product), 'Product fetched.');
     }
 
     #[OA\Post(
@@ -152,24 +154,28 @@ class ProductController extends Controller
         $product = DB::transaction(function () use ($data, $uploadedImages, $variants) {
             $product = Product::create($data);
 
-            $this->syncImages($product, $uploadedImages);
+            // Add images to Spatie media collection
+            foreach ($uploadedImages as $file) {
+                $product->addMedia($file)
+                    ->toMediaCollection('product_images');
+            }
 
             if ($variants) {
                 foreach ($variants as $variant) {
                     $product->variants()->create([
-                        'name' => $variant['name'],
-                        'sku' => $variant['sku'] ?? null,
-                        'price' => $variant['price'] ?? null,
-                        'stock_qty' => $variant['stock_qty'] ?? 0,
+                        'name'       => $variant['name'],
+                        'sku'        => $variant['sku'] ?? null,
+                        'price'      => $variant['price'] ?? null,
+                        'stock_qty'  => $variant['stock_qty'] ?? 0,
                         'attributes' => $variant['attributes'] ?? null,
                     ]);
                 }
             }
 
-            return $product->load(['variants', 'images', 'category']);
+            return $product->load(['variants', 'media', 'category.media']);
         });
 
-        return $this->success($product, 'Product created.', 201);
+        return $this->success(new ProductDetailResource($product), 'Product created.', 201);
     }
 
     #[OA\Post(
@@ -251,39 +257,37 @@ class ProductController extends Controller
             $product->update($data);
 
             if ($uploadedImages !== null) {
-                // Delete old files from disk before replacing
-                foreach ($product->images as $oldImage) {
-                    if ($oldImage->path) {
-                        Storage::disk('public')->delete($oldImage->path);
-                    }
-                }
-                $product->images()->delete();
+                // Clear existing collection and re-upload via Spatie
+                $product->clearMediaCollection('product_images');
 
-                $this->syncImages($product, $uploadedImages);
+                foreach ($uploadedImages as $file) {
+                    $product->addMedia($file)
+                        ->toMediaCollection('product_images');
+                }
             }
 
             if (is_array($variants)) {
                 $product->variants()->delete();
                 foreach ($variants as $variant) {
                     $product->variants()->create([
-                        'name' => $variant['name'],
-                        'sku' => $variant['sku'] ?? null,
-                        'price' => $variant['price'] ?? null,
-                        'stock_qty' => $variant['stock_qty'] ?? 0,
+                        'name'       => $variant['name'],
+                        'sku'        => $variant['sku'] ?? null,
+                        'price'      => $variant['price'] ?? null,
+                        'stock_qty'  => $variant['stock_qty'] ?? 0,
                         'attributes' => $variant['attributes'] ?? null,
                     ]);
                 }
             }
 
-            return $product->load(['variants', 'images', 'category']);
+            return $product->load(['variants', 'media', 'category.media']);
         });
-        
+
         $this->logActivity('update_product', "Updated product {$product->name}", [
             'before' => $oldIndex,
-            'after' => $product->toArray()
+            'after'  => $product->toArray()
         ]);
-        
-        return $this->success($product, 'Product updated.');
+
+        return $this->success(new ProductDetailResource($product), 'Product updated.');
     }
 
     #[OA\Delete(
@@ -302,34 +306,13 @@ class ProductController extends Controller
         return $this->success(null, 'Product deleted.');
     }
 
-    /**
-     * Store uploaded image files and create ProductImage records.
-     *
-     * @param  Product  $product
-     * @param  array<\Illuminate\Http\UploadedFile>  $files
-     */
-    private function syncImages(Product $product, array $files): void
-    {
-        foreach ($files as $index => $file) {
-            $path = $file->store('product-images', 'public');
-
-            ProductImage::create([
-                'product_id'    => $product->id,
-                'path'          => $path,
-                'mime_type'     => $file->getMimeType(),
-                'original_name' => $file->getClientOriginalName(),
-                'sort_order'    => $index,
-            ]);
-        }
-    }
-
     private function success($data, string $message, int $status = 200): JsonResponse
     {
         return response()->json([
             'success' => true,
             'message' => $message,
-            'data' => $data,
-            'errors' => null,
+            'data'    => $data,
+            'errors'  => null,
         ], $status);
     }
 }

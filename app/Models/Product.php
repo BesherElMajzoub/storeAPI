@@ -6,10 +6,14 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
+use Spatie\Image\Enums\Fit;
 
-class Product extends Model
+class Product extends Model implements HasMedia
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, InteractsWithMedia;
 
     protected $fillable = [
         'name', 'slug', 'description', 'price', 'discount_price', 'sku',
@@ -18,15 +22,55 @@ class Product extends Model
     ];
 
     protected $casts = [
-        'options' => 'array', // flexible attributes setup
-        'in_stock' => 'boolean',
-        'is_featured' => 'boolean',
-        'price' => 'decimal:2',
+        'options'        => 'array',
+        'in_stock'       => 'boolean',
+        'is_featured'    => 'boolean',
+        'price'          => 'decimal:2',
         'discount_price' => 'decimal:2',
-        'rating' => 'decimal:2',
+        'rating'         => 'decimal:2',
     ];
 
-    // Relations
+    // ──────────────────────────────────────────
+    //  Spatie Media Library
+    // ──────────────────────────────────────────
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('product_images');
+    }
+
+    /**
+     * nonQueued() so conversions are generated immediately on upload.
+     * To switch back to queued in production, replace ->nonQueued() with ->queued()
+     * and run a queue worker: php artisan queue:work
+     */
+    public function registerMediaConversions(?Media $media = null): void
+    {
+        $this->addMediaConversion('product_thumb')
+            ->fit(Fit::Crop, 120, 120)
+            ->format('webp')
+            ->nonQueued();
+
+        $this->addMediaConversion('product_card')
+            ->fit(Fit::Crop, 420, 420)
+            ->format('webp')
+            ->nonQueued();
+
+        $this->addMediaConversion('product_detail')
+            ->fit(Fit::Crop, 1000, 1000)
+            ->format('webp')
+            ->nonQueued();
+
+        $this->addMediaConversion('product_zoom')
+            ->fit(Fit::Crop, 1600, 1600)
+            ->format('webp')
+            ->nonQueued();
+    }
+
+    // ──────────────────────────────────────────
+    //  Relations
+    // ──────────────────────────────────────────
+
     public function category()
     {
         return $this->belongsTo(Category::class);
@@ -37,6 +81,9 @@ class Product extends Model
         return $this->hasMany(ProductVariant::class);
     }
 
+    /**
+     * @deprecated Kept temporarily for backward compatibility during migration.
+     */
     public function images()
     {
         return $this->hasMany(ProductImage::class)->orderBy('sort_order');
@@ -47,19 +94,19 @@ class Product extends Model
         return $this->hasMany(Review::class);
     }
 
-    /**
-     * Users who have this product in their wishlist.
-     */
     public function wishlistedByUsers()
     {
         return $this->belongsToMany(User::class, 'wishlist_items')->withTimestamps();
     }
 
-    // Accessors & Scopes
+    // ──────────────────────────────────────────
+    //  Accessors & Scopes
+    // ──────────────────────────────────────────
+
     public function getFinalPriceAttribute()
     {
-        return $this->discount_price && $this->discount_price < $this->price 
-            ? $this->discount_price 
+        return ($this->discount_price && $this->discount_price > 0 && $this->discount_price < $this->price)
+            ? $this->discount_price
             : $this->price;
     }
 
@@ -73,7 +120,7 @@ class Product extends Model
         $finalPriceExpr = self::finalPriceExpression();
 
         $query->when($filters['search'] ?? null, function ($q, $search) {
-            $q->where(function($sub) use ($search) {
+            $q->where(function ($sub) use ($search) {
                 $sub->where('name', 'like', "%{$search}%")
                     ->orWhere('description', 'like', "%{$search}%");
             });
@@ -84,7 +131,7 @@ class Product extends Model
                 $q->where('category_id', (int) $slug);
                 return;
             }
-            $q->whereHas('category', fn($c) => $c->where('slug', $slug));
+            $q->whereHas('category', fn ($c) => $c->where('slug', $slug));
         });
 
         $query->when($filters['price_min'] ?? null, function ($q, $v) use ($finalPriceExpr) {
@@ -95,7 +142,7 @@ class Product extends Model
             $q->whereRaw("{$finalPriceExpr} <= ?", [(float) $v]);
         });
 
-        $query->when($filters['rating'] ?? null, fn($q, $v) => $q->where('rating', '>=', $v));
+        $query->when($filters['rating'] ?? null, fn ($q, $v) => $q->where('rating', '>=', $v));
 
         $query->when(isset($filters['in_stock']), function ($q) use ($filters) {
             $flag = filter_var($filters['in_stock'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
@@ -106,7 +153,7 @@ class Product extends Model
             }
         });
     }
-    
+
     public function scopeSort(Builder $query, $sort)
     {
         $finalPriceExpr = self::finalPriceExpression();
@@ -122,10 +169,7 @@ class Product extends Model
                 $query->orderBy('rating', 'desc');
                 break;
             case 'best_selling':
-                // Assuming we track sales count somewhere, usually 'sold_count' column or via order_items relation
-                 // For now, let's just sort by reviews_count as a proxy or add sold_count to schema next time. 
-                 // I'll stick to created_at if not available, or id.
-                 $query->orderBy('reviews_count', 'desc');
+                $query->orderBy('reviews_count', 'desc');
                 break;
             case 'newest':
             default:
@@ -136,6 +180,6 @@ class Product extends Model
 
     protected static function finalPriceExpression(): string
     {
-        return 'CASE WHEN products.discount_price IS NOT NULL AND products.discount_price < products.price THEN products.discount_price ELSE products.price END';
+        return 'CASE WHEN products.discount_price IS NOT NULL AND products.discount_price > 0 AND products.discount_price < products.price THEN products.discount_price ELSE products.price END';
     }
 }

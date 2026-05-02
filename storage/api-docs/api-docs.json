@@ -2029,6 +2029,395 @@
                 ]
             }
         },
+        "/api/v1/admin/telescope/requests": {
+            "get": {
+                "tags": [
+                    "Admin Telescope"
+                ],
+                "summary": "Get Telescope Requests",
+                "description": "Get logged HTTP requests from Telescope",
+                "operationId": "608fe062b49a8c97c1226bee4909ca99",
+                "parameters": [
+                    {
+                        "name": "before",
+                        "in": "query",
+                        "description": "Cursor for pagination (UUID)",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "take",
+                        "in": "query",
+                        "description": "Number of items to return",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 50
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/telescope/queries": {
+            "get": {
+                "tags": [
+                    "Admin Telescope"
+                ],
+                "summary": "Get Telescope Queries",
+                "description": "Get logged database queries from Telescope",
+                "operationId": "c4182a0ac92e953b41e75dfb4701dedb",
+                "parameters": [
+                    {
+                        "name": "before",
+                        "in": "query",
+                        "description": "Cursor for pagination (UUID)",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "take",
+                        "in": "query",
+                        "description": "Number of items to return",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 50
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/telescope/exceptions": {
+            "get": {
+                "tags": [
+                    "Admin Telescope"
+                ],
+                "summary": "Get Telescope Exceptions",
+                "description": "Get logged exceptions from Telescope",
+                "operationId": "e1fd638ced821eaf1e9e2965e240a659",
+                "parameters": [
+                    {
+                        "name": "before",
+                        "in": "query",
+                        "description": "Cursor for pagination (UUID)",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "take",
+                        "in": "query",
+                        "description": "Number of items to return",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 50
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/telescope/jobs": {
+            "get": {
+                "tags": [
+                    "Admin Telescope"
+                ],
+                "summary": "Get Telescope Jobs",
+                "description": "Get logged queue jobs from Telescope",
+                "operationId": "b521cf216c8f4477ce7b61c8d74314a1",
+                "parameters": [
+                    {
+                        "name": "before",
+                        "in": "query",
+                        "description": "Cursor for pagination (UUID)",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "take",
+                        "in": "query",
+                        "description": "Number of items to return",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 50
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/telescope/logs": {
+            "get": {
+                "tags": [
+                    "Admin Telescope"
+                ],
+                "summary": "Get Telescope Logs",
+                "description": "Get logged application logs from Telescope",
+                "operationId": "e0a7289279a4e3e2ad7670c0987fb3f4",
+                "parameters": [
+                    {
+                        "name": "before",
+                        "in": "query",
+                        "description": "Cursor for pagination (UUID)",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "take",
+                        "in": "query",
+                        "description": "Number of items to return",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 50
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/telescope/events": {
+            "get": {
+                "tags": [
+                    "Admin Telescope"
+                ],
+                "summary": "Get Telescope Events",
+                "description": "Get logged events from Telescope",
+                "operationId": "a4ad87eba790b3dea1528ff109343c71",
+                "parameters": [
+                    {
+                        "name": "before",
+                        "in": "query",
+                        "description": "Cursor for pagination (UUID)",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "take",
+                        "in": "query",
+                        "description": "Number of items to return",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 50
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/telescope/mail": {
+            "get": {
+                "tags": [
+                    "Admin Telescope"
+                ],
+                "summary": "Get Telescope Mail",
+                "description": "Get logged emails from Telescope",
+                "operationId": "e7ae7dd1b944b42628be8f71c054fc08",
+                "parameters": [
+                    {
+                        "name": "before",
+                        "in": "query",
+                        "description": "Cursor for pagination (UUID)",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "take",
+                        "in": "query",
+                        "description": "Number of items to return",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 50
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/telescope/notifications": {
+            "get": {
+                "tags": [
+                    "Admin Telescope"
+                ],
+                "summary": "Get Telescope Notifications",
+                "description": "Get logged notifications from Telescope",
+                "operationId": "3c7cb1b905eee7f9613329202b49cf1f",
+                "parameters": [
+                    {
+                        "name": "before",
+                        "in": "query",
+                        "description": "Cursor for pagination (UUID)",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "take",
+                        "in": "query",
+                        "description": "Number of items to return",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 50
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/telescope/cache": {
+            "get": {
+                "tags": [
+                    "Admin Telescope"
+                ],
+                "summary": "Get Telescope Cache",
+                "description": "Get logged cache operations from Telescope",
+                "operationId": "1552e7f09183714053878a470cb16317",
+                "parameters": [
+                    {
+                        "name": "before",
+                        "in": "query",
+                        "description": "Cursor for pagination (UUID)",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "take",
+                        "in": "query",
+                        "description": "Number of items to return",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 50
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/telescope/summary": {
+            "get": {
+                "tags": [
+                    "Admin Telescope"
+                ],
+                "summary": "Get Telescope Overview Summary",
+                "description": "Get a summary count and latest entry of all monitored Telescope types",
+                "operationId": "e525ba860f45d6f2f364ac87e3e6678b",
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/admin/users": {
             "get": {
                 "tags": [
@@ -4234,7 +4623,7 @@
             },
             "Category": {
                 "title": "Category",
-                "description": "Product category",
+                "description": "Product category (detail view)",
                 "properties": {
                     "id": {
                         "type": "integer",
@@ -4248,29 +4637,50 @@
                         "type": "string",
                         "example": "electronics"
                     },
-                    "description": {
+                    "meta_description": {
                         "type": "string",
-                        "example": "Electronic devices and accessories",
                         "nullable": true
-                    },
-                    "parent_id": {
-                        "type": "integer",
-                        "example": null,
-                        "nullable": true
-                    },
-                    "is_active": {
-                        "type": "boolean",
-                        "example": true
                     },
                     "image": {
-                        "type": "string",
-                        "example": "categories/xyz.png",
+                        "properties": {
+                            "thumb": {
+                                "type": "string",
+                                "format": "uri",
+                                "nullable": true
+                            },
+                            "card": {
+                                "type": "string",
+                                "format": "uri",
+                                "nullable": true
+                            },
+                            "banner": {
+                                "description": "Only in category detail endpoint",
+                                "type": "string",
+                                "format": "uri",
+                                "nullable": true
+                            }
+                        },
+                        "type": "object",
                         "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "CategoryBasic": {
+                "title": "CategoryBasic",
+                "description": "Minimal category reference (used inside product listings)",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "example": 1
                     },
-                    "created_at": {
+                    "name": {
                         "type": "string",
-                        "format": "date-time",
-                        "example": "2023-01-01T00:00:00Z"
+                        "example": "Electronics"
+                    },
+                    "slug": {
+                        "type": "string",
+                        "example": "electronics"
                     }
                 },
                 "type": "object"
@@ -4407,15 +4817,6 @@
                         "example": "APL-MBC-2023",
                         "nullable": true
                     },
-                    "status": {
-                        "type": "string",
-                        "example": "published",
-                        "enum": [
-                            "draft",
-                            "published",
-                            "archived"
-                        ]
-                    },
                     "in_stock": {
                         "type": "boolean",
                         "example": true
@@ -4433,40 +4834,127 @@
                         "type": "integer",
                         "example": 15
                     },
-                    "category_id": {
-                        "type": "integer",
-                        "example": 1,
+                    "category": {
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/CategoryBasic"
+                            }
+                        ],
                         "nullable": true
                     },
-                    "images": {
+                    "image": {
+                        "properties": {
+                            "thumb": {
+                                "type": "string",
+                                "format": "uri",
+                                "nullable": true
+                            },
+                            "card": {
+                                "type": "string",
+                                "format": "uri",
+                                "nullable": true
+                            },
+                            "detail": {
+                                "description": "Only in product detail endpoint",
+                                "type": "string",
+                                "format": "uri",
+                                "nullable": true
+                            },
+                            "zoom": {
+                                "description": "Only in product detail endpoint",
+                                "type": "string",
+                                "format": "uri",
+                                "nullable": true
+                            }
+                        },
+                        "type": "object",
+                        "nullable": true
+                    },
+                    "gallery": {
+                        "description": "Only in product detail endpoint",
                         "type": "array",
                         "items": {
                             "properties": {
                                 "id": {
-                                    "type": "integer",
-                                    "example": 1
+                                    "type": "integer"
                                 },
-                                "url": {
+                                "thumb": {
                                     "type": "string",
                                     "format": "uri",
-                                    "example": "http://localhost/storage/product-images/abc123.jpg"
+                                    "nullable": true
                                 },
-                                "original_name": {
+                                "card": {
                                     "type": "string",
-                                    "example": "photo.jpg"
+                                    "format": "uri",
+                                    "nullable": true
                                 },
-                                "sort_order": {
-                                    "type": "integer",
-                                    "example": 0
+                                "detail": {
+                                    "type": "string",
+                                    "format": "uri",
+                                    "nullable": true
+                                },
+                                "zoom": {
+                                    "type": "string",
+                                    "format": "uri",
+                                    "nullable": true
+                                },
+                                "order": {
+                                    "type": "integer"
                                 }
                             },
                             "type": "object"
                         },
                         "nullable": true
                     },
-                    "created_at": {
+                    "variants": {
+                        "description": "Only in product detail endpoint",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ProductVariant"
+                        },
+                        "nullable": true
+                    },
+                    "attributes": {
+                        "description": "Only in product detail endpoint",
+                        "type": "object",
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "ProductVariant": {
+                "title": "ProductVariant",
+                "description": "Product variant (color/size combination)",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "name": {
                         "type": "string",
-                        "format": "date-time",
+                        "example": "Red / XL"
+                    },
+                    "sku": {
+                        "type": "string",
+                        "example": "SHIRT-RED-XL",
+                        "nullable": true
+                    },
+                    "price": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 35,
+                        "nullable": true
+                    },
+                    "stock_qty": {
+                        "type": "integer",
+                        "example": 50
+                    },
+                    "attributes": {
+                        "type": "object",
+                        "example": {
+                            "Color": "Red",
+                            "Size": "XL"
+                        },
                         "nullable": true
                     }
                 },
@@ -4624,6 +5112,10 @@
         {
             "name": "Admin Reviews",
             "description": "Admin Reviews"
+        },
+        {
+            "name": "Admin Telescope",
+            "description": "Admin Telescope"
         },
         {
             "name": "Admin Users",

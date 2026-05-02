@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Admin\ReorderCategoryRequest;
 use App\Http\Requests\Api\V1\Admin\StoreCategoryRequest;
 use App\Http\Requests\Api\V1\Admin\UpdateCategoryRequest;
+use App\Http\Resources\CategoryDetailResource;
 use App\Models\Category;
 use App\Services\CategoryService;
 use Illuminate\Http\JsonResponse;
@@ -50,9 +51,9 @@ class CategoryController extends Controller
             $query->with($this->buildChildrenDepth($depth));
         }
 
-        $categories = $query->get();
+        $categories = $query->with('media')->get();
 
-        return $this->success($categories, 'Categories fetched.');
+        return $this->success(CategoryDetailResource::collection($categories), 'Categories fetched.');
     }
 
     #[OA\Post(
@@ -96,13 +97,17 @@ class CategoryController extends Controller
         $slugSource = $data['slug'] ?? $data['name'];
         $data['slug'] = $service->generateUniqueSlug($slugSource);
 
-        if ($request->hasFile('image')) {
-            $data['image'] = $request->file('image')->store('category-images', 'public');
-        }
+        // Remove 'image' from fillable data — Spatie handles it separately
+        unset($data['image']);
 
         $category = Category::create($data);
 
-        return $this->success($category, 'Category created.', 201);
+        if ($request->hasFile('image')) {
+            $category->addMediaFromRequest('image')
+                ->toMediaCollection('category_image');
+        }
+
+        return $this->success(new CategoryDetailResource($category->load('media')), 'Category created.', 201);
     }
 
     #[OA\Post(
@@ -151,17 +156,18 @@ class CategoryController extends Controller
             $data['slug'] = $service->generateUniqueSlug($data['slug'], $category->id);
         }
 
-        if ($request->hasFile('image')) {
-            $oldImage = $category->getRawOriginal('image');
-            if ($oldImage && !str_starts_with($oldImage, 'http')) {
-                \Illuminate\Support\Facades\Storage::disk('public')->delete($oldImage);
-            }
-            $data['image'] = $request->file('image')->store('category-images', 'public');
-        }
+        // Remove 'image' from fillable data — Spatie handles it separately
+        unset($data['image']);
 
         $category->update($data);
 
-        return $this->success($category->refresh(), 'Category updated.');
+        if ($request->hasFile('image')) {
+            // singleFile() collection auto-clears the old image
+            $category->addMediaFromRequest('image')
+                ->toMediaCollection('category_image');
+        }
+
+        return $this->success(new CategoryDetailResource($category->refresh()->load('media')), 'Category updated.');
     }
 
     #[OA\Delete(
@@ -271,9 +277,8 @@ class CategoryController extends Controller
     #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
     public function show(int $id): JsonResponse
     {
-        // Adding the missing show logic directly, as it was in Postman mismatched list and route list.
-        $category = Category::findOrFail($id);
-        return $this->success($category, 'Category fetched.');
+        $category = Category::with('media')->findOrFail($id);
+        return $this->success(new CategoryDetailResource($category), 'Category fetched.');
     }
 
     private function success($data, string $message, int $status = 200): JsonResponse

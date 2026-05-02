@@ -21,6 +21,8 @@ use App\Http\Controllers\Api\V1\Admin\WishlistAnalyticsController;
 use App\Http\Controllers\Api\V1\Admin\ContactMessageController as AdminContactMessageController;
 use App\Http\Controllers\Api\V1\Admin\InspiredLeadController as AdminInspiredLeadController;
 use App\Http\Controllers\Api\V1\Admin\ReviewController as AdminReviewController;
+use App\Http\Controllers\Api\V1\Admin\TelescopeApiController;
+use App\Http\Controllers\Api\V1\Admin\MediaController;
 
 Route::prefix('v1')->group(function () {
     
@@ -95,6 +97,12 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('categories', AdminCategoryController::class);
         Route::post('categories/reorder', [AdminCategoryController::class, 'reorder']);
 
+        // Media management
+        Route::post('products/{product}/media', [MediaController::class, 'uploadProductImages']);
+        Route::post('products/{product}/media/reorder', [MediaController::class, 'reorderProductGallery']);
+        Route::post('categories/{category}/media', [MediaController::class, 'replaceCategoryImage']);
+        Route::delete('media/{media}', [MediaController::class, 'destroy']);
+
         // Orders
         Route::get('orders', [AdminOrderController::class, 'index']);
         Route::get('orders/{id}', [AdminOrderController::class, 'show']);
@@ -124,5 +132,22 @@ Route::prefix('v1')->group(function () {
         Route::get('reviews/{review}', [AdminReviewController::class, 'show']);
         Route::patch('reviews/{review}/moderate', [AdminReviewController::class, 'moderate']);
         Route::delete('reviews/{review}', [AdminReviewController::class, 'destroy']);
+
+        // ─── Telescope API (React Admin Panel) ─────────────────────────────────
+        // متاح فقط إذا كان TELESCOPE_ENABLED=true
+        if (config('telescope.enabled')) {
+            Route::prefix('telescope')->group(function () {
+                Route::get('summary',       [TelescopeApiController::class, 'summary']);
+                Route::get('requests',      [TelescopeApiController::class, 'requests']);
+                Route::get('queries',       [TelescopeApiController::class, 'queries']);
+                Route::get('exceptions',    [TelescopeApiController::class, 'exceptions']);
+                Route::get('jobs',          [TelescopeApiController::class, 'jobs']);
+                Route::get('logs',          [TelescopeApiController::class, 'logs']);
+                Route::get('events',        [TelescopeApiController::class, 'events']);
+                Route::get('mail',          [TelescopeApiController::class, 'mail']);
+                Route::get('notifications', [TelescopeApiController::class, 'notifications']);
+                Route::get('cache',         [TelescopeApiController::class, 'cache']);
+            });
+        }
     });
 });
