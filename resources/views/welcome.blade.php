@@ -10,6 +10,9 @@
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
 
+        <!-- Google Identity Services -->
+        <script src="https://accounts.google.com/gsi/client" async defer></script>
+
         <!-- Styles / Scripts -->
         @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
             @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -117,6 +120,29 @@
                             </a>
                         </li>
                     </ul>
+
+                    {{-- ─── Google Login Section ─── --}}
+                    <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e3e3e0;" class="dark:border-[#3E3E3A]">
+                        <p style="font-size: 13px; color: #706f6c; margin-bottom: 0.75rem;" class="dark:text-[#A1A09A]">Or continue with</p>
+
+                        {{-- Google One Tap hidden trigger --}}
+                        <div id="g_id_onload"
+                             data-client_id="{{ config('services.google.client_id') }}"
+                             data-callback="handleGoogleLogin"
+                             data-auto_prompt="false">
+                        </div>
+
+                        {{-- Sign-in button --}}
+                        <div class="g_id_signin" data-type="standard" data-theme="outline" data-size="large"></div>
+
+                        {{-- Status & response display --}}
+                        <div id="google-status" style="margin-top: 0.75rem; font-size: 12px; font-weight: 600; display: none;"></div>
+                        <pre id="google-log"
+                             style="display:none; margin-top:0.75rem; background:#2d2d2d; color:#50fa7b;
+                                    padding:0.75rem; border-radius:6px; font-size:11px;
+                                    overflow-x:auto; white-space:pre-wrap; max-height:200px; overflow-y:auto;">
+                        </pre>
+                    </div>
                 </div>
                 <div class="bg-[#fff2f2] dark:bg-[#1D0002] relative lg:-ml-px -mb-px lg:mb-0 rounded-t-lg lg:rounded-t-none lg:rounded-r-lg aspect-[335/376] lg:aspect-auto w-full lg:w-[438px] shrink-0 overflow-hidden">
                     {{-- Laravel Logo --}}
@@ -273,5 +299,41 @@
         @if (Route::has('login'))
             <div class="h-14.5 hidden lg:block"></div>
         @endif
+
+    <script>
+        function handleGoogleLogin(response) {
+            const statusEl = document.getElementById('google-status');
+            const logEl    = document.getElementById('google-log');
+
+            statusEl.style.display = 'block';
+            statusEl.style.color   = '#706f6c';
+            statusEl.innerText     = 'Authenticating...';
+
+            fetch('{{ url("/api/v1/auth/google") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept':       'application/json'
+                },
+                body: JSON.stringify({
+                    id_token:    response.credential,
+                    device_name: 'web_home'
+                })
+            })
+            .then(r => r.json())
+            .then(data => {
+                statusEl.innerText   = data.success ? '✅ Login Successful' : '❌ ' + (data.message ?? 'Login failed');
+                statusEl.style.color = data.success ? '#16a34a' : '#dc2626';
+                logEl.style.display  = 'block';
+                logEl.innerText      = JSON.stringify(data, null, 2);
+                console.log('[Google Auth]', data);
+            })
+            .catch(err => {
+                statusEl.innerText   = '❌ Network Error — check console';
+                statusEl.style.color = '#dc2626';
+                console.error('[Google Auth] fetch error:', err);
+            });
+        }
+    </script>
     </body>
 </html>
