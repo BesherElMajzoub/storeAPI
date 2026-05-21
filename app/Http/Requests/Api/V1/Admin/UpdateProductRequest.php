@@ -67,23 +67,41 @@ class UpdateProductRequest extends BaseAdminRequest
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
-            if (!$this->has('discount_price')) {
-                return;
+            if ($this->has('discount_price')) {
+                $discount = $this->input('discount_price');
+                if ($discount !== null) {
+                    $price = $this->input('price');
+                    if ($price === null) {
+                        $product = Product::find($this->route('id'));
+                        $price = $product?->price;
+                    }
+
+                    if ($price !== null && $discount >= $price) {
+                        $validator->errors()->add('discount_price', 'The discount price must be less than price.');
+                    }
+                }
             }
 
-            $discount = $this->input('discount_price');
-            if ($discount === null) {
-                return;
-            }
+            if ($this->has('variants')) {
+                $variants = $this->input('variants');
+                if (is_array($variants) && count($variants) > 0) {
+                    $stockQty = $this->input('stock_qty');
+                    if ($stockQty === null && !$this->has('stock_qty')) {
+                        $product = Product::find($this->route('id'));
+                        $stockQty = $product?->stock_qty;
+                    }
 
-            $price = $this->input('price');
-            if ($price === null) {
-                $product = Product::find($this->route('id'));
-                $price = $product?->price;
-            }
+                    if ($stockQty !== null) {
+                        $variantsStockSum = 0;
+                        foreach ($variants as $variant) {
+                            $variantsStockSum += (int) ($variant['stock_qty'] ?? 0);
+                        }
 
-            if ($price !== null && $discount >= $price) {
-                $validator->errors()->add('discount_price', 'The discount price must be less than price.');
+                        if ($variantsStockSum > $stockQty) {
+                            $validator->errors()->add('variants', 'The total stock quantity of variants cannot exceed the product\'s stock quantity.');
+                        }
+                    }
+                }
             }
         });
     }

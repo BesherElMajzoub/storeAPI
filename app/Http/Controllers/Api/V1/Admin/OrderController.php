@@ -5,8 +5,11 @@ namespace App\Http\Controllers\Api\V1\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Admin\UpdateOrderStatusRequest;
 use App\Models\Order;
+use App\Services\StripeCheckoutService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use OpenApi\Attributes as OA;
 
 class OrderController extends Controller
@@ -151,12 +154,13 @@ class OrderController extends Controller
     private function statusTransitions(): array
     {
         return [
-            'pending' => ['processing', 'cancelled'],
-            'processing' => ['shipped', 'cancelled'],
-            'shipped' => ['delivered', 'refunded'],
-            'delivered' => ['refunded'],
-            'cancelled' => [],
-            'refunded' => [],
+            'pending'         => ['processing', 'cancelled'],
+            'pending_payment' => ['cancelled'],
+            'processing'      => ['shipped', 'cancelled'],
+            'shipped'         => ['delivered', 'refunded'],
+            'delivered'       => ['refunded'],
+            'cancelled'       => [],
+            'refunded'        => [],
         ];
     }
 
@@ -179,7 +183,56 @@ class OrderController extends Controller
         return in_array($to, $map[$from] ?? [], true);
     }
 
-    private function success($data, string $message, int $status = 200)
+    #[OA\Post(
+        path: "/api/v1/admin/orders/{order}/refund",
+        summary: "Admin Refund Order",
+        description: "Issue a full Stripe refund for a paid order and mark it as refunded.",
+        security: [["bearerAuth" => []]],
+        tags: ["Admin Orders"]
+    )]
+    #[OA\Parameter(name: "order", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
+    #[OA\Response(response: 200, description: "Order refunded")]
+    #[OA\Response(response: 409, description: "Order not eligible for refund")]
+    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
+    public function refund(int $order, StripeCheckoutService $stripe): JsonResponse
+    {
+        $order = Order::findOrFail($order);
+
+        if (!$order->isPaid()) {
+            return $this->error('Order is not paid and cannot be refunded.', 409);
+        }
+
+        if ($order->isRefunded()) {
+            return $this->error('Order has already been refunded.', 409);
+        }
+
+        if (!$order->stripe_payment_intent_id) {
+            return $this->error('No Stripe PaymentIntent found for this order.', 409);
+        }
+
+        try {
+            $stripe->refundOrder($order);
+        } catch (\Throwable $e) {
+            Log::error('Stripe refund failed', [
+                'order_id' => $order->id,
+                'error'    => $e->getMessage(),
+            ]);
+            return $this->error('Stripe refund failed: ' . $e->getMessage(), 502);
+        }
+
+        $order->update([
+            'status'         => 'refunded',
+            'payment_status' => 'refunded',
+            'refunded_at'    => now(),
+        ]);
+
+        return $this->success(
+            ['message' => "Order #{$order->order_number} has been refunded successfully."],
+            'Order refunded.'
+        );
+    }
+
+    private function success($data, string $message, int $status = 200): JsonResponse
     {
         return response()->json([
             'success' => true,

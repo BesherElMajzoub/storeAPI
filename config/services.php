@@ -43,7 +43,20 @@ return [
     | Get your Client ID from: https://console.cloud.google.com
     */
     'google' => [
-        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_id'        => env('GOOGLE_CLIENT_ID'),
+        'places_api_key'   => env('GOOGLE_PLACES_API_KEY'),
+        'places_base_url'  => env('GOOGLE_PLACES_BASE_URL', 'https://places.googleapis.com/v1'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Stripe
+    |--------------------------------------------------------------------------
+    */
+    'stripe' => [
+        'secret'         => env('STRIPE_SECRET'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        'publishable'    => env('STRIPE_PUBLISHABLE_KEY'),
     ],
 
 ];

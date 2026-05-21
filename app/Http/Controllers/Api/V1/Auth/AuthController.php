@@ -358,8 +358,8 @@ class AuthController extends Controller
             $token = $this->issuePasswordResetToken($user);
 
             // 3. SEND THE EMAIL (The missing part)
-            // Using a queueable mailable ensures this doesn't hang the API
-            Mail::to($user->email)->later(now()->addSeconds(5), new ResetPasswordMail($token, $user->email));
+            // Send synchronously to deliver the verification/reset email immediately
+            Mail::to($user->email)->send(new ResetPasswordMail($token, $user->email));
             Log::info('Password reset link sent', ['email' => $user->email]);
 
         } catch (\Throwable $e) {

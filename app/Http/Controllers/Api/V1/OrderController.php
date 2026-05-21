@@ -4,11 +4,16 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreOrderRequest;
+use App\Http\Requests\Api\V1\StoreCancellationRequestRequest;
 use App\Http\Resources\OrderResource;
 use App\Models\Order;
+use App\Models\OrderCancellationRequest;
 use App\Models\Product;
+use App\Services\StripeCheckoutService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use OpenApi\Attributes as OA;
 
@@ -69,7 +74,7 @@ class OrderController extends Controller
     public function show(Request $request, $id)
     {
         $order = $request->user()->orders()
-            ->with(['items.product', 'payment'])
+            ->with(['items.product', 'items.variant', 'payment', 'cancellationRequest'])
             ->findOrFail($id);
 
         return new OrderResource($order);
@@ -115,7 +120,7 @@ class OrderController extends Controller
     )]
     #[OA\Response(response: 422, ref: "#/components/responses/ValidationErrorResponse")]
     #[OA\Response(response: 401, ref: "#/components/responses/ErrorResponse")]
-    public function store(StoreOrderRequest $request)
+    public function store(StoreOrderRequest $request, StripeCheckoutService $stripe): JsonResponse
     {
         $items = $request->items;
         $subtotal = 0;
@@ -124,64 +129,192 @@ class OrderController extends Controller
         foreach ($items as $item) {
             $product = Product::findOrFail($item['product_id']);
             $price = $product->final_price;
-            $startTotal = $price * $item['quantity'];
-            $subtotal += $startTotal;
+            $lineTotal = $price * $item['quantity'];
+            $subtotal += $lineTotal;
+
+            $variant = isset($item['variant_id'])
+                ? \App\Models\ProductVariant::find($item['variant_id'])
+                : null;
 
             $orderItemsData[] = [
-                'product_id' => $product->id,
-                'product_name' => $product->name,
-                'price' => $price,
-                'quantity' => $item['quantity'],
-                'total' => $startTotal,
+                'product_id'         => $product->id,
+                'product_name'       => $product->name,
+                'variant_id'         => $variant?->id,
+                'variant_name'       => $variant?->name,
+                'variant_attributes' => $variant?->attributes,   // JSON snapshot
+                'sku'                => $variant?->sku ?? $product->sku,
+                'price'              => $price,
+                'quantity'           => $item['quantity'],
+                'total'              => $lineTotal,
             ];
         }
 
         $total = $subtotal; // + tax + shipping - discount
 
+        // 1️⃣ Create order in DB (pending_payment, unpaid)
         $order = DB::transaction(function () use ($request, $subtotal, $total, $orderItemsData) {
             $order = Order::create([
-                'order_number' => 'ORD-'.strtoupper(Str::random(10)),
-                'user_id' => $request->user()->id,
-                'status' => 'pending',
-                'payment_status' => 'unpaid',
-                'subtotal' => $subtotal,
-                'total' => $total,
+                'order_number'    => 'ORD-' . strtoupper(Str::random(10)),
+                'user_id'         => $request->user()->id,
+                'status'          => 'pending_payment',
+                'payment_status'  => 'unpaid',
+                'subtotal'        => $subtotal,
+                'total'           => $total,
                 'shipping_address' => $request->shipping_address,
-                'billing_address' => $request->billing_address ?? $request->shipping_address,
+                'billing_address'  => $request->billing_address ?? $request->shipping_address,
             ]);
 
             foreach ($orderItemsData as $data) {
                 $order->items()->create($data);
             }
 
-            return $order;
+            return $order->load('items');
         });
 
-        return new OrderResource($order->load('items'));
+        // 2️⃣ Create Stripe Checkout Session
+        try {
+            $session = $stripe->createCheckoutSession($order);
+
+            $order->update([
+                'stripe_session_id' => $session->id,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Stripe checkout session creation failed', [
+                'order_id' => $order->id,
+                'error'    => $e->getMessage(),
+            ]);
+
+            // Roll back the order so the user can try again
+            $order->delete();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Payment provider error. Please try again.',
+                'data'    => null,
+                'errors'  => null,
+            ], 502);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Order created. Redirect to Stripe checkout.',
+            'data'    => [
+                'order'        => new OrderResource($order),
+                'checkout_url' => $session->url,
+                'payment'      => [
+                    'session_id' => $session->id,
+                ],
+            ],
+            'errors'  => null,
+        ], 201);
     }
 
     #[OA\Post(
         path: "/api/v1/orders/{id}/cancel",
-        summary: "Cancel Order",
-        description: "Cancel a pending order belonging to the user",
+        summary: "Cancel Order (Direct)",
+        description: "Immediately cancel a **pending** order. Only allowed within **3 hours** of creation.",
         security: [["bearerAuth" => []]],
         tags: ["Orders"]
     )]
     #[OA\Parameter(name: "id", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
     #[OA\Response(response: 200, description: "Order cancelled successfully")]
-    #[OA\Response(response: 400, description: "Cannot cancel order (not pending)")]
+    #[OA\Response(response: 400, description: "Cannot cancel order (wrong status or window expired)")]
     #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
     #[OA\Response(response: 401, ref: "#/components/responses/ErrorResponse")]
-    public function cancel(Request $request, $id)
+    public function cancel(Request $request, $id): JsonResponse
     {
         $order = $request->user()->orders()->findOrFail($id);
 
         if ($order->status !== 'pending') {
-            return response()->json(['message' => 'Cannot cancel order'], 400);
+            return response()->json([
+                'success' => false,
+                'message' => 'Only pending orders can be cancelled directly.',
+                'data'    => null,
+                'errors'  => null,
+            ], 400);
+        }
+
+        // Enforce 3-hour direct-cancel window
+        if ($order->created_at->diffInHours(now()) >= 3) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The 3-hour direct cancellation window has passed. Please submit a cancellation request instead.',
+                'data'    => null,
+                'errors'  => null,
+            ], 400);
         }
 
         $order->update(['status' => 'cancelled']);
 
-        return response()->json(['message' => 'Order cancelled']);
+        return response()->json([
+            'success' => true,
+            'message' => 'Order cancelled successfully.',
+            'data'    => null,
+            'errors'  => null,
+        ]);
+    }
+
+    #[OA\Post(
+        path: "/api/v1/orders/{id}/cancellation-request",
+        summary: "Submit Cancellation Request",
+        description: "Submit a cancellation request for an order. Cannot be used if order is shipped, delivered, or cancelled, or if a pending request already exists.",
+        security: [["bearerAuth" => []]],
+        tags: ["Orders"]
+    )]
+    #[OA\Parameter(name: "id", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            required: ["reason"],
+            properties: [
+                new OA\Property(property: "reason", type: "string", minLength: 10, example: "I ordered by mistake and need to cancel."),
+            ]
+        )
+    )]
+    #[OA\Response(response: 201, description: "Cancellation request submitted")]
+    #[OA\Response(response: 422, ref: "#/components/responses/ValidationErrorResponse")]
+    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
+    public function requestCancellation(StoreCancellationRequestRequest $request, $id): JsonResponse
+    {
+        $order = $request->user()->orders()->findOrFail($id);
+
+        // Block if order is in a terminal/non-cancellable state
+        $blockedStatuses = ['shipped', 'delivered', 'cancelled'];
+        if (in_array($order->status, $blockedStatuses, true)) {
+            return response()->json([
+                'success' => false,
+                'message' => "Cannot request cancellation for an order with status '{$order->status}'.",
+                'data'    => null,
+                'errors'  => null,
+            ], 422);
+        }
+
+        // Reject if a pending request already exists
+        $exists = OrderCancellationRequest::where('order_id', $order->id)
+            ->where('status', 'pending')
+            ->exists();
+
+        if ($exists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'A cancellation request is already pending for this order.',
+                'data'    => null,
+                'errors'  => null,
+            ], 422);
+        }
+
+        OrderCancellationRequest::create([
+            'order_id' => $order->id,
+            'user_id'  => $request->user()->id,
+            'reason'   => $request->validated('reason'),
+            'status'   => 'pending',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Your cancellation request has been submitted and is under review.',
+            'data'    => null,
+            'errors'  => null,
+        ], 201);
     }
 }

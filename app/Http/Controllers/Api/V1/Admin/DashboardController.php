@@ -54,7 +54,9 @@ class DashboardController extends Controller
     {
         return response()->json([
             // 'visitors_today' => 100, // Placeholder
-            'month_sales_total' => Order::where('created_at', '>=', now()->startOfMonth())->sum('total'),
+            'month_sales_total' => Order::where('created_at', '>=', now()->startOfMonth())
+                ->whereNotIn('status', ['cancelled', 'refunded', 'pending_payment'])
+                ->sum('total'),
             'current_orders_count' => Order::where('status', 'pending')->count(),
             'users_count' => User::count(),
             'top_products' => Product::withCount('reviews')->orderBy('reviews_count', 'desc')->take(5)->get(), // or sold count

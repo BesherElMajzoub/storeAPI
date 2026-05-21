@@ -23,9 +23,15 @@ use App\Http\Controllers\Api\V1\Admin\InspiredLeadController as AdminInspiredLea
 use App\Http\Controllers\Api\V1\Admin\ReviewController as AdminReviewController;
 use App\Http\Controllers\Api\V1\Admin\TelescopeApiController;
 use App\Http\Controllers\Api\V1\Admin\MediaController;
+use App\Http\Controllers\Api\V1\Admin\GeoController;
+use App\Http\Controllers\Api\V1\Admin\CancellationRequestController;
+use App\Http\Controllers\Api\V1\Admin\SkuController;
+use App\Http\Controllers\Api\StripeWebhookController;
 
 Route::prefix('v1')->group(function () {
-    
+
+    // --- STRIPE WEBHOOK (no auth — verified by Stripe signature) ---
+    Route::post('webhooks/stripe', [StripeWebhookController::class, 'handle']);
     // --- AUTH ---
     Route::prefix('auth')->group(function () {
         Route::post('register', [AuthController::class, 'register']);
@@ -55,6 +61,10 @@ Route::prefix('v1')->group(function () {
     Route::get('products/{slug}', [ProductController::class, 'show']);
     Route::get('products/{id}/reviews', [ProductController::class, 'reviews']);
 
+    // Google Places Proxy
+    Route::get('address/autocomplete', [AddressController::class, 'autocomplete'])->middleware('throttle:60,1');
+    Route::get('address/details', [AddressController::class, 'details'])->middleware('throttle:60,1');
+
     // --- USER PROTECTED ---
     Route::middleware('auth:sanctum')->group(function () {
         // Orders
@@ -62,6 +72,7 @@ Route::prefix('v1')->group(function () {
         Route::get('orders', [OrderController::class, 'index']);
         Route::get('orders/{id}', [OrderController::class, 'show']);
         Route::post('orders/{id}/cancel', [OrderController::class, 'cancel']);
+        Route::post('orders/{id}/cancellation-request', [OrderController::class, 'requestCancellation']);
 
         // Reviews (auth user CRUD)
         Route::post('products/{product}/reviews', [ReviewController::class, 'store']);
@@ -90,12 +101,18 @@ Route::prefix('v1')->group(function () {
     Route::prefix('admin')->middleware(['auth:sanctum', 'can:admin-access'])->group(function () {
         Route::get('dashboard', [DashboardController::class, 'index']);
 
+        // Geo-location
+        Route::get('geo/me', [GeoController::class, 'me']);
+
         // Products
         Route::apiResource('products', AdminProductController::class);
 
         // Categories
         Route::apiResource('categories', AdminCategoryController::class);
         Route::post('categories/reorder', [AdminCategoryController::class, 'reorder']);
+
+        // SKUs
+        Route::post('skus/generate', [SkuController::class, 'generate']);
 
         // Media management
         Route::post('products/{product}/media', [MediaController::class, 'uploadProductImages']);
@@ -107,6 +124,12 @@ Route::prefix('v1')->group(function () {
         Route::get('orders', [AdminOrderController::class, 'index']);
         Route::get('orders/{id}', [AdminOrderController::class, 'show']);
         Route::post('orders/{id}/status', [AdminOrderController::class, 'updateStatus']);
+        Route::post('orders/{order}/refund', [AdminOrderController::class, 'refund']);
+
+        // Cancellation Requests
+        Route::get('cancellation-requests', [CancellationRequestController::class, 'index']);
+        Route::post('cancellation-requests/{id}/accept', [CancellationRequestController::class, 'accept']);
+        Route::post('cancellation-requests/{id}/reject', [CancellationRequestController::class, 'reject']);
 
         // Users (with Wishlist & Addresses tabs)
         Route::get('users', [AdminUserController::class, 'index']);

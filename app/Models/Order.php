@@ -13,18 +13,37 @@ class Order extends Model
     protected $fillable = [
         'order_number', 'user_id', 'status', 'payment_status',
         'subtotal', 'tax', 'shipping_cost', 'discount', 'total',
-        'coupon_code', 'shipping_address', 'billing_address', 'notes'
+        'coupon_code', 'shipping_address', 'billing_address', 'notes',
+        'stripe_session_id', 'stripe_payment_intent_id',
+        'paid_at', 'cancelled_at', 'refunded_at',
     ];
 
     protected $casts = [
-        'shipping_address' => 'array',
-        'billing_address' => 'array',
-        'subtotal' => 'decimal:2',
-        'tax' => 'decimal:2',
-        'shipping_cost' => 'decimal:2',
-        'discount' => 'decimal:2',
-        'total' => 'decimal:2',
+        'shipping_address'         => 'array',
+        'billing_address'          => 'array',
+        'subtotal'                 => 'decimal:2',
+        'tax'                      => 'decimal:2',
+        'shipping_cost'            => 'decimal:2',
+        'discount'                 => 'decimal:2',
+        'total'                    => 'decimal:2',
+        'paid_at'                  => 'datetime',
+        'cancelled_at'             => 'datetime',
+        'refunded_at'              => 'datetime',
     ];
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    public function isPaid(): bool
+    {
+        return $this->payment_status === 'paid';
+    }
+
+    public function isRefunded(): bool
+    {
+        return $this->payment_status === 'refunded';
+    }
+
+    // ── Relations ─────────────────────────────────────────────────────────────
 
     public function items()
     {
@@ -40,6 +59,13 @@ class Order extends Model
     {
         return $this->hasOne(Payment::class);
     }
+
+    public function cancellationRequest()
+    {
+        return $this->hasOne(\App\Models\OrderCancellationRequest::class);
+    }
+
+    // ── Scopes ────────────────────────────────────────────────────────────────
 
     public function scopeStatus($query, $status)
     {

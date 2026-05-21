@@ -15,134 +15,68 @@
         }
     ],
     "paths": {
-        "/api/v1/profile/addresses": {
-            "get": {
-                "tags": [
-                    "Profile"
-                ],
-                "summary": "List user addresses",
-                "description": "List all addresses of the authenticated user, ordered by default first.",
-                "operationId": "d7be08dcf3750604b896c92a9c161162",
-                "responses": {
-                    "200": {
-                        "description": "Addresses fetched successfully",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "properties": {
-                                        "success": {
-                                            "type": "boolean",
-                                            "example": true
-                                        },
-                                        "message": {
-                                            "type": "string",
-                                            "example": "Addresses fetched."
-                                        },
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/components/schemas/Address"
-                                            }
-                                        }
-                                    },
-                                    "type": "object"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/ErrorResponse"
-                    }
-                },
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ]
-            },
+        "/api/v1/webhooks/stripe": {
             "post": {
                 "tags": [
-                    "Profile"
+                    "Webhooks"
                 ],
-                "summary": "Create Address",
-                "description": "Create a new address for the authenticated user",
-                "operationId": "55e59cd09a5b284e9c4865e66f718b04",
+                "summary": "Stripe Webhook",
+                "description": "Receives Stripe webhook events. Verifies signature. Handles: `checkout.session.completed`, `checkout.session.expired`, `charge.refunded`. **No authentication required** — secured by Stripe signature.",
+                "operationId": "4367a0899de20b82df99b21c0ec02e94",
                 "requestBody": {
                     "required": true,
                     "content": {
                         "application/json": {
                             "schema": {
-                                "required": [
-                                    "title",
-                                    "address_line_1",
-                                    "city",
-                                    "state",
-                                    "postal_code",
-                                    "country",
-                                    "phone"
-                                ],
-                                "properties": {
-                                    "label": {
-                                        "type": "string",
-                                        "example": "work"
-                                    },
-                                    "full_name": {
-                                        "type": "string",
-                                        "example": "John Doe"
-                                    },
-                                    "phone": {
-                                        "type": "string",
-                                        "example": "+1234567890"
-                                    },
-                                    "country": {
-                                        "type": "string",
-                                        "example": "United Arab Emirates"
-                                    },
-                                    "city": {
-                                        "type": "string",
-                                        "example": "Dubai"
-                                    },
-                                    "area": {
-                                        "type": "string",
-                                        "example": "Downtown"
-                                    },
-                                    "street": {
-                                        "type": "string",
-                                        "example": "Sheikh Zayed Road"
-                                    },
-                                    "building": {
-                                        "type": "string",
-                                        "example": "Burj Khalifa"
-                                    },
-                                    "floor": {
-                                        "type": "string",
-                                        "example": "42"
-                                    },
-                                    "apartment": {
-                                        "type": "string",
-                                        "example": "4205"
-                                    },
-                                    "postal_code": {
-                                        "type": "string",
-                                        "example": "00000"
-                                    },
-                                    "notes": {
-                                        "type": "string",
-                                        "example": "Please leave packages at the reception"
-                                    },
-                                    "is_default": {
-                                        "type": "boolean",
-                                        "example": true
-                                    }
-                                },
                                 "type": "object"
                             }
                         }
                     }
                 },
                 "responses": {
-                    "201": {
-                        "description": "Address created successfully",
+                    "200": {
+                        "description": "Webhook handled"
+                    },
+                    "400": {
+                        "description": "Invalid signature or payload"
+                    }
+                }
+            }
+        },
+        "/api/v1/address/autocomplete": {
+            "get": {
+                "tags": [
+                    "Addresses"
+                ],
+                "summary": "Address Autocomplete",
+                "description": "Get address autocomplete suggestions using Google Places API proxy.",
+                "operationId": "14c2789966b90ebcfa90efcf850910cc",
+                "parameters": [
+                    {
+                        "name": "q",
+                        "in": "query",
+                        "description": "Search query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 255,
+                            "minLength": 2
+                        }
+                    },
+                    {
+                        "name": "session",
+                        "in": "query",
+                        "description": "Session UUID to link related autocomplete and details requests",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Address suggestions fetched successfully",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -153,10 +87,27 @@
                                         },
                                         "message": {
                                             "type": "string",
-                                            "example": "Address created."
+                                            "example": "Address suggestions fetched successfully"
                                         },
                                         "data": {
-                                            "$ref": "#/components/schemas/Address"
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "place_id": {
+                                                        "type": "string"
+                                                    },
+                                                    "description": {
+                                                        "type": "string"
+                                                    },
+                                                    "main_text": {
+                                                        "type": "string"
+                                                    },
+                                                    "secondary_text": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
                                         }
                                     },
                                     "type": "object"
@@ -166,6 +117,157 @@
                     },
                     "422": {
                         "$ref": "#/components/responses/ValidationErrorResponse"
+                    },
+                    "429": {
+                        "description": "Too Many Requests"
+                    },
+                    "502": {
+                        "description": "Bad Gateway - Google API Error"
+                    }
+                }
+            }
+        },
+        "/api/v1/address/details": {
+            "get": {
+                "tags": [
+                    "Addresses"
+                ],
+                "summary": "Address Details",
+                "description": "Get normalized address details for a specific place_id using Google Places API proxy.",
+                "operationId": "a6ff8234c9bbd49ca150c6baf0fc57ea",
+                "parameters": [
+                    {
+                        "name": "place_id",
+                        "in": "query",
+                        "description": "Google Place ID",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "session",
+                        "in": "query",
+                        "description": "Session UUID to link related autocomplete and details requests",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Address details fetched successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Address details fetched successfully"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "line1": {
+                                                    "type": "string"
+                                                },
+                                                "city": {
+                                                    "type": "string"
+                                                },
+                                                "state": {
+                                                    "type": "string"
+                                                },
+                                                "postal_code": {
+                                                    "type": "string"
+                                                },
+                                                "country": {
+                                                    "type": "string"
+                                                },
+                                                "formatted_address": {
+                                                    "type": "string"
+                                                },
+                                                "lat": {
+                                                    "type": "number",
+                                                    "format": "float"
+                                                },
+                                                "lng": {
+                                                    "type": "number",
+                                                    "format": "float"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationErrorResponse"
+                    },
+                    "429": {
+                        "description": "Too Many Requests"
+                    },
+                    "502": {
+                        "description": "Bad Gateway - Google API Error"
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/cancellation-requests": {
+            "get": {
+                "tags": [
+                    "Admin Cancellation Requests"
+                ],
+                "summary": "Admin – List Cancellation Requests",
+                "description": "Paginated list of order cancellation requests. Filter by `status` (pending/accepted/rejected).",
+                "operationId": "0b9816d4ede6e9b777fd64db40cca1ee",
+                "parameters": [
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "pending",
+                                "accepted",
+                                "rejected"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 20
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Requests fetched",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "data": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
                     }
                 },
                 "security": [
@@ -175,14 +277,50 @@
                 ]
             }
         },
-        "/api/v1/profile/addresses/{id}": {
-            "put": {
+        "/api/v1/admin/cancellation-requests/{id}/accept": {
+            "post": {
                 "tags": [
-                    "Profile"
+                    "Admin Cancellation Requests"
                 ],
-                "summary": "Update Address",
-                "description": "Update an existing user address",
-                "operationId": "3249f9ab1e2db46278eae3321cbbb5ea",
+                "summary": "Admin – Accept Cancellation Request",
+                "description": "Accept the request: cancel the order, restock variants, and email the user.",
+                "operationId": "70c297217d4fbcd6e949e55375d19d65",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Request accepted, order cancelled"
+                    },
+                    "409": {
+                        "description": "Request already decided"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/ErrorResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/cancellation-requests/{id}/reject": {
+            "post": {
+                "tags": [
+                    "Admin Cancellation Requests"
+                ],
+                "summary": "Admin – Reject Cancellation Request",
+                "description": "Reject the request. Order is left untouched. An email with the admin note is sent to the user.",
+                "operationId": "80c4e4d4098793507f49084722a2ba1f",
                 "parameters": [
                     {
                         "name": "id",
@@ -198,42 +336,14 @@
                     "content": {
                         "application/json": {
                             "schema": {
+                                "required": [
+                                    "admin_note"
+                                ],
                                 "properties": {
-                                    "title": {
+                                    "admin_note": {
                                         "type": "string",
-                                        "example": "Work"
-                                    },
-                                    "address_line_1": {
-                                        "type": "string",
-                                        "example": "123 Main St"
-                                    },
-                                    "address_line_2": {
-                                        "type": "string",
-                                        "example": "Suite 100"
-                                    },
-                                    "city": {
-                                        "type": "string",
-                                        "example": "New York"
-                                    },
-                                    "state": {
-                                        "type": "string",
-                                        "example": "NY"
-                                    },
-                                    "postal_code": {
-                                        "type": "string",
-                                        "example": "10001"
-                                    },
-                                    "country": {
-                                        "type": "string",
-                                        "example": "USA"
-                                    },
-                                    "phone": {
-                                        "type": "string",
-                                        "example": "123-456-7890"
-                                    },
-                                    "is_default": {
-                                        "type": "boolean",
-                                        "example": false
+                                        "example": "Your order has already been dispatched and cannot be cancelled.",
+                                        "minLength": 5
                                     }
                                 },
                                 "type": "object"
@@ -243,141 +353,10 @@
                 },
                 "responses": {
                     "200": {
-                        "description": "Address updated successfully",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "properties": {
-                                        "success": {
-                                            "type": "boolean",
-                                            "example": true
-                                        },
-                                        "message": {
-                                            "type": "string",
-                                            "example": "Address updated."
-                                        },
-                                        "data": {
-                                            "$ref": "#/components/schemas/Address"
-                                        }
-                                    },
-                                    "type": "object"
-                                }
-                            }
-                        }
+                        "description": "Request rejected, user notified"
                     },
-                    "403": {
-                        "$ref": "#/components/responses/ErrorResponse"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
-                    }
-                },
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ]
-            },
-            "delete": {
-                "tags": [
-                    "Profile"
-                ],
-                "summary": "Delete Address",
-                "description": "Delete an existing user address",
-                "operationId": "61f419b57c556c86d2b667de6d114451",
-                "parameters": [
-                    {
-                        "name": "id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "integer"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Address deleted successfully",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "properties": {
-                                        "success": {
-                                            "type": "boolean",
-                                            "example": true
-                                        },
-                                        "message": {
-                                            "type": "string",
-                                            "example": "Address deleted."
-                                        },
-                                        "data": {
-                                            "type": "object",
-                                            "nullable": true
-                                        }
-                                    },
-                                    "type": "object"
-                                }
-                            }
-                        }
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/ErrorResponse"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
-                    }
-                },
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ]
-            }
-        },
-        "/api/v1/profile/addresses/{id}/default": {
-            "post": {
-                "tags": [
-                    "Profile"
-                ],
-                "summary": "Set Default Address",
-                "description": "Set a specific user address as the default",
-                "operationId": "6a591ed7354a61f042d1393ca1d148fa",
-                "parameters": [
-                    {
-                        "name": "id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "integer"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Default address updated successfully",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "properties": {
-                                        "success": {
-                                            "type": "boolean",
-                                            "example": true
-                                        },
-                                        "message": {
-                                            "type": "string",
-                                            "example": "Default address updated."
-                                        },
-                                        "data": {
-                                            "$ref": "#/components/schemas/Address"
-                                        }
-                                    },
-                                    "type": "object"
-                                }
-                            }
-                        }
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                    "409": {
+                        "description": "Request already decided"
                     },
                     "404": {
                         "$ref": "#/components/responses/ErrorResponse"
@@ -1026,6 +1005,84 @@
                 ]
             }
         },
+        "/api/v1/admin/geo/me": {
+            "get": {
+                "tags": [
+                    "Admin Geo"
+                ],
+                "summary": "Admin – IP Geo-location",
+                "description": "Returns geo-location data for the caller's IP address. Reads Cloudflare's `CF-IPCountry` header first (zero cost). Falls back to **ipapi.co** when the header is absent.",
+                "operationId": "44f067b5d615ee2ddc8d03308f2ea599",
+                "responses": {
+                    "200": {
+                        "description": "Geo-location resolved",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Geo-location resolved."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "ip": {
+                                                    "type": "string",
+                                                    "example": "185.60.112.10"
+                                                },
+                                                "country_code": {
+                                                    "type": "string",
+                                                    "example": "SA",
+                                                    "nullable": true
+                                                },
+                                                "country_name": {
+                                                    "type": "string",
+                                                    "example": "Saudi Arabia",
+                                                    "nullable": true
+                                                },
+                                                "region": {
+                                                    "type": "string",
+                                                    "example": "Riyadh",
+                                                    "nullable": true
+                                                },
+                                                "city": {
+                                                    "type": "string",
+                                                    "example": "Riyadh",
+                                                    "nullable": true
+                                                },
+                                                "source": {
+                                                    "description": "Resolution source: `cloudflare` | `ipapi.co` | null",
+                                                    "type": "string",
+                                                    "example": "cloudflare",
+                                                    "nullable": true
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/ErrorResponse"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/ErrorResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/admin/inspired-leads": {
             "get": {
                 "tags": [
@@ -1456,6 +1513,42 @@
                     },
                     "409": {
                         "description": "Status transition not allowed"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/ErrorResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/orders/{order}/refund": {
+            "post": {
+                "tags": [
+                    "Admin Orders"
+                ],
+                "summary": "Admin Refund Order",
+                "description": "Issue a full Stripe refund for a paid order and mark it as refunded.",
+                "operationId": "c0abfd1268155e28733e289facc942bb",
+                "parameters": [
+                    {
+                        "name": "order",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Order refunded"
+                    },
+                    "409": {
+                        "description": "Order not eligible for refund"
                     },
                     "404": {
                         "$ref": "#/components/responses/ErrorResponse"
@@ -2017,6 +2110,98 @@
                 "responses": {
                     "200": {
                         "description": "Review moderated"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationErrorResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/skus/generate": {
+            "post": {
+                "tags": [
+                    "Admin SKUs"
+                ],
+                "summary": "Admin Generate SKU Preview",
+                "description": "Generate a preview SKU for a product or variant based on the provided details. Does NOT reserve or persist the SKU.",
+                "operationId": "ae7f5b999b9f8a34c602ccb468c9e985",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "type",
+                                    "category_id",
+                                    "product_name"
+                                ],
+                                "properties": {
+                                    "type": {
+                                        "type": "string",
+                                        "example": "variant",
+                                        "enum": [
+                                            "product",
+                                            "variant"
+                                        ]
+                                    },
+                                    "category_id": {
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "product_name": {
+                                        "type": "string",
+                                        "example": "Pear Necklace"
+                                    },
+                                    "product_slug": {
+                                        "type": "string",
+                                        "example": "pear-necklace",
+                                        "nullable": true
+                                    },
+                                    "variant_name": {
+                                        "type": "string",
+                                        "example": "Rose Gold",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "SKU generated successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "SKU generated successfully"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "sku": {
+                                                    "type": "string",
+                                                    "example": "OTQ-NCK-PEAR-RG-0042"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
                     },
                     "422": {
                         "$ref": "#/components/responses/ValidationErrorResponse"
@@ -3787,8 +3972,8 @@
                 "tags": [
                     "Orders"
                 ],
-                "summary": "Cancel Order",
-                "description": "Cancel a pending order belonging to the user",
+                "summary": "Cancel Order (Direct)",
+                "description": "Immediately cancel a **pending** order. Only allowed within **3 hours** of creation.",
                 "operationId": "7fb5c5cde4a48c07f8f7551e1abfac97",
                 "parameters": [
                     {
@@ -3805,12 +3990,68 @@
                         "description": "Order cancelled successfully"
                     },
                     "400": {
-                        "description": "Cannot cancel order (not pending)"
+                        "description": "Cannot cancel order (wrong status or window expired)"
                     },
                     "404": {
                         "$ref": "#/components/responses/ErrorResponse"
                     },
                     "401": {
+                        "$ref": "#/components/responses/ErrorResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/orders/{id}/cancellation-request": {
+            "post": {
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Submit Cancellation Request",
+                "description": "Submit a cancellation request for an order. Cannot be used if order is shipped, delivered, or cancelled, or if a pending request already exists.",
+                "operationId": "98c44ac10087b4e87c02f74a053fb029",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "reason"
+                                ],
+                                "properties": {
+                                    "reason": {
+                                        "type": "string",
+                                        "example": "I ordered by mistake and need to cancel.",
+                                        "minLength": 10
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Cancellation request submitted"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationErrorResponse"
+                    },
+                    "404": {
                         "$ref": "#/components/responses/ErrorResponse"
                     }
                 },
@@ -4697,35 +4938,81 @@
                         "type": "string",
                         "example": "ORD-2023-1001"
                     },
-                    "user_id": {
-                        "type": "integer",
-                        "example": 5
-                    },
                     "status": {
                         "type": "string",
                         "example": "pending"
-                    },
-                    "total_amount": {
-                        "type": "number",
-                        "format": "float",
-                        "example": 299.99
-                    },
-                    "payment_method": {
-                        "type": "string",
-                        "example": "credit_card"
                     },
                     "payment_status": {
                         "type": "string",
                         "example": "paid"
                     },
+                    "subtotal": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 299.99
+                    },
+                    "tax": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 0
+                    },
+                    "shipping_cost": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 15
+                    },
+                    "discount": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 0
+                    },
+                    "total": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 314.99
+                    },
                     "shipping_address": {
                         "$ref": "#/components/schemas/Address"
+                    },
+                    "billing_address": {
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/Address"
+                            }
+                        ],
+                        "nullable": true,
+                        "type": "object"
                     },
                     "items": {
                         "type": "array",
                         "items": {
                             "$ref": "#/components/schemas/OrderItem"
                         }
+                    },
+                    "stripe_session_id": {
+                        "type": "string",
+                        "example": "cs_test_a1b2c3d4",
+                        "nullable": true
+                    },
+                    "stripe_payment_intent_id": {
+                        "type": "string",
+                        "example": "pi_123456789",
+                        "nullable": true
+                    },
+                    "paid_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "cancelled_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "refunded_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
                     },
                     "created_at": {
                         "type": "string",
@@ -4754,19 +5041,81 @@
                         "type": "string",
                         "example": "MacBook Pro"
                     },
+                    "variant_name": {
+                        "type": "string",
+                        "example": "Silver",
+                        "nullable": true
+                    },
+                    "sku": {
+                        "type": "string",
+                        "example": "MBP-SLV",
+                        "nullable": true
+                    },
                     "quantity": {
                         "type": "integer",
                         "example": 2
                     },
-                    "unit_price": {
+                    "price": {
                         "type": "number",
                         "format": "float",
                         "example": 149.99
                     },
-                    "subtotal": {
+                    "total": {
                         "type": "number",
                         "format": "float",
                         "example": 299.98
+                    },
+                    "variant_attributes": {
+                        "description": "Selected variant attributes snapshot",
+                        "type": "object",
+                        "example": {
+                            "color": "Gold",
+                            "size": "18in"
+                        },
+                        "nullable": true
+                    },
+                    "attributes": {
+                        "description": "Selected variant attributes alias",
+                        "type": "object",
+                        "example": {
+                            "color": "Gold",
+                            "size": "18in"
+                        },
+                        "nullable": true
+                    },
+                    "variant": {
+                        "properties": {
+                            "id": {
+                                "type": "integer",
+                                "example": 2
+                            },
+                            "name": {
+                                "type": "string",
+                                "example": "Gold / 18in"
+                            },
+                            "sku": {
+                                "type": "string",
+                                "example": "NK-G-18"
+                            },
+                            "attributes": {
+                                "description": "Attributes map for variant",
+                                "type": "object",
+                                "example": {
+                                    "color": "Gold",
+                                    "size": "18in"
+                                }
+                            },
+                            "options": {
+                                "description": "Options map alias for variant",
+                                "type": "object",
+                                "example": {
+                                    "color": "Gold",
+                                    "size": "18in"
+                                }
+                            }
+                        },
+                        "type": "object",
+                        "nullable": true
                     }
                 },
                 "type": "object"
@@ -5082,8 +5431,16 @@
     },
     "tags": [
         {
-            "name": "Profile",
-            "description": "Profile"
+            "name": "Webhooks",
+            "description": "Webhooks"
+        },
+        {
+            "name": "Addresses",
+            "description": "Addresses"
+        },
+        {
+            "name": "Admin Cancellation Requests",
+            "description": "Admin Cancellation Requests"
         },
         {
             "name": "Admin Categories",
@@ -5096,6 +5453,10 @@
         {
             "name": "Admin Dashboard",
             "description": "Admin Dashboard"
+        },
+        {
+            "name": "Admin Geo",
+            "description": "Admin Geo"
         },
         {
             "name": "Admin Inspired Leads",
@@ -5112,6 +5473,10 @@
         {
             "name": "Admin Reviews",
             "description": "Admin Reviews"
+        },
+        {
+            "name": "Admin SKUs",
+            "description": "Admin SKUs"
         },
         {
             "name": "Admin Telescope",

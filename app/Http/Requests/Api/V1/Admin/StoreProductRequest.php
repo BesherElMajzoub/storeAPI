@@ -59,4 +59,23 @@ class StoreProductRequest extends BaseAdminRequest
             'variants.*.attributes' => ['nullable', 'array'],
         ];
     }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator) {
+            $stockQty = $this->input('stock_qty');
+            $variants = $this->input('variants');
+
+            if ($stockQty !== null && is_array($variants) && count($variants) > 0) {
+                $variantsStockSum = 0;
+                foreach ($variants as $variant) {
+                    $variantsStockSum += (int) ($variant['stock_qty'] ?? 0);
+                }
+
+                if ($variantsStockSum > $stockQty) {
+                    $validator->errors()->add('variants', 'The total stock quantity of variants cannot exceed the product\'s stock quantity.');
+                }
+            }
+        });
+    }
 }
