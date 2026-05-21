@@ -10,7 +10,7 @@ class OtpSendRequest extends BaseAuthRequest
     {
         return [
             'email' => ['required', 'string', 'email', 'max:255'],
-            'purpose' => ['sometimes', 'string', Rule::in(['password_reset'])],
+            'purpose' => ['sometimes', 'string', Rule::in(['password_reset', 'email_verification'])],
             'channel' => ['sometimes', 'string', Rule::in(['email'])],
         ];
     }
