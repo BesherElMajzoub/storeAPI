@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\StoreContactMessageRequest;
 use App\Models\ContactMessage;
+use App\Jobs\SendAdminAlert;
 use Illuminate\Http\JsonResponse;
 use OpenApi\Attributes as OA;
 
@@ -44,7 +45,10 @@ class ContactMessageController extends Controller
     #[OA\Response(response: 422, ref: "#/components/responses/ErrorResponse")]
     public function store(StoreContactMessageRequest $request): JsonResponse
     {
-        ContactMessage::create($request->validated());
+        $contactMessage = ContactMessage::create($request->validated());
+
+        $message = "📩 New message from {$contactMessage->name} ({$contactMessage->email}): \"{$contactMessage->subject}\"";
+        SendAdminAlert::dispatch($message)->onQueue('notifications');
 
         return response()->json([
             'success' => true,

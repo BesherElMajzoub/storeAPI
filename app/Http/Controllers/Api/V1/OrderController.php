@@ -8,6 +8,7 @@ use App\Http\Requests\Api\V1\StoreCancellationRequestRequest;
 use App\Http\Resources\OrderResource;
 use App\Models\Order;
 use App\Models\OrderCancellationRequest;
+use App\Jobs\SendAdminAlert;
 use App\Models\Product;
 use App\Services\StripeCheckoutService;
 use Illuminate\Http\JsonResponse;
@@ -309,6 +310,9 @@ class OrderController extends Controller
             'reason'   => $request->validated('reason'),
             'status'   => 'pending',
         ]);
+
+        $message = "⚠️ Cancellation request for order {$order->order_number} — Reason: \"" . $request->validated('reason') . "\"";
+        SendAdminAlert::dispatch($message)->onQueue('notifications');
 
         return response()->json([
             'success' => true,

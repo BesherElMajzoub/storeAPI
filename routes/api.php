@@ -27,6 +27,8 @@ use App\Http\Controllers\Api\V1\Admin\GeoController;
 use App\Http\Controllers\Api\V1\Admin\CancellationRequestController;
 use App\Http\Controllers\Api\V1\Admin\SkuController;
 use App\Http\Controllers\Api\StripeWebhookController;
+use App\Http\Controllers\Api\V1\AnalyticsEventController;
+use App\Http\Controllers\Api\V1\Admin\AdminAnalyticsController;
 
 Route::prefix('v1')->group(function () {
 
@@ -53,6 +55,7 @@ Route::prefix('v1')->group(function () {
     // --- PUBLIC STORE ---
     Route::post('contact-messages', [ContactMessageController::class, 'store']);
     Route::post('inspired-leads', [InspiredLeadController::class, 'store']);
+    Route::post('analytics/event', [AnalyticsEventController::class, 'track']);
 
     Route::get('categories', [CategoryController::class, 'index']);
     Route::get('categories/{slug}', [CategoryController::class, 'show']);
@@ -100,6 +103,7 @@ Route::prefix('v1')->group(function () {
     // --- ADMIN ---
     Route::prefix('admin')->middleware(['auth:sanctum', 'can:admin-access'])->group(function () {
         Route::get('dashboard', [DashboardController::class, 'index']);
+        Route::get('analytics/dashboard', [AdminAnalyticsController::class, 'dashboard']);
 
         // Geo-location
         Route::get('geo/me', [GeoController::class, 'me']);

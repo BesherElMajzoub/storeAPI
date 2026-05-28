@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Order;
+use App\Jobs\SendAdminAlert;
 use App\Services\StripeCheckoutService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -83,6 +84,11 @@ class StripeWebhookController extends Controller
             'stripe_payment_intent_id'   => $session->payment_intent,
             'paid_at'                    => now(),
         ]);
+
+        $order->load('items');
+        $itemCount = $order->items->sum('quantity');
+        $message = "🛒 New order {$order->order_number} — \${$order->total} — {$itemCount} items";
+        SendAdminAlert::dispatch($message)->onQueue('notifications');
 
         Log::info("Order {$order->order_number} marked as paid via Stripe.");
     }

@@ -43,8 +43,8 @@ class StripeCheckoutTest extends TestCase
     public function test_order_creation_returns_checkout_url(): void
     {
         $mockSession = Mockery::mock(StripeSession::class);
-        $mockSession->id  = 'cs_test_abc123';
-        $mockSession->url = 'https://checkout.stripe.com/pay/cs_test_abc123';
+        $mockSession->shouldReceive('__get')->with('id')->andReturn('cs_test_abc123');
+        $mockSession->shouldReceive('__get')->with('url')->andReturn('https://checkout.stripe.com/pay/cs_test_abc123');
 
         $this->mock(StripeCheckoutService::class, function ($mock) use ($mockSession) {
             $mock->shouldReceive('createCheckoutSession')->once()->andReturn($mockSession);
@@ -69,8 +69,8 @@ class StripeCheckoutTest extends TestCase
     public function test_order_remains_unpaid_after_creation(): void
     {
         $mockSession = Mockery::mock(StripeSession::class);
-        $mockSession->id  = 'cs_test_xyz';
-        $mockSession->url = 'https://checkout.stripe.com/pay/cs_test_xyz';
+        $mockSession->shouldReceive('__get')->with('id')->andReturn('cs_test_xyz');
+        $mockSession->shouldReceive('__get')->with('url')->andReturn('https://checkout.stripe.com/pay/cs_test_xyz');
 
         $this->mock(StripeCheckoutService::class, function ($mock) use ($mockSession) {
             $mock->shouldReceive('createCheckoutSession')->once()->andReturn($mockSession);
