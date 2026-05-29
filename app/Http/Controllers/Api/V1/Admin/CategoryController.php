@@ -146,7 +146,7 @@ class CategoryController extends Controller
         )
     )]
     #[OA\Response(response: 422, ref: "#/components/responses/ValidationErrorResponse")]
-    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
     public function update(UpdateCategoryRequest $request, int $id, CategoryService $service): JsonResponse
     {
         $category = Category::findOrFail($id);
@@ -179,7 +179,7 @@ class CategoryController extends Controller
     )]
     #[OA\Parameter(name: "category", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
     #[OA\Response(response: 200, description: "Category deleted")]
-    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
     public function destroy(int $id): JsonResponse
     {
         $category = Category::findOrFail($id);
@@ -274,7 +274,7 @@ class CategoryController extends Controller
             ]
         )
     )]
-    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
     public function show(int $id): JsonResponse
     {
         $category = Category::with('media')->findOrFail($id);

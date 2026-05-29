@@ -65,7 +65,7 @@ class CancellationRequestController extends Controller
     #[OA\Parameter(name: "id", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
     #[OA\Response(response: 200, description: "Request accepted, order cancelled")]
     #[OA\Response(response: 409, description: "Request already decided")]
-    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
     public function accept(Request $request, int $id): JsonResponse
     {
         $cancellation = OrderCancellationRequest::with(['order.items.product', 'user'])->findOrFail($id);
@@ -133,7 +133,7 @@ class CancellationRequestController extends Controller
     )]
     #[OA\Response(response: 200, description: "Request rejected, user notified")]
     #[OA\Response(response: 409, description: "Request already decided")]
-    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
     public function reject(RejectCancellationRequestRequest $request, int $id): JsonResponse
     {
         $cancellation = OrderCancellationRequest::with(['order', 'user'])->findOrFail($id);

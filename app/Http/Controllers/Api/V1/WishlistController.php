@@ -37,7 +37,7 @@ class WishlistController extends Controller
             ]
         )
     )]
-    #[OA\Response(response: 401, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 401, ref: "#/components/responses/UnauthorizedResponse")]
     public function index(Request $request): JsonResponse
     {
         $items = $request->user()
@@ -79,8 +79,8 @@ class WishlistController extends Controller
             ]
         )
     )]
-    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
-    #[OA\Response(response: 422, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
+    #[OA\Response(response: 422, ref: "#/components/responses/ValidationErrorResponse")]
     public function store(Request $request): JsonResponse
     {
         $request->validate([
@@ -138,7 +138,7 @@ class WishlistController extends Controller
             ]
         )
     )]
-    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
     public function destroy(Request $request, $productId): JsonResponse
     {
         $user = $request->user();

@@ -75,7 +75,7 @@ class UserController extends Controller
             ]
         )
     )]
-    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
     public function show(int $id): JsonResponse
     {
         $user = User::withCount(['orders', 'reviews'])
@@ -107,7 +107,7 @@ class UserController extends Controller
             ]
         )
     )]
-    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
     public function wishlist(int $id): JsonResponse
     {
         $user = User::findOrFail($id);
@@ -162,7 +162,7 @@ class UserController extends Controller
             ]
         )
     )]
-    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
     public function addresses(int $id): JsonResponse
     {
         $user = User::findOrFail($id);

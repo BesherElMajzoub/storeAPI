@@ -74,7 +74,7 @@ class ProductController extends Controller
             ]
         )
     )]
-    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
     public function show(int $id): JsonResponse
     {
         $product = Product::with(['variants', 'media', 'category.media'])->findOrFail($id);
@@ -234,7 +234,7 @@ class ProductController extends Controller
         )
     )]
     #[OA\Response(response: 422, ref: "#/components/responses/ValidationErrorResponse")]
-    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
     public function update(UpdateProductRequest $request, int $id, ProductService $service): JsonResponse
     {
         $product = Product::findOrFail($id);
@@ -299,7 +299,7 @@ class ProductController extends Controller
     )]
     #[OA\Parameter(name: "product", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
     #[OA\Response(response: 200, description: "Product deleted")]
-    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
     public function destroy(int $id): JsonResponse
     {
         Product::findOrFail($id)->delete();

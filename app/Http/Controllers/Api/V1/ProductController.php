@@ -80,7 +80,7 @@ class ProductController extends Controller
             ]
         )
     )]
-    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
     public function show($slug)
     {
         $product = Product::where('slug', $slug)
@@ -120,7 +120,7 @@ class ProductController extends Controller
             ]
         )
     )]
-    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
     public function reviews($id)
     {
         $product = Product::published()->findOrFail($id);

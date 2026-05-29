@@ -48,7 +48,7 @@ class OrderController extends Controller
             ]
         )
     )]
-    #[OA\Response(response: 401, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 401, ref: "#/components/responses/UnauthorizedResponse")]
     public function index(Request $request)
     {
         $perPage = min(max((int) $request->get('per_page', 20), 1), 100);
@@ -84,7 +84,7 @@ class OrderController extends Controller
             ]
         )
     )]
-    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
     public function show($id)
     {
         $order = Order::with(['items', 'user', 'payment'])->findOrFail($id);
@@ -120,7 +120,7 @@ class OrderController extends Controller
         )
     )]
     #[OA\Response(response: 409, description: "Status transition not allowed")]
-    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
     public function updateStatus(UpdateOrderStatusRequest $request, $id)
     {
         $order = Order::findOrFail($id);
@@ -193,7 +193,7 @@ class OrderController extends Controller
     #[OA\Parameter(name: "order", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
     #[OA\Response(response: 200, description: "Order refunded")]
     #[OA\Response(response: 409, description: "Order not eligible for refund")]
-    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
     public function refund(int $order, StripeCheckoutService $stripe): JsonResponse
     {
         $order = Order::findOrFail($order);

@@ -48,8 +48,8 @@ class DashboardController extends Controller
             ]
         )
     )]
-    #[OA\Response(response: 401, ref: "#/components/responses/ErrorResponse")]
-    #[OA\Response(response: 403, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 401, ref: "#/components/responses/UnauthorizedResponse")]
+    #[OA\Response(response: 403, ref: "#/components/responses/ForbiddenResponse")]
     public function index()
     {
         return response()->json([

@@ -65,7 +65,7 @@ class CategoryController extends Controller
             ]
         )
     )]
-    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
     public function show($slug)
     {
         $category = Category::where('slug', $slug)

@@ -9,6 +9,7 @@ use OpenApi\Attributes as OA;
     title: "Validation Error Response",
     description: "Response for 422 validation errors",
     properties: [
+        new OA\Property(property: "success", type: "boolean", example: false),
         new OA\Property(property: "message", type: "string", example: "The given data was invalid."),
         new OA\Property(
             property: "errors",

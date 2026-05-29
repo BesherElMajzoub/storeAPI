@@ -220,6 +220,37 @@
                 }
             }
         },
+        "/api/v1/admin/analytics/dashboard": {
+            "get": {
+                "tags": [
+                    "Admin Analytics"
+                ],
+                "summary": "Admin Analytics Dashboard Stats",
+                "description": "Returns aggregated visitor statistics, traffic trends, and conversion rate for the dashboard.",
+                "operationId": "74c20483fa7df0f026bb5f2c0b763517",
+                "parameters": [
+                    {
+                        "name": "days",
+                        "in": "query",
+                        "description": "Number of days for historical trends",
+                        "schema": {
+                            "type": "integer",
+                            "default": 30
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Analytics statistics fetched successfully"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/admin/cancellation-requests": {
             "get": {
                 "tags": [
@@ -303,7 +334,7 @@
                         "description": "Request already decided"
                     },
                     "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/NotFoundResponse"
                     }
                 },
                 "security": [
@@ -359,7 +390,7 @@
                         "description": "Request already decided"
                     },
                     "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/NotFoundResponse"
                     }
                 },
                 "security": [
@@ -524,7 +555,7 @@
                         }
                     },
                     "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/NotFoundResponse"
                     }
                 },
                 "security": [
@@ -613,7 +644,7 @@
                         "$ref": "#/components/responses/ValidationErrorResponse"
                     },
                     "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/NotFoundResponse"
                     }
                 },
                 "security": [
@@ -644,7 +675,7 @@
                         "description": "Category deleted"
                     },
                     "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/NotFoundResponse"
                     }
                 },
                 "security": [
@@ -992,10 +1023,10 @@
                         }
                     },
                     "401": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/UnauthorizedResponse"
                     },
                     "403": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/ForbiddenResponse"
                     }
                 },
                 "security": [
@@ -1070,10 +1101,10 @@
                         }
                     },
                     "401": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/UnauthorizedResponse"
                     },
                     "403": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/ForbiddenResponse"
                     }
                 },
                 "security": [
@@ -1400,7 +1431,7 @@
                         }
                     },
                     "401": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/UnauthorizedResponse"
                     }
                 },
                 "security": [
@@ -1445,7 +1476,7 @@
                         }
                     },
                     "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/NotFoundResponse"
                     }
                 },
                 "security": [
@@ -1515,7 +1546,7 @@
                         "description": "Status transition not allowed"
                     },
                     "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/NotFoundResponse"
                     }
                 },
                 "security": [
@@ -1551,7 +1582,7 @@
                         "description": "Order not eligible for refund"
                     },
                     "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/NotFoundResponse"
                     }
                 },
                 "security": [
@@ -1773,7 +1804,7 @@
                         }
                     },
                     "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/NotFoundResponse"
                     }
                 },
                 "security": [
@@ -1914,7 +1945,7 @@
                         "$ref": "#/components/responses/ValidationErrorResponse"
                     },
                     "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/NotFoundResponse"
                     }
                 },
                 "security": [
@@ -1945,7 +1976,7 @@
                         "description": "Product deleted"
                     },
                     "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/NotFoundResponse"
                     }
                 },
                 "security": [
@@ -2688,7 +2719,7 @@
                         }
                     },
                     "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/NotFoundResponse"
                     }
                 },
                 "security": [
@@ -2733,7 +2764,7 @@
                         }
                     },
                     "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/NotFoundResponse"
                     }
                 },
                 "security": [
@@ -2778,7 +2809,7 @@
                         }
                     },
                     "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/NotFoundResponse"
                     }
                 },
                 "security": [
@@ -3063,7 +3094,7 @@
                         }
                     },
                     "401": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/UnauthorizedResponse"
                     },
                     "422": {
                         "$ref": "#/components/responses/ValidationErrorResponse"
@@ -3096,7 +3127,7 @@
                         }
                     },
                     "401": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/UnauthorizedResponse"
                     }
                 },
                 "security": [
@@ -3163,7 +3194,7 @@
                         }
                     },
                     "401": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/UnauthorizedResponse"
                     },
                     "422": {
                         "$ref": "#/components/responses/ValidationErrorResponse"
@@ -3206,7 +3237,7 @@
                         "description": "Logged out successfully"
                     },
                     "401": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/UnauthorizedResponse"
                     }
                 },
                 "security": [
@@ -3266,7 +3297,7 @@
                         }
                     },
                     "401": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/UnauthorizedResponse"
                     }
                 },
                 "security": [
@@ -3407,7 +3438,7 @@
                         "description": "OTP sent"
                     },
                     "429": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/TooManyRequestsResponse"
                     },
                     "422": {
                         "$ref": "#/components/responses/ValidationErrorResponse"
@@ -3626,7 +3657,7 @@
                         }
                     },
                     "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/NotFoundResponse"
                     }
                 }
             }
@@ -3707,7 +3738,7 @@
                         }
                     },
                     "422": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/ValidationErrorResponse"
                     }
                 }
             }
@@ -3797,7 +3828,7 @@
                         }
                     },
                     "422": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/ValidationErrorResponse"
                     }
                 }
             }
@@ -3833,7 +3864,7 @@
                         }
                     },
                     "401": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/UnauthorizedResponse"
                     }
                 },
                 "security": [
@@ -3847,7 +3878,7 @@
                     "Orders"
                 ],
                 "summary": "Create Order",
-                "description": "Create a new order for the authenticated user",
+                "description": "Create a new order for the authenticated user and generate a Stripe Checkout Session.",
                 "operationId": "79da0a1adcc617490783dfd61927ff56",
                 "requestBody": {
                     "required": true,
@@ -3867,6 +3898,11 @@
                                                     "type": "integer",
                                                     "example": 1
                                                 },
+                                                "variant_id": {
+                                                    "type": "integer",
+                                                    "example": null,
+                                                    "nullable": true
+                                                },
                                                 "quantity": {
                                                     "type": "integer",
                                                     "example": 2
@@ -3876,12 +3912,79 @@
                                         }
                                     },
                                     "shipping_address": {
-                                        "description": "Shipping address details",
+                                        "properties": {
+                                            "first_name": {
+                                                "type": "string",
+                                                "example": "John"
+                                            },
+                                            "last_name": {
+                                                "type": "string",
+                                                "example": "Doe"
+                                            },
+                                            "address_line_1": {
+                                                "type": "string",
+                                                "example": "123 Main St"
+                                            },
+                                            "city": {
+                                                "type": "string",
+                                                "example": "New York"
+                                            },
+                                            "state": {
+                                                "type": "string",
+                                                "example": "NY"
+                                            },
+                                            "postal_code": {
+                                                "type": "string",
+                                                "example": "10001"
+                                            },
+                                            "country": {
+                                                "type": "string",
+                                                "example": "US"
+                                            },
+                                            "phone": {
+                                                "type": "string",
+                                                "example": "+1234567890"
+                                            }
+                                        },
                                         "type": "object"
                                     },
                                     "billing_address": {
-                                        "description": "Billing address details (optional)",
-                                        "type": "object"
+                                        "properties": {
+                                            "first_name": {
+                                                "type": "string",
+                                                "example": "John"
+                                            },
+                                            "last_name": {
+                                                "type": "string",
+                                                "example": "Doe"
+                                            },
+                                            "address_line_1": {
+                                                "type": "string",
+                                                "example": "123 Main St"
+                                            },
+                                            "city": {
+                                                "type": "string",
+                                                "example": "New York"
+                                            },
+                                            "state": {
+                                                "type": "string",
+                                                "example": "NY"
+                                            },
+                                            "postal_code": {
+                                                "type": "string",
+                                                "example": "10001"
+                                            },
+                                            "country": {
+                                                "type": "string",
+                                                "example": "US"
+                                            },
+                                            "phone": {
+                                                "type": "string",
+                                                "example": "+1234567890"
+                                            }
+                                        },
+                                        "type": "object",
+                                        "nullable": true
                                     }
                                 },
                                 "type": "object"
@@ -3891,13 +3994,44 @@
                 },
                 "responses": {
                     "201": {
-                        "description": "Order created successfully",
+                        "description": "Order created successfully. Redirect to Stripe checkout.",
                         "content": {
                             "application/json": {
                                 "schema": {
                                     "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Order created. Redirect to Stripe checkout."
+                                        },
                                         "data": {
-                                            "$ref": "#/components/schemas/Order"
+                                            "properties": {
+                                                "order": {
+                                                    "$ref": "#/components/schemas/Order"
+                                                },
+                                                "checkout_url": {
+                                                    "type": "string",
+                                                    "example": "https://checkout.stripe.com/c/pay/cs_test_a1b2c3d4"
+                                                },
+                                                "payment": {
+                                                    "properties": {
+                                                        "session_id": {
+                                                            "type": "string",
+                                                            "example": "cs_test_a1b2c3d4"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
                                         }
                                     },
                                     "type": "object"
@@ -3905,11 +4039,41 @@
                             }
                         }
                     },
+                    "401": {
+                        "$ref": "#/components/responses/UnauthorizedResponse"
+                    },
                     "422": {
                         "$ref": "#/components/responses/ValidationErrorResponse"
                     },
-                    "401": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                    "502": {
+                        "description": "Payment provider error.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Payment provider error. Please try again."
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
                     }
                 },
                 "security": [
@@ -3954,10 +4118,10 @@
                         }
                     },
                     "401": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/UnauthorizedResponse"
                     },
                     "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/NotFoundResponse"
                     }
                 },
                 "security": [
@@ -3987,16 +4151,70 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Order cancelled successfully"
+                        "description": "Order cancelled successfully.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Order cancelled successfully."
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
                     },
                     "400": {
-                        "description": "Cannot cancel order (wrong status or window expired)"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "description": "Cannot cancel order (wrong status or window expired).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Only pending orders can be cancelled directly."
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
                     },
                     "401": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/UnauthorizedResponse"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFoundResponse"
                     }
                 },
                 "security": [
@@ -4046,13 +4264,43 @@
                 },
                 "responses": {
                     "201": {
-                        "description": "Cancellation request submitted"
+                        "description": "Cancellation request submitted successfully.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Your cancellation request has been submitted and is under review."
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/UnauthorizedResponse"
                     },
                     "422": {
                         "$ref": "#/components/responses/ValidationErrorResponse"
                     },
                     "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/NotFoundResponse"
                     }
                 },
                 "security": [
@@ -4188,7 +4436,7 @@
                         }
                     },
                     "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/NotFoundResponse"
                     }
                 }
             }
@@ -4235,7 +4483,7 @@
                         }
                     },
                     "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/NotFoundResponse"
                     }
                 }
             }
@@ -4466,7 +4714,7 @@
                         }
                     },
                     "401": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/UnauthorizedResponse"
                     }
                 },
                 "security": [
@@ -4523,10 +4771,10 @@
                         }
                     },
                     "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/NotFoundResponse"
                     },
                     "422": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/ValidationErrorResponse"
                     }
                 },
                 "security": [
@@ -4576,7 +4824,7 @@
                         }
                     },
                     "404": {
-                        "$ref": "#/components/responses/ErrorResponse"
+                        "$ref": "#/components/responses/NotFoundResponse"
                     }
                 },
                 "security": [
@@ -4708,6 +4956,56 @@
                 },
                 "type": "object"
             },
+            "ForbiddenResponse": {
+                "title": "Forbidden Response",
+                "description": "Response for 403 forbidden error",
+                "properties": {
+                    "success": {
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "message": {
+                        "type": "string",
+                        "example": "Forbidden. You do not have permission to access this resource."
+                    },
+                    "data": {
+                        "type": "object",
+                        "example": null,
+                        "nullable": true
+                    },
+                    "errors": {
+                        "type": "object",
+                        "example": null,
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "NotFoundResponse": {
+                "title": "NotFound Response",
+                "description": "Response for 404 not found error",
+                "properties": {
+                    "success": {
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "message": {
+                        "type": "string",
+                        "example": "Resource not found."
+                    },
+                    "data": {
+                        "type": "object",
+                        "example": null,
+                        "nullable": true
+                    },
+                    "errors": {
+                        "type": "object",
+                        "example": null,
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
             "PaginationMeta": {
                 "title": "Pagination Meta",
                 "description": "Metadata for paginated responses (Laravel style)",
@@ -4789,10 +5087,71 @@
                 },
                 "type": "object"
             },
+            "TooManyRequestsResponse": {
+                "title": "Too Many Requests Response",
+                "description": "Response for 429 too many requests error",
+                "properties": {
+                    "success": {
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "message": {
+                        "type": "string",
+                        "example": "Too many requests. Please try again later."
+                    },
+                    "data": {
+                        "type": "object",
+                        "example": null,
+                        "nullable": true
+                    },
+                    "errors": {
+                        "properties": {
+                            "rate_limit": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "example": "Too many requests, please try again later."
+                                }
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "type": "object"
+            },
+            "UnauthorizedResponse": {
+                "title": "Unauthorized Response",
+                "description": "Response for 401 unauthorized error",
+                "properties": {
+                    "success": {
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "message": {
+                        "type": "string",
+                        "example": "Unauthenticated."
+                    },
+                    "data": {
+                        "type": "object",
+                        "example": null,
+                        "nullable": true
+                    },
+                    "errors": {
+                        "type": "object",
+                        "example": null,
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
             "ValidationErrorResponse": {
                 "title": "Validation Error Response",
                 "description": "Response for 422 validation errors",
                 "properties": {
+                    "success": {
+                        "type": "boolean",
+                        "example": false
+                    },
                     "message": {
                         "type": "string",
                         "example": "The given data was invalid."
@@ -5410,6 +5769,46 @@
                     }
                 }
             },
+            "ForbiddenResponse": {
+                "description": "Forbidden error response",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/ForbiddenResponse"
+                        }
+                    }
+                }
+            },
+            "NotFoundResponse": {
+                "description": "Not found error response",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/NotFoundResponse"
+                        }
+                    }
+                }
+            },
+            "TooManyRequestsResponse": {
+                "description": "Too many requests error response",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/TooManyRequestsResponse"
+                        }
+                    }
+                }
+            },
+            "UnauthorizedResponse": {
+                "description": "Unauthorized error response",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/UnauthorizedResponse"
+                        }
+                    }
+                }
+            },
             "ValidationErrorResponse": {
                 "description": "Validation error response",
                 "content": {
@@ -5437,6 +5836,10 @@
         {
             "name": "Addresses",
             "description": "Addresses"
+        },
+        {
+            "name": "Admin Analytics",
+            "description": "Admin Analytics"
         },
         {
             "name": "Admin Cancellation Requests",

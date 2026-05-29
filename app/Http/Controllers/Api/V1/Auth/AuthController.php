@@ -132,7 +132,7 @@ class AuthController extends Controller
             ]
         )
     )]
-    #[OA\Response(response: 401, ref: '#/components/responses/ErrorResponse')]
+    #[OA\Response(response: 401, ref: '#/components/responses/UnauthorizedResponse')]
     #[OA\Response(response: 422, ref: '#/components/responses/ValidationErrorResponse')]
     public function login(LoginRequest $request)
     {
@@ -181,7 +181,7 @@ class AuthController extends Controller
             ]
         )
     )]
-    #[OA\Response(response: 401, ref: '#/components/responses/ErrorResponse')]
+    #[OA\Response(response: 401, ref: '#/components/responses/UnauthorizedResponse')]
     public function me(Request $request)
     {
         return $this->success($request->user()->load('roles'), 'Profile fetched.');
@@ -219,7 +219,7 @@ class AuthController extends Controller
             ]
         )
     )]
-    #[OA\Response(response: 401, ref: '#/components/responses/ErrorResponse')]
+    #[OA\Response(response: 401, ref: '#/components/responses/UnauthorizedResponse')]
     #[OA\Response(response: 422, ref: '#/components/responses/ValidationErrorResponse')]
     public function updateProfile(UpdateProfileRequest $request)
     {
@@ -261,7 +261,7 @@ class AuthController extends Controller
         )
     )]
     #[OA\Response(response: 200, description: 'Logged out successfully')]
-    #[OA\Response(response: 401, ref: '#/components/responses/ErrorResponse')]
+    #[OA\Response(response: 401, ref: '#/components/responses/UnauthorizedResponse')]
     public function logout(Request $request)
     {
         $user = $request->user();
@@ -308,7 +308,7 @@ class AuthController extends Controller
             ]
         )
     )]
-    #[OA\Response(response: 401, ref: '#/components/responses/ErrorResponse')]
+    #[OA\Response(response: 401, ref: '#/components/responses/UnauthorizedResponse')]
     public function refresh(Request $request)
     {
         $user = $request->user();
@@ -443,7 +443,7 @@ class AuthController extends Controller
         )
     )]
     #[OA\Response(response: 200, description: 'OTP sent')]
-    #[OA\Response(response: 429, ref: '#/components/responses/ErrorResponse')]
+    #[OA\Response(response: 429, ref: '#/components/responses/TooManyRequestsResponse')]
     #[OA\Response(response: 422, ref: '#/components/responses/ValidationErrorResponse')]
     public function sendOtp(OtpSendRequest $request, OtpService $otpService)
     {

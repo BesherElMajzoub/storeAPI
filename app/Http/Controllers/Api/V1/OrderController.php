@@ -3,12 +3,12 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\StoreOrderRequest;
 use App\Http\Requests\Api\V1\StoreCancellationRequestRequest;
+use App\Http\Requests\StoreOrderRequest;
 use App\Http\Resources\OrderResource;
+use App\Jobs\SendAdminAlert;
 use App\Models\Order;
 use App\Models\OrderCancellationRequest;
-use App\Jobs\SendAdminAlert;
 use App\Models\Product;
 use App\Services\StripeCheckoutService;
 use Illuminate\Http\JsonResponse;
@@ -21,28 +21,28 @@ use OpenApi\Attributes as OA;
 class OrderController extends Controller
 {
     #[OA\Get(
-        path: "/api/v1/orders",
-        summary: "List Orders",
+        path: '/api/v1/orders',
+        summary: 'List Orders',
         description: "Get a paginated list of the authenticated user's orders",
-        security: [["bearerAuth" => []]],
-        tags: ["Orders"]
+        security: [['bearerAuth' => []]],
+        tags: ['Orders']
     )]
     #[OA\Response(
         response: 200,
-        description: "Successful response",
+        description: 'Successful response',
         content: new OA\JsonContent(
-            type: "object",
+            type: 'object',
             properties: [
                 new OA\Property(
-                    property: "data",
-                    type: "array",
-                    items: new OA\Items(ref: "#/components/schemas/Order")
+                    property: 'data',
+                    type: 'array',
+                    items: new OA\Items(ref: '#/components/schemas/Order')
                 ),
-                new OA\Property(property: "meta", ref: "#/components/schemas/PaginationMeta")
+                new OA\Property(property: 'meta', ref: '#/components/schemas/PaginationMeta'),
             ]
         )
     )]
-    #[OA\Response(response: 401, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 401, ref: '#/components/responses/UnauthorizedResponse')]
     public function index(Request $request)
     {
         $orders = $request->user()->orders()
@@ -53,25 +53,25 @@ class OrderController extends Controller
     }
 
     #[OA\Get(
-        path: "/api/v1/orders/{id}",
-        summary: "Get Order Details",
-        description: "Get details of a specific order belonging to the user",
-        security: [["bearerAuth" => []]],
-        tags: ["Orders"]
+        path: '/api/v1/orders/{id}',
+        summary: 'Get Order Details',
+        description: 'Get details of a specific order belonging to the user',
+        security: [['bearerAuth' => []]],
+        tags: ['Orders']
     )]
-    #[OA\Parameter(name: "id", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
+    #[OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))]
     #[OA\Response(
         response: 200,
-        description: "Successful response",
+        description: 'Successful response',
         content: new OA\JsonContent(
-            type: "object",
+            type: 'object',
             properties: [
-                new OA\Property(property: "data", ref: "#/components/schemas/Order")
+                new OA\Property(property: 'data', ref: '#/components/schemas/Order'),
             ]
         )
     )]
-    #[OA\Response(response: 401, ref: "#/components/responses/ErrorResponse")]
-    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 401, ref: '#/components/responses/UnauthorizedResponse')]
+    #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
     public function show(Request $request, $id)
     {
         $order = $request->user()->orders()
@@ -82,45 +82,103 @@ class OrderController extends Controller
     }
 
     #[OA\Post(
-        path: "/api/v1/orders",
-        summary: "Create Order",
-        description: "Create a new order for the authenticated user",
-        security: [["bearerAuth" => []]],
-        tags: ["Orders"]
+        path: '/api/v1/orders',
+        summary: 'Create Order',
+        description: 'Create a new order for the authenticated user and generate a Stripe Checkout Session.',
+        security: [['bearerAuth' => []]],
+        tags: ['Orders']
     )]
     #[OA\RequestBody(
         required: true,
         content: new OA\JsonContent(
-            required: ["items", "shipping_address"],
+            required: ['items', 'shipping_address'],
             properties: [
                 new OA\Property(
-                    property: "items",
-                    type: "array",
+                    property: 'items',
+                    type: 'array',
                     items: new OA\Items(
-                        type: "object",
+                        type: 'object',
                         properties: [
-                            new OA\Property(property: "product_id", type: "integer", example: 1),
-                            new OA\Property(property: "quantity", type: "integer", example: 2)
+                            new OA\Property(property: 'product_id', type: 'integer', example: 1),
+                            new OA\Property(property: 'variant_id', type: 'integer', nullable: true, example: null),
+                            new OA\Property(property: 'quantity', type: 'integer', example: 2),
                         ]
                     )
                 ),
-                new OA\Property(property: "shipping_address", type: "object", description: "Shipping address details"),
-                new OA\Property(property: "billing_address", type: "object", description: "Billing address details (optional)")
+                new OA\Property(
+                    property: 'shipping_address',
+                    type: 'object',
+                    properties: [
+                        new OA\Property(property: 'first_name', type: 'string', example: 'John'),
+                        new OA\Property(property: 'last_name', type: 'string', example: 'Doe'),
+                        new OA\Property(property: 'address_line_1', type: 'string', example: '123 Main St'),
+                        new OA\Property(property: 'city', type: 'string', example: 'New York'),
+                        new OA\Property(property: 'state', type: 'string', example: 'NY'),
+                        new OA\Property(property: 'postal_code', type: 'string', example: '10001'),
+                        new OA\Property(property: 'country', type: 'string', example: 'US'),
+                        new OA\Property(property: 'phone', type: 'string', example: '+1234567890')
+                    ]
+                ),
+                new OA\Property(
+                    property: 'billing_address',
+                    type: 'object',
+                    nullable: true,
+                    properties: [
+                        new OA\Property(property: 'first_name', type: 'string', example: 'John'),
+                        new OA\Property(property: 'last_name', type: 'string', example: 'Doe'),
+                        new OA\Property(property: 'address_line_1', type: 'string', example: '123 Main St'),
+                        new OA\Property(property: 'city', type: 'string', example: 'New York'),
+                        new OA\Property(property: 'state', type: 'string', example: 'NY'),
+                        new OA\Property(property: 'postal_code', type: 'string', example: '10001'),
+                        new OA\Property(property: 'country', type: 'string', example: 'US'),
+                        new OA\Property(property: 'phone', type: 'string', example: '+1234567890')
+                    ]
+                )
             ]
         )
     )]
     #[OA\Response(
         response: 201,
-        description: "Order created successfully",
+        description: 'Order created successfully. Redirect to Stripe checkout.',
         content: new OA\JsonContent(
-            type: "object",
+            type: 'object',
             properties: [
-                new OA\Property(property: "data", ref: "#/components/schemas/Order")
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'message', type: 'string', example: 'Order created. Redirect to Stripe checkout.'),
+                new OA\Property(
+                    property: 'data',
+                    type: 'object',
+                    properties: [
+                        new OA\Property(property: 'order', ref: '#/components/schemas/Order'),
+                        new OA\Property(property: 'checkout_url', type: 'string', example: 'https://checkout.stripe.com/c/pay/cs_test_a1b2c3d4'),
+                        new OA\Property(
+                            property: 'payment',
+                            type: 'object',
+                            properties: [
+                                new OA\Property(property: 'session_id', type: 'string', example: 'cs_test_a1b2c3d4')
+                            ]
+                        )
+                    ]
+                ),
+                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null)
             ]
         )
     )]
-    #[OA\Response(response: 422, ref: "#/components/responses/ValidationErrorResponse")]
-    #[OA\Response(response: 401, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 401, ref: '#/components/responses/UnauthorizedResponse')]
+    #[OA\Response(response: 422, ref: '#/components/responses/ValidationErrorResponse')]
+    #[OA\Response(
+        response: 502,
+        description: 'Payment provider error.',
+        content: new OA\JsonContent(
+            type: 'object',
+            properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: false),
+                new OA\Property(property: 'message', type: 'string', example: 'Payment provider error. Please try again.'),
+                new OA\Property(property: 'data', type: 'object', nullable: true, example: null),
+                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null)
+            ]
+        )
+    )]
     public function store(StoreOrderRequest $request, StripeCheckoutService $stripe): JsonResponse
     {
         $items = $request->items;
@@ -138,15 +196,15 @@ class OrderController extends Controller
                 : null;
 
             $orderItemsData[] = [
-                'product_id'         => $product->id,
-                'product_name'       => $product->name,
-                'variant_id'         => $variant?->id,
-                'variant_name'       => $variant?->name,
+                'product_id' => $product->id,
+                'product_name' => $product->name,
+                'variant_id' => $variant?->id,
+                'variant_name' => $variant?->name,
                 'variant_attributes' => $variant?->attributes,   // JSON snapshot
-                'sku'                => $variant?->sku ?? $product->sku,
-                'price'              => $price,
-                'quantity'           => $item['quantity'],
-                'total'              => $lineTotal,
+                'sku' => $variant?->sku ?? $product->sku,
+                'price' => $price,
+                'quantity' => $item['quantity'],
+                'total' => $lineTotal,
             ];
         }
 
@@ -155,14 +213,14 @@ class OrderController extends Controller
         // 1️⃣ Create order in DB (pending_payment, unpaid)
         $order = DB::transaction(function () use ($request, $subtotal, $total, $orderItemsData) {
             $order = Order::create([
-                'order_number'    => 'ORD-' . strtoupper(Str::random(10)),
-                'user_id'         => $request->user()->id,
-                'status'          => 'pending_payment',
-                'payment_status'  => 'unpaid',
-                'subtotal'        => $subtotal,
-                'total'           => $total,
+                'order_number' => 'ORD-'.strtoupper(Str::random(10)),
+                'user_id' => $request->user()->id,
+                'status' => 'pending_payment',
+                'payment_status' => 'unpaid',
+                'subtotal' => $subtotal,
+                'total' => $total,
                 'shipping_address' => $request->shipping_address,
-                'billing_address'  => $request->billing_address ?? $request->shipping_address,
+                'billing_address' => $request->billing_address ?? $request->shipping_address,
             ]);
 
             foreach ($orderItemsData as $data) {
@@ -182,7 +240,7 @@ class OrderController extends Controller
         } catch (\Throwable $e) {
             Log::error('Stripe checkout session creation failed', [
                 'order_id' => $order->id,
-                'error'    => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
 
             // Roll back the order so the user can try again
@@ -191,37 +249,61 @@ class OrderController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Payment provider error. Please try again.',
-                'data'    => null,
-                'errors'  => null,
+                'data' => null,
+                'errors' => null,
             ], 502);
         }
 
         return response()->json([
             'success' => true,
             'message' => 'Order created. Redirect to Stripe checkout.',
-            'data'    => [
-                'order'        => new OrderResource($order),
+            'data' => [
+                'order' => new OrderResource($order),
                 'checkout_url' => $session->url,
-                'payment'      => [
+                'payment' => [
                     'session_id' => $session->id,
                 ],
             ],
-            'errors'  => null,
+            'errors' => null,
         ], 201);
     }
 
     #[OA\Post(
-        path: "/api/v1/orders/{id}/cancel",
-        summary: "Cancel Order (Direct)",
-        description: "Immediately cancel a **pending** order. Only allowed within **3 hours** of creation.",
-        security: [["bearerAuth" => []]],
-        tags: ["Orders"]
+        path: '/api/v1/orders/{id}/cancel',
+        summary: 'Cancel Order (Direct)',
+        description: 'Immediately cancel a **pending** order. Only allowed within **3 hours** of creation.',
+        security: [['bearerAuth' => []]],
+        tags: ['Orders']
     )]
-    #[OA\Parameter(name: "id", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
-    #[OA\Response(response: 200, description: "Order cancelled successfully")]
-    #[OA\Response(response: 400, description: "Cannot cancel order (wrong status or window expired)")]
-    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
-    #[OA\Response(response: 401, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))]
+    #[OA\Response(
+        response: 200,
+        description: 'Order cancelled successfully.',
+        content: new OA\JsonContent(
+            type: 'object',
+            properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'message', type: 'string', example: 'Order cancelled successfully.'),
+                new OA\Property(property: 'data', type: 'object', nullable: true, example: null),
+                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null)
+            ]
+        )
+    )]
+    #[OA\Response(
+        response: 400,
+        description: 'Cannot cancel order (wrong status or window expired).',
+        content: new OA\JsonContent(
+            type: 'object',
+            properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: false),
+                new OA\Property(property: 'message', type: 'string', example: 'Only pending orders can be cancelled directly.'),
+                new OA\Property(property: 'data', type: 'object', nullable: true, example: null),
+                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null)
+            ]
+        )
+    )]
+    #[OA\Response(response: 401, ref: '#/components/responses/UnauthorizedResponse')]
+    #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
     public function cancel(Request $request, $id): JsonResponse
     {
         $order = $request->user()->orders()->findOrFail($id);
@@ -230,8 +312,8 @@ class OrderController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Only pending orders can be cancelled directly.',
-                'data'    => null,
-                'errors'  => null,
+                'data' => null,
+                'errors' => null,
             ], 400);
         }
 
@@ -240,8 +322,8 @@ class OrderController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'The 3-hour direct cancellation window has passed. Please submit a cancellation request instead.',
-                'data'    => null,
-                'errors'  => null,
+                'data' => null,
+                'errors' => null,
             ], 400);
         }
 
@@ -250,31 +332,44 @@ class OrderController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Order cancelled successfully.',
-            'data'    => null,
-            'errors'  => null,
+            'data' => null,
+            'errors' => null,
         ]);
     }
 
     #[OA\Post(
-        path: "/api/v1/orders/{id}/cancellation-request",
-        summary: "Submit Cancellation Request",
-        description: "Submit a cancellation request for an order. Cannot be used if order is shipped, delivered, or cancelled, or if a pending request already exists.",
-        security: [["bearerAuth" => []]],
-        tags: ["Orders"]
+        path: '/api/v1/orders/{id}/cancellation-request',
+        summary: 'Submit Cancellation Request',
+        description: 'Submit a cancellation request for an order. Cannot be used if order is shipped, delivered, or cancelled, or if a pending request already exists.',
+        security: [['bearerAuth' => []]],
+        tags: ['Orders']
     )]
-    #[OA\Parameter(name: "id", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
+    #[OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))]
     #[OA\RequestBody(
         required: true,
         content: new OA\JsonContent(
-            required: ["reason"],
+            required: ['reason'],
             properties: [
-                new OA\Property(property: "reason", type: "string", minLength: 10, example: "I ordered by mistake and need to cancel."),
+                new OA\Property(property: 'reason', type: 'string', minLength: 10, example: 'I ordered by mistake and need to cancel.'),
             ]
         )
     )]
-    #[OA\Response(response: 201, description: "Cancellation request submitted")]
-    #[OA\Response(response: 422, ref: "#/components/responses/ValidationErrorResponse")]
-    #[OA\Response(response: 404, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(
+        response: 201,
+        description: 'Cancellation request submitted successfully.',
+        content: new OA\JsonContent(
+            type: 'object',
+            properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'message', type: 'string', example: 'Your cancellation request has been submitted and is under review.'),
+                new OA\Property(property: 'data', type: 'object', nullable: true, example: null),
+                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null)
+            ]
+        )
+    )]
+    #[OA\Response(response: 401, ref: '#/components/responses/UnauthorizedResponse')]
+    #[OA\Response(response: 422, ref: '#/components/responses/ValidationErrorResponse')]
+    #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
     public function requestCancellation(StoreCancellationRequestRequest $request, $id): JsonResponse
     {
         $order = $request->user()->orders()->findOrFail($id);
@@ -285,8 +380,8 @@ class OrderController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => "Cannot request cancellation for an order with status '{$order->status}'.",
-                'data'    => null,
-                'errors'  => null,
+                'data' => null,
+                'errors' => null,
             ], 422);
         }
 
@@ -299,26 +394,26 @@ class OrderController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'A cancellation request is already pending for this order.',
-                'data'    => null,
-                'errors'  => null,
+                'data' => null,
+                'errors' => null,
             ], 422);
         }
 
         OrderCancellationRequest::create([
             'order_id' => $order->id,
-            'user_id'  => $request->user()->id,
-            'reason'   => $request->validated('reason'),
-            'status'   => 'pending',
+            'user_id' => $request->user()->id,
+            'reason' => $request->validated('reason'),
+            'status' => 'pending',
         ]);
 
-        $message = "⚠️ Cancellation request for order {$order->order_number} — Reason: \"" . $request->validated('reason') . "\"";
+        $message = "⚠️ Cancellation request for order {$order->order_number} — Reason: \"".$request->validated('reason').'"';
         SendAdminAlert::dispatch($message)->onQueue('notifications');
 
         return response()->json([
             'success' => true,
             'message' => 'Your cancellation request has been submitted and is under review.',
-            'data'    => null,
-            'errors'  => null,
+            'data' => null,
+            'errors' => null,
         ], 201);
     }
 }

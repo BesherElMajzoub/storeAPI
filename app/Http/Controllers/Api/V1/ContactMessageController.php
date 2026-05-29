@@ -42,7 +42,7 @@ class ContactMessageController extends Controller
             ]
         )
     )]
-    #[OA\Response(response: 422, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 422, ref: "#/components/responses/ValidationErrorResponse")]
     public function store(StoreContactMessageRequest $request): JsonResponse
     {
         $contactMessage = ContactMessage::create($request->validated());

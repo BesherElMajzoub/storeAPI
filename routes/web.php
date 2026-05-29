@@ -44,3 +44,8 @@ Route::get('/google-test', function () {
     return view('google-auth');
 });
 
+Route::get('/orders/{id}', function ($id) {
+    return "Payment success for order ID: " . $id;
+});
+
+

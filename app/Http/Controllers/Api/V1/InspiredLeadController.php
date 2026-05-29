@@ -49,7 +49,7 @@ class InspiredLeadController extends Controller
             ]
         )
     )]
-    #[OA\Response(response: 422, ref: "#/components/responses/ErrorResponse")]
+    #[OA\Response(response: 422, ref: "#/components/responses/ValidationErrorResponse")]
     public function store(StoreInspiredLeadRequest $request): JsonResponse
     {
         $validated = $request->validated();
