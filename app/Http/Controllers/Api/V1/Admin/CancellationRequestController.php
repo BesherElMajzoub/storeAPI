@@ -80,19 +80,7 @@ class CancellationRequestController extends Controller
             // Cancel the order
             $order->update(['status' => 'cancelled']);
 
-            // Restock variants/products for each order item
-            foreach ($order->items as $item) {
-                $product = $item->product;
-                if ($product) {
-                    $product->increment('stock_qty', $item->quantity);
-                    // Also update variants if the order item had a variant_id
-                    if ($item->variant_id) {
-                        $product->variants()
-                            ->where('id', $item->variant_id)
-                            ->increment('stock_qty', $item->quantity);
-                    }
-                }
-            }
+
 
             // Mark the cancellation request as accepted
             $cancellation->update([

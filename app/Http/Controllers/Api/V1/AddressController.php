@@ -5,17 +5,17 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\AddressAutocompleteRequest;
 use App\Http\Requests\Api\V1\AddressDetailsRequest;
-use App\Services\GooglePlacesService;
+use App\Contracts\LocationServiceInterface;
 use Illuminate\Http\JsonResponse;
 use OpenApi\Attributes as OA;
 
 class AddressController extends Controller
 {
-    private GooglePlacesService $googlePlaces;
+    private LocationServiceInterface $locationService;
 
-    public function __construct(GooglePlacesService $googlePlaces)
+    public function __construct(LocationServiceInterface $locationService)
     {
-        $this->googlePlaces = $googlePlaces;
+        $this->locationService = $locationService;
     }
 
     #[OA\Get(
@@ -57,7 +57,7 @@ class AddressController extends Controller
     )]
     public function autocomplete(AddressAutocompleteRequest $request): JsonResponse
     {
-        $result = $this->googlePlaces->autocomplete(
+        $result = $this->locationService->autocomplete(
             $request->query('q'),
             $request->query('session')
         );
@@ -120,7 +120,7 @@ class AddressController extends Controller
     )]
     public function details(AddressDetailsRequest $request): JsonResponse
     {
-        $result = $this->googlePlaces->details(
+        $result = $this->locationService->details(
             $request->query('place_id'),
             $request->query('session')
         );

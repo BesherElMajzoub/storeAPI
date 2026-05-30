@@ -4,8 +4,9 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use App\Contracts\LocationServiceInterface;
 
-class GooglePlacesService
+class GooglePlacesService implements LocationServiceInterface
 {
     private string $apiKey;
     private string $baseUrl;

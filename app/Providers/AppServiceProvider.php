@@ -7,7 +7,9 @@ use App\Events\WishlistItemRemoved;
 use App\Listeners\RecordWishlistEvent;
 use App\Models\Address;
 use App\Models\Review;
+use App\Models\Order;
 use App\Observers\ReviewObserver;
+use App\Observers\OrderObserver;
 use App\Policies\AddressPolicy;
 use App\Policies\ReviewPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -25,7 +27,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(\App\Contracts\LocationServiceInterface::class, function ($app) {
+            $provider = config('services.location_provider', 'geoapify');
+            if ($provider === 'google') {
+                return new \App\Services\GooglePlacesService();
+            }
+            return new \App\Services\GeoapifyService();
+        });
     }
 
     /**
@@ -60,6 +68,7 @@ class AppServiceProvider extends ServiceProvider
 
         // ─── Observers ────────────────────────────────────────────────────────────
         Review::observe(ReviewObserver::class);
+        Order::observe(OrderObserver::class);
 
         // ─── Event Listeners ──────────────────────────────────────────────────────
         $listener = new RecordWishlistEvent();

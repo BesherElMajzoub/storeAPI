@@ -64,4 +64,11 @@ return [
         'admin_chat_id' => env('TELEGRAM_ADMIN_CHAT_ID'),
     ],
 
+    'location_provider' => env('LOCATION_PROVIDER', 'geoapify'),
+
+    'geoapify' => [
+        'api_key' => env('GEOAPIFY_API_KEY'),
+        'base_url' => env('GEOAPIFY_BASE_URL', 'https://api.geoapify.com'),
+    ],
+
 ];
