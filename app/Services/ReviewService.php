@@ -33,7 +33,7 @@ class ReviewService
             'order_id'             => $this->findVerifiedPurchaseOrderId($user, $product->id),
             'rating'               => $data['rating'],
             'comment'              => $data['comment'] ?? null,
-            'is_approved'          => false, // All reviews go through moderation
+            'status'               => 'pending', // All reviews go through moderation
             'is_verified_purchase' => $this->isVerifiedPurchase($user, $product->id),
             'ip_address'           => $ipAddress,
         ]);
@@ -54,9 +54,9 @@ class ReviewService
     public function update(Review $review, array $data): Review
     {
         $review->update([
-            'rating'      => $data['rating'] ?? $review->rating,
-            'comment'     => $data['comment'] ?? $review->comment,
-            'is_approved' => false, // Re-moderate after edit
+            'rating'  => $data['rating'] ?? $review->rating,
+            'comment' => $data['comment'] ?? $review->comment,
+            'status'  => 'pending', // Re-moderate after edit
         ]);
 
         return $review->fresh();
@@ -78,7 +78,7 @@ class ReviewService
     public function moderate(Review $review, string $action, ?string $adminNote = null): Review
     {
         $review->update([
-            'is_approved' => ($action === 'approve'),
+            'status'     => ($action === 'approve' ? 'approved' : 'rejected'),
             'admin_note'  => $adminNote,
         ]);
 

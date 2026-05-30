@@ -90,7 +90,7 @@ class ProductController extends Controller
                 'media',
                 'variants',
                 'reviews' => function ($query) {
-                    $query->where('is_approved', true)->with('user');
+                    $query->approved()->with('user');
                 },
             ])
             ->firstOrFail();
@@ -126,7 +126,7 @@ class ProductController extends Controller
         $product = Product::published()->findOrFail($id);
 
         $reviews = $product->reviews()
-            ->where('is_approved', true)
+            ->approved()
             ->with('user')
             ->latest()
             ->paginate(10);

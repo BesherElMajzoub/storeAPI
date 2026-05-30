@@ -14,7 +14,7 @@ class ReviewObserver
     public function created(Review $review): void
     {
         // Only recalculate if the review is approved right away
-        if ($review->is_approved) {
+        if ($review->status === 'approved') {
             $this->recalculateRating($review->product_id);
         }
     }
@@ -25,7 +25,7 @@ class ReviewObserver
     public function updated(Review $review): void
     {
         // Recalculate if approval status changed or rating changed
-        if ($review->wasChanged('is_approved') || $review->wasChanged('rating')) {
+        if ($review->wasChanged('status') || $review->wasChanged('rating')) {
             $this->recalculateRating($review->product_id);
         }
     }
@@ -46,7 +46,7 @@ class ReviewObserver
     {
         try {
             $stats = Review::where('product_id', $productId)
-                ->where('is_approved', true)
+                ->where('status', 'approved')
                 ->selectRaw('AVG(rating) as avg_rating, COUNT(*) as total')
                 ->first();
 

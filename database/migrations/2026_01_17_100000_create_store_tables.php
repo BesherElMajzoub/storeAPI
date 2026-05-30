@@ -217,7 +217,7 @@ return new class extends Migration
             $table->foreignId('order_id')->nullable(); // Verified purchase
             $table->integer('rating'); // 1-5
             $table->text('comment')->nullable();
-            $table->boolean('is_approved')->default(false);
+            $table->enum('status', ['pending', 'approved', 'rejected'])->default('pending');
             $table->timestamps();
         });
         

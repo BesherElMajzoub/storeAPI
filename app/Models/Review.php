@@ -11,11 +11,10 @@ class Review extends Model
 
     protected $fillable = [
         'user_id', 'product_id', 'order_id', 'rating', 'comment',
-        'is_approved', 'is_verified_purchase', 'admin_note', 'ip_address',
+        'status', 'is_verified_purchase', 'admin_note', 'ip_address',
     ];
 
     protected $casts = [
-        'is_approved'          => 'boolean',
         'is_verified_purchase' => 'boolean',
     ];
 
@@ -40,16 +39,16 @@ class Review extends Model
 
     public function scopeApproved($query)
     {
-        return $query->where('is_approved', true);
+        return $query->where('status', 'approved');
     }
 
     public function scopePending($query)
     {
-        return $query->where('is_approved', false)->whereNull('admin_note');
+        return $query->where('status', 'pending');
     }
 
     public function scopeRejected($query)
     {
-        return $query->where('is_approved', false)->whereNotNull('admin_note');
+        return $query->where('status', 'rejected');
     }
 }

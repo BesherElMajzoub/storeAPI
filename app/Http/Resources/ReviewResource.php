@@ -15,7 +15,8 @@ class ReviewResource extends JsonResource
             'id'                   => $this->id,
             'rating'               => (int) $this->rating,
             'comment'              => $this->comment,
-            'is_approved'          => (bool) $this->is_approved,
+            'status'               => $this->status,
+            'is_approved'          => $this->status === 'approved',
             'is_verified_purchase' => (bool) $this->is_verified_purchase,
             // Only show if it's the reviewer's own review (for "my review" context)
             'is_own_review'        => $user?->id === $this->user_id,

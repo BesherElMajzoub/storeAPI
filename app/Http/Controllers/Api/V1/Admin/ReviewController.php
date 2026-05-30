@@ -33,14 +33,9 @@ class ReviewController extends Controller
         $perPage = min(max((int) $request->get('per_page', 20), 1), 100);
         $query   = Review::with(['user', 'product']);
 
-        // Filter by approval status
-        if ($request->has('status')) {
-            match ($request->status) {
-                'pending'  => $query->where('is_approved', false)->whereNull('admin_note'),
-                'approved' => $query->where('is_approved', true),
-                'rejected' => $query->where('is_approved', false)->whereNotNull('admin_note'),
-                default    => null,
-            };
+        // Filter by status
+        if ($request->has('status') && in_array($request->status, ['pending', 'approved', 'rejected'], true)) {
+            $query->where('status', $request->status);
         }
 
         if ($request->filled('product_id')) {
