@@ -13,7 +13,18 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             RolesAndAdminSeeder::class,
-            StoreContentSeeder::class,
+            AdminSeeder::class,
+            UserSeeder::class,
+            CategorySeeder::class,
+            ProductSeeder::class,
+            ProductVariantSeeder::class,
+            CouponSeeder::class,
+            AddressSeeder::class,
+            OrderSeeder::class,
+            OrderCancellationRequestSeeder::class,
+            ReviewSeeder::class,
+            WishlistSeeder::class,
+            ContactMessageSeeder::class,
         ]);
     }
 }

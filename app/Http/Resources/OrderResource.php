@@ -19,6 +19,8 @@ class OrderResource extends JsonResource
             'shipping_cost'              => (float) $this->shipping_cost,
             'discount'                   => (float) $this->discount,
             'total'                      => (float) $this->total,
+            'coupon_id'                  => $this->coupon_id,
+            'coupon_code'                => $this->coupon_code,
             'items'                      => OrderItemResource::collection($this->whenLoaded('items')),
             'shipping_address'           => $this->shipping_address,
             'billing_address'            => $this->billing_address,

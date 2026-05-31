@@ -34,13 +34,31 @@ class StripeCheckoutService
 
         $frontendUrl = rtrim(config('app.frontend_url', config('app.url')), '/');
 
-        return StripeSession::create([
+        $sessionParams = [
             'mode'        => 'payment',
             'line_items'  => $lineItems,
-            'metadata'    => ['order_id' => (string) $order->id],
+            'metadata'    => [
+                'order_id'    => (string) $order->id,
+                'coupon_code' => (string) $order->coupon_code,
+                'discount'    => (string) $order->discount,
+            ],
             'success_url' => "{$frontendUrl}/orders/{$order->id}?stripe_status=success",
             'cancel_url'  => "{$frontendUrl}/checkout?stripe_status=cancelled",
-        ]);
+        ];
+
+        if ($order->discount > 0) {
+            $stripeCoupon = \Stripe\Coupon::create([
+                'amount_off' => (int) round($order->discount * 100),
+                'currency'   => 'usd',
+                'duration'   => 'once',
+                'name'       => $order->coupon_code ?: 'Discount',
+            ]);
+            $sessionParams['discounts'] = [
+                ['coupon' => $stripeCoupon->id]
+            ];
+        }
+
+        return StripeSession::create($sessionParams);
     }
 
     /**

@@ -23,6 +23,7 @@ class User extends Authenticatable
         'password',
         'phone',
         'avatar_url',
+        'is_active',
     ];
 
     /**
@@ -110,5 +111,10 @@ class User extends Authenticatable
         $credits = $this->walletTransactions()->where('type', 'credit')->sum('amount');
         $debits = $this->walletTransactions()->where('type', 'debit')->sum('amount');
         return $credits - $debits;
+    }
+
+    public function couponUsages()
+    {
+        return $this->hasMany(CouponUsage::class);
     }
 }

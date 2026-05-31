@@ -11,7 +11,7 @@ class Order extends Model
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'order_number', 'user_id', 'status', 'payment_status',
+        'order_number', 'user_id', 'coupon_id', 'status', 'payment_status',
         'subtotal', 'tax', 'shipping_cost', 'discount', 'total',
         'coupon_code', 'shipping_address', 'billing_address', 'notes',
         'stripe_session_id', 'stripe_payment_intent_id',
@@ -44,6 +44,11 @@ class Order extends Model
     }
 
     // ── Relations ─────────────────────────────────────────────────────────────
+
+    public function coupon()
+    {
+        return $this->belongsTo(Coupon::class);
+    }
 
     public function items()
     {

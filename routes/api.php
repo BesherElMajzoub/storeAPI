@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\CategoryController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\ReviewController;
 use App\Http\Controllers\Api\V1\OrderController;
+use App\Http\Controllers\Api\V1\CouponController;
 use App\Http\Controllers\Api\V1\AddressController;
 use App\Http\Controllers\Api\V1\WishlistController;
 use App\Http\Controllers\Api\V1\ContactMessageController;
@@ -22,6 +23,7 @@ use App\Http\Controllers\Api\V1\Admin\ContactMessageController as AdminContactMe
 use App\Http\Controllers\Api\V1\Admin\InspiredLeadController as AdminInspiredLeadController;
 use App\Http\Controllers\Api\V1\Admin\ReviewController as AdminReviewController;
 use App\Http\Controllers\Api\V1\Admin\TelescopeApiController;
+use App\Http\Controllers\Api\V1\Admin\CouponController as AdminCouponController;
 use App\Http\Controllers\Api\V1\Admin\MediaController;
 use App\Http\Controllers\Api\V1\Admin\GeoController;
 use App\Http\Controllers\Api\V1\Admin\CancellationRequestController;
@@ -53,6 +55,7 @@ Route::prefix('v1')->group(function () {
     });
 
     // --- PUBLIC STORE ---
+    Route::post('coupons/validate', [CouponController::class, 'validate']);
     Route::post('contact-messages', [ContactMessageController::class, 'store']);
     Route::post('inspired-leads', [InspiredLeadController::class, 'store']);
     Route::post('analytics/event', [AnalyticsEventController::class, 'track']);
@@ -114,6 +117,11 @@ Route::prefix('v1')->group(function () {
         // Categories
         Route::apiResource('categories', AdminCategoryController::class);
         Route::post('categories/reorder', [AdminCategoryController::class, 'reorder']);
+
+        // Coupons
+        Route::apiResource('coupons', AdminCouponController::class);
+        Route::patch('coupons/{coupon}/toggle-status', [AdminCouponController::class, 'toggleStatus']);
+        Route::get('coupons/{coupon}/usages', [AdminCouponController::class, 'usages']);
 
         // SKUs
         Route::post('skus/generate', [SkuController::class, 'generate']);

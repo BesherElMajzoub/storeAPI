@@ -11,6 +11,7 @@ use App\Models\Order;
 use App\Models\OrderCancellationRequest;
 use App\Models\Product;
 use App\Services\StripeCheckoutService;
+use App\Services\CouponService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -133,6 +134,12 @@ class OrderController extends Controller
                         new OA\Property(property: 'country', type: 'string', example: 'US'),
                         new OA\Property(property: 'phone', type: 'string', example: '+1234567890')
                     ]
+                ),
+                new OA\Property(
+                    property: 'coupon_code',
+                    type: 'string',
+                    nullable: true,
+                    example: 'SAVE50'
                 )
             ]
         )
@@ -179,56 +186,97 @@ class OrderController extends Controller
             ]
         )
     )]
-    public function store(StoreOrderRequest $request, StripeCheckoutService $stripe): JsonResponse
+    public function store(StoreOrderRequest $request, StripeCheckoutService $stripe, CouponService $couponService): JsonResponse
     {
         $items = $request->items;
-        $subtotal = 0;
+        $subtotal = 0.0;
         $orderItemsData = [];
 
         foreach ($items as $item) {
             $product = Product::findOrFail($item['product_id']);
-            $price = $product->final_price;
-            $lineTotal = $price * $item['quantity'];
-            $subtotal += $lineTotal;
+            $price = (float) $product->final_price;
 
-            $variant = isset($item['variant_id'])
+            $variant = isset($item['variant_id']) && $item['variant_id']
                 ? \App\Models\ProductVariant::find($item['variant_id'])
                 : null;
 
+            if ($variant && $variant->price !== null) {
+                $price = (float) $variant->price;
+            }
+
+            $lineTotal = $price * $item['quantity'];
+            $subtotal += $lineTotal;
+
             $orderItemsData[] = [
-                'product_id' => $product->id,
-                'product_name' => $product->name,
-                'variant_id' => $variant?->id,
-                'variant_name' => $variant?->name,
+                'product_id'         => $product->id,
+                'product_name'       => $product->name,
+                'variant_id'         => $variant?->id,
+                'variant_name'       => $variant?->name,
                 'variant_attributes' => $variant?->attributes,   // JSON snapshot
-                'sku' => $variant?->sku ?? $product->sku,
-                'price' => $price,
-                'quantity' => $item['quantity'],
-                'total' => $lineTotal,
+                'sku'                => $variant?->sku ?? $product->sku,
+                'price'              => $price,
+                'quantity'           => $item['quantity'],
+                'total'              => $lineTotal,
             ];
         }
 
-        $total = $subtotal; // + tax + shipping - discount
-
         // 1️⃣ Create order in DB (pending_payment, unpaid)
-        $order = DB::transaction(function () use ($request, $subtotal, $total, $orderItemsData) {
-            $order = Order::create([
-                'order_number' => 'ORD-'.strtoupper(Str::random(10)),
-                'user_id' => $request->user()->id,
-                'status' => 'pending_payment',
-                'payment_status' => 'unpaid',
-                'subtotal' => $subtotal,
-                'total' => $total,
-                'shipping_address' => $request->shipping_address,
-                'billing_address' => $request->billing_address ?? $request->shipping_address,
-            ]);
+        try {
+            $order = DB::transaction(function () use ($request, $subtotal, $orderItemsData, $couponService) {
+                $coupon = null;
+                $discount = 0.0;
 
-            foreach ($orderItemsData as $data) {
-                $order->items()->create($data);
-            }
+                if ($request->filled('coupon_code')) {
+                    // lockForUpdate is executed within validateCoupon if in transaction
+                    $coupon = $couponService->validateCoupon($request->coupon_code, $request->user(), $subtotal);
+                    $discount = $couponService->calculateDiscount($coupon, $subtotal);
+                }
 
-            return $order->load('items');
-        });
+                $total = max(0.0, $subtotal - $discount);
+
+                $order = Order::create([
+                    'order_number'     => 'ORD-'.strtoupper(Str::random(10)),
+                    'user_id'          => $request->user()->id,
+                    'status'           => 'pending_payment',
+                    'payment_status'   => 'unpaid',
+                    'subtotal'         => $subtotal,
+                    'total'            => $total,
+                    'shipping_address' => $request->shipping_address,
+                    'billing_address'  => $request->billing_address ?? $request->shipping_address,
+                ]);
+
+                if ($coupon) {
+                    $couponService->applyCouponToOrder($coupon, $order, $discount);
+                    $order->save();
+
+                    // Create usage record
+                    \App\Models\CouponUsage::create([
+                        'coupon_id'       => $coupon->id,
+                        'user_id'         => $request->user()->id,
+                        'order_id'        => $order->id,
+                        'discount_amount' => $discount,
+                    ]);
+
+                    // Safe atomic increment
+                    $coupon->increment('used_count');
+                }
+
+                foreach ($orderItemsData as $data) {
+                    $order->items()->create($data);
+                }
+
+                return $order->load('items');
+            });
+        } catch (\App\Exceptions\CouponValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'data'    => null,
+                'errors'  => [
+                    'coupon_code' => [$e->getMessage()]
+                ],
+            ], 422);
+        }
 
         // 2️⃣ Create Stripe Checkout Session
         try {
@@ -240,7 +288,7 @@ class OrderController extends Controller
         } catch (\Throwable $e) {
             Log::error('Stripe checkout session creation failed', [
                 'order_id' => $order->id,
-                'error' => $e->getMessage(),
+                'error'    => $e->getMessage(),
             ]);
 
             // Roll back the order so the user can try again
@@ -249,22 +297,22 @@ class OrderController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Payment provider error. Please try again.',
-                'data' => null,
-                'errors' => null,
+                'data'    => null,
+                'errors'  => null,
             ], 502);
         }
 
         return response()->json([
             'success' => true,
             'message' => 'Order created. Redirect to Stripe checkout.',
-            'data' => [
-                'order' => new OrderResource($order),
+            'data'    => [
+                'order'        => new OrderResource($order),
                 'checkout_url' => $session->url,
-                'payment' => [
+                'payment'      => [
                     'session_id' => $session->id,
                 ],
             ],
-            'errors' => null,
+            'errors'  => null,
         ], 201);
     }
 

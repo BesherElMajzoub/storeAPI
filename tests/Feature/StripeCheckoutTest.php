@@ -42,9 +42,10 @@ class StripeCheckoutTest extends TestCase
 
     public function test_order_creation_returns_checkout_url(): void
     {
-        $mockSession = Mockery::mock(StripeSession::class);
-        $mockSession->shouldReceive('__get')->with('id')->andReturn('cs_test_abc123');
-        $mockSession->shouldReceive('__get')->with('url')->andReturn('https://checkout.stripe.com/pay/cs_test_abc123');
+        $mockSession = StripeSession::constructFrom([
+            'id'  => 'cs_test_abc123',
+            'url' => 'https://checkout.stripe.com/pay/cs_test_abc123',
+        ]);
 
         $this->mock(StripeCheckoutService::class, function ($mock) use ($mockSession) {
             $mock->shouldReceive('createCheckoutSession')->once()->andReturn($mockSession);
@@ -53,7 +54,7 @@ class StripeCheckoutTest extends TestCase
         $response = $this->actingAs($this->user, 'sanctum')
             ->postJson('/api/v1/orders', [
                 'items'            => [['product_id' => $this->product->id, 'quantity' => 2]],
-                'shipping_address' => ['line1' => '123 Test St', 'city' => 'NYC', 'country' => 'US'],
+                'shipping_address' => ['name' => 'John Doe', 'line1' => '123 Test St', 'city' => 'NYC', 'country' => 'US'],
             ]);
 
         $response->assertStatus(201)
@@ -68,9 +69,10 @@ class StripeCheckoutTest extends TestCase
 
     public function test_order_remains_unpaid_after_creation(): void
     {
-        $mockSession = Mockery::mock(StripeSession::class);
-        $mockSession->shouldReceive('__get')->with('id')->andReturn('cs_test_xyz');
-        $mockSession->shouldReceive('__get')->with('url')->andReturn('https://checkout.stripe.com/pay/cs_test_xyz');
+        $mockSession = StripeSession::constructFrom([
+            'id'  => 'cs_test_xyz',
+            'url' => 'https://checkout.stripe.com/pay/cs_test_xyz',
+        ]);
 
         $this->mock(StripeCheckoutService::class, function ($mock) use ($mockSession) {
             $mock->shouldReceive('createCheckoutSession')->once()->andReturn($mockSession);
@@ -79,7 +81,7 @@ class StripeCheckoutTest extends TestCase
         $this->actingAs($this->user, 'sanctum')
             ->postJson('/api/v1/orders', [
                 'items'            => [['product_id' => $this->product->id, 'quantity' => 1]],
-                'shipping_address' => ['line1' => '1 Street', 'city' => 'City', 'country' => 'US'],
+                'shipping_address' => ['name' => 'John Doe', 'line1' => '1 Street', 'city' => 'City', 'country' => 'US'],
             ]);
 
         $this->assertDatabaseHas('orders', [
