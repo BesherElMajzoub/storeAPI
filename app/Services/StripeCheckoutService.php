@@ -32,6 +32,19 @@ class StripeCheckoutService
             ];
         })->toArray();
 
+        if ($order->shipping_cost > 0) {
+            $lineItems[] = [
+                'price_data' => [
+                    'currency'     => 'usd',
+                    'unit_amount'  => (int) round($order->shipping_cost * 100), // cents
+                    'product_data' => [
+                        'name'     => 'Shipping Cost',
+                    ],
+                ],
+                'quantity' => 1,
+            ];
+        }
+
         $frontendUrl = rtrim(config('app.frontend_url', config('app.url')), '/');
 
         $sessionParams = [

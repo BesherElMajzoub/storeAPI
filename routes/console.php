@@ -11,3 +11,6 @@ Artisan::command('inspire', function () {
 // ─── Telescope: تنظيف تلقائي للبيانات القديمة ────────────────────────────────
 // يحتفظ بآخر 48 ساعة فقط لتجنب تضخم جدول telescope_entries
 Schedule::command('telescope:prune --hours=48')->daily();
+
+// ─── EasyPost: تحديث حالة الشحنات تلقائياً كل 4 ساعات ─────────────────────────
+Schedule::command('shipping:track')->everyFourHours();

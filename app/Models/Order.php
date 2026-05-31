@@ -16,6 +16,7 @@ class Order extends Model
         'coupon_code', 'shipping_address', 'billing_address', 'notes',
         'stripe_session_id', 'stripe_payment_intent_id',
         'paid_at', 'cancelled_at', 'refunded_at',
+        'easypost_shipment_id', 'tracking_number', 'label_url',
     ];
 
     protected $casts = [

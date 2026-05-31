@@ -220,9 +220,44 @@ class OrderController extends Controller
             ];
         }
 
+        $shippingCost = 0.0;
+        $easypostShipmentId = null;
+
+        if ($request->filled('shipping_rate_id') && $request->filled('easypost_shipment_id')) {
+            try {
+                $client = new \EasyPost\EasyPostClient(config('services.easypost.api_key'));
+                $shipment = $client->shipment->retrieve($request->easypost_shipment_id);
+                
+                // Find matching rate
+                $matchingRate = collect($shipment->rates)->first(fn($rate) => $rate->id === $request->shipping_rate_id);
+                
+                if ($matchingRate) {
+                    $shippingCost = (float) $matchingRate->rate;
+                    $easypostShipmentId = $shipment->id;
+                } else {
+                    throw new \Exception("Selected shipping rate is not valid for this shipment.");
+                }
+            } catch (\Throwable $e) {
+                Log::error('EasyPost rate verification failed during checkout', [
+                    'shipment_id' => $request->easypost_shipment_id,
+                    'rate_id' => $request->shipping_rate_id,
+                    'error' => $e->getMessage(),
+                ]);
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid shipping rate selected: ' . $e->getMessage(),
+                    'data'    => null,
+                    'errors'  => [
+                        'shipping_rate_id' => ['Invalid shipping rate selected.']
+                    ],
+                ], 422);
+            }
+        }
+
         // 1️⃣ Create order in DB (pending_payment, unpaid)
         try {
-            $order = DB::transaction(function () use ($request, $subtotal, $orderItemsData, $couponService) {
+            $order = DB::transaction(function () use ($request, $subtotal, $orderItemsData, $couponService, $shippingCost, $easypostShipmentId) {
                 $coupon = null;
                 $discount = 0.0;
 
@@ -232,17 +267,19 @@ class OrderController extends Controller
                     $discount = $couponService->calculateDiscount($coupon, $subtotal);
                 }
 
-                $total = max(0.0, $subtotal - $discount);
+                $total = max(0.0, $subtotal + $shippingCost - $discount);
 
                 $order = Order::create([
-                    'order_number'     => 'ORD-'.strtoupper(Str::random(10)),
-                    'user_id'          => $request->user()->id,
-                    'status'           => 'pending_payment',
-                    'payment_status'   => 'unpaid',
-                    'subtotal'         => $subtotal,
-                    'total'            => $total,
-                    'shipping_address' => $request->shipping_address,
-                    'billing_address'  => $request->billing_address ?? $request->shipping_address,
+                    'order_number'         => 'ORD-'.strtoupper(Str::random(10)),
+                    'user_id'              => $request->user()->id,
+                    'status'               => 'pending_payment',
+                    'payment_status'       => 'unpaid',
+                    'subtotal'             => $subtotal,
+                    'shipping_cost'        => $shippingCost,
+                    'easypost_shipment_id' => $easypostShipmentId,
+                    'total'                => $total,
+                    'shipping_address'     => $request->shipping_address,
+                    'billing_address'      => $request->billing_address ?? $request->shipping_address,
                 ]);
 
                 if ($coupon) {

@@ -24,6 +24,8 @@ class StoreOrderRequest extends FormRequest
             'shipping_address.city'  => 'required|string',
             'shipping_address.country' => 'required|string',
             'coupon_code'            => 'nullable|string',
+            'shipping_rate_id'       => 'nullable|string',
+            'easypost_shipment_id'   => 'nullable|string',
         ];
     }
 

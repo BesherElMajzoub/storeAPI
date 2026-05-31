@@ -2,12 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Models\Address;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class AddressControllerTest extends TestCase
 {
+    use RefreshDatabase;
     private string $session;
 
     protected function setUp(): void
@@ -102,5 +106,140 @@ class AddressControllerTest extends TestCase
         $response->assertStatus(504)
                  ->assertJsonPath('success', false)
                  ->assertJsonPath('message', 'A connection timeout or unexpected error occurred.');
+    }
+
+    public function test_user_can_list_addresses()
+    {
+        $user = User::factory()->create();
+        Address::create([
+            'user_id' => $user->id,
+            'label' => 'home',
+            'full_name' => 'John Doe',
+            'phone' => '123456789',
+            'country' => 'US',
+            'city' => 'New York',
+            'street' => '123 Main St',
+            'name' => 'John Doe',
+            'type' => 'shipping',
+            'line1' => '123 Main St',
+        ]);
+
+        $response = $this->actingAs($user, 'sanctum')
+            ->getJson('/api/v1/profile/addresses');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonStructure(['data' => [['id', 'label', 'full_name']]]);
+    }
+
+    public function test_user_can_create_address()
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/profile/addresses', [
+                'label' => 'work',
+                'full_name' => 'Jane Smith',
+                'phone' => '123456789',
+                'country' => 'US',
+                'city' => 'Boston',
+                'street' => '456 Elm St',
+            ]);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.full_name', 'Jane Smith')
+            ->assertJsonPath('data.is_default', true); // Automatically default if first address
+    }
+
+    public function test_user_can_update_address()
+    {
+        $user = User::factory()->create();
+        $address = Address::create([
+            'user_id' => $user->id,
+            'label' => 'home',
+            'full_name' => 'Old Name',
+            'phone' => '123456789',
+            'country' => 'US',
+            'city' => 'New York',
+            'street' => '123 Main St',
+            'name' => 'Old Name',
+            'type' => 'shipping',
+            'line1' => '123 Main St',
+        ]);
+
+        $response = $this->actingAs($user, 'sanctum')
+            ->putJson("/api/v1/profile/addresses/{$address->id}", [
+                'full_name' => 'New Name',
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.full_name', 'New Name');
+    }
+
+    public function test_user_can_delete_address()
+    {
+        $user = User::factory()->create();
+        $address = Address::create([
+            'user_id' => $user->id,
+            'label' => 'home',
+            'full_name' => 'Old Name',
+            'phone' => '123456789',
+            'country' => 'US',
+            'city' => 'New York',
+            'street' => '123 Main St',
+            'name' => 'Old Name',
+            'type' => 'shipping',
+            'line1' => '123 Main St',
+        ]);
+
+        $response = $this->actingAs($user, 'sanctum')
+            ->deleteJson("/api/v1/profile/addresses/{$address->id}");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        $this->assertDatabaseMissing('addresses', ['id' => $address->id]);
+    }
+
+    public function test_user_can_set_default_address()
+    {
+        $user = User::factory()->create();
+        $address1 = Address::create([
+            'user_id' => $user->id,
+            'label' => 'home',
+            'full_name' => 'Old Name',
+            'phone' => '123456789',
+            'country' => 'US',
+            'city' => 'New York',
+            'street' => '123 Main St',
+            'is_default' => true,
+            'name' => 'Old Name',
+            'type' => 'shipping',
+            'line1' => '123 Main St',
+        ]);
+        $address2 = Address::create([
+            'user_id' => $user->id,
+            'label' => 'work',
+            'full_name' => 'Old Name',
+            'phone' => '123456789',
+            'country' => 'US',
+            'city' => 'Boston',
+            'street' => '456 Elm St',
+            'is_default' => false,
+            'name' => 'Old Name',
+            'type' => 'shipping',
+            'line1' => '456 Elm St',
+        ]);
+
+        $response = $this->actingAs($user, 'sanctum')
+            ->postJson("/api/v1/profile/addresses/{$address2->id}/default");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        $this->assertTrue($address2->fresh()->is_default);
+        $this->assertFalse($address1->fresh()->is_default);
     }
 }

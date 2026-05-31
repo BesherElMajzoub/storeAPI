@@ -31,11 +31,16 @@ use App\Http\Controllers\Api\V1\Admin\SkuController;
 use App\Http\Controllers\Api\StripeWebhookController;
 use App\Http\Controllers\Api\V1\AnalyticsEventController;
 use App\Http\Controllers\Api\V1\Admin\AdminAnalyticsController;
+use App\Http\Controllers\Api\V1\ShippingController;
+use App\Http\Controllers\Api\V1\Admin\ShippingController as AdminShippingController;
+use App\Http\Controllers\Api\V1\EasyPostWebhookController;
 
 Route::prefix('v1')->group(function () {
 
     // --- STRIPE WEBHOOK (no auth — verified by Stripe signature) ---
     Route::post('webhooks/stripe', [StripeWebhookController::class, 'handle']);
+    // --- EASYPOST WEBHOOK (no auth — verified by EasyPost signature) ---
+    Route::post('webhooks/easypost', [EasyPostWebhookController::class, 'handle']);
     // --- AUTH ---
     Route::prefix('auth')->group(function () {
         Route::post('register', [AuthController::class, 'register']);
@@ -59,6 +64,10 @@ Route::prefix('v1')->group(function () {
     Route::post('contact-messages', [ContactMessageController::class, 'store']);
     Route::post('inspired-leads', [InspiredLeadController::class, 'store']);
     Route::post('analytics/event', [AnalyticsEventController::class, 'track']);
+
+    // Shipping
+    Route::post('shipping/verify-address', [ShippingController::class, 'verifyAddress']);
+    Route::post('shipping/rates', [ShippingController::class, 'getRates']);
 
     Route::get('categories', [CategoryController::class, 'index']);
     Route::get('categories/{slug}', [CategoryController::class, 'show']);
@@ -137,6 +146,10 @@ Route::prefix('v1')->group(function () {
         Route::get('orders/{id}', [AdminOrderController::class, 'show']);
         Route::post('orders/{id}/status', [AdminOrderController::class, 'updateStatus']);
         Route::post('orders/{order}/refund', [AdminOrderController::class, 'refund']);
+
+        // Shipping / Label purchase
+        Route::post('orders/{order}/ship', [AdminShippingController::class, 'createShipment']);
+        Route::get('orders/{order}/tracking', [AdminShippingController::class, 'getTracking']);
 
         // Cancellation Requests
         Route::get('cancellation-requests', [CancellationRequestController::class, 'index']);

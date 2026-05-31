@@ -43,6 +43,437 @@
                 }
             }
         },
+        "/api/v1/profile/addresses": {
+            "get": {
+                "tags": [
+                    "Addresses"
+                ],
+                "summary": "List Saved Addresses",
+                "description": "Get all saved addresses of the authenticated user.",
+                "operationId": "d7be08dcf3750604b896c92a9c161162",
+                "responses": {
+                    "200": {
+                        "description": "Addresses retrieved successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Addresses retrieved successfully."
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/Address"
+                                            }
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/UnauthorizedResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Addresses"
+                ],
+                "summary": "Create Saved Address",
+                "description": "Save a new address to the user's address book.",
+                "operationId": "55e59cd09a5b284e9c4865e66f718b04",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "label",
+                                    "full_name",
+                                    "phone",
+                                    "country",
+                                    "city",
+                                    "street"
+                                ],
+                                "properties": {
+                                    "label": {
+                                        "type": "string",
+                                        "example": "home",
+                                        "enum": [
+                                            "home",
+                                            "work",
+                                            "other"
+                                        ]
+                                    },
+                                    "full_name": {
+                                        "type": "string",
+                                        "example": "John Doe"
+                                    },
+                                    "phone": {
+                                        "type": "string",
+                                        "example": "+1234567890"
+                                    },
+                                    "country": {
+                                        "type": "string",
+                                        "example": "US"
+                                    },
+                                    "city": {
+                                        "type": "string",
+                                        "example": "New York"
+                                    },
+                                    "area": {
+                                        "type": "string",
+                                        "example": "Manhattan",
+                                        "nullable": true
+                                    },
+                                    "street": {
+                                        "type": "string",
+                                        "example": "5th Avenue"
+                                    },
+                                    "building": {
+                                        "type": "string",
+                                        "example": "Flatiron Building",
+                                        "nullable": true
+                                    },
+                                    "floor": {
+                                        "type": "string",
+                                        "example": "12",
+                                        "nullable": true
+                                    },
+                                    "apartment": {
+                                        "type": "string",
+                                        "example": "12B",
+                                        "nullable": true
+                                    },
+                                    "postal_code": {
+                                        "type": "string",
+                                        "example": "10010",
+                                        "nullable": true
+                                    },
+                                    "notes": {
+                                        "type": "string",
+                                        "example": "Leave at door",
+                                        "nullable": true
+                                    },
+                                    "is_default": {
+                                        "type": "boolean",
+                                        "example": false
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Address saved successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Address saved successfully."
+                                        },
+                                        "data": {
+                                            "$ref": "#/components/schemas/Address"
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationErrorResponse"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/UnauthorizedResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/profile/addresses/{id}": {
+            "put": {
+                "tags": [
+                    "Addresses"
+                ],
+                "summary": "Update Saved Address",
+                "description": "Update the details of a saved address.",
+                "operationId": "3249f9ab1e2db46278eae3321cbbb5ea",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "label": {
+                                        "type": "string",
+                                        "enum": [
+                                            "home",
+                                            "work",
+                                            "other"
+                                        ]
+                                    },
+                                    "full_name": {
+                                        "type": "string"
+                                    },
+                                    "phone": {
+                                        "type": "string"
+                                    },
+                                    "country": {
+                                        "type": "string"
+                                    },
+                                    "city": {
+                                        "type": "string"
+                                    },
+                                    "area": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "street": {
+                                        "type": "string"
+                                    },
+                                    "building": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "floor": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "apartment": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "postal_code": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "notes": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "is_default": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Address updated successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Address updated successfully."
+                                        },
+                                        "data": {
+                                            "$ref": "#/components/schemas/Address"
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/ForbiddenResponse"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFoundResponse"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationErrorResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Addresses"
+                ],
+                "summary": "Delete Saved Address",
+                "description": "Remove an address from the user's address book.",
+                "operationId": "61f419b57c556c86d2b667de6d114451",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Address deleted successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Address deleted successfully."
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/ForbiddenResponse"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFoundResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/profile/addresses/{id}/default": {
+            "post": {
+                "tags": [
+                    "Addresses"
+                ],
+                "summary": "Set Default Address",
+                "description": "Set an address as the user's primary/default address.",
+                "operationId": "6a591ed7354a61f042d1393ca1d148fa",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default address updated successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Default address updated successfully."
+                                        },
+                                        "data": {
+                                            "$ref": "#/components/schemas/Address"
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/ForbiddenResponse"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFoundResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/address/autocomplete": {
             "get": {
                 "tags": [
@@ -2701,6 +3132,253 @@
                 ]
             }
         },
+        "/api/v1/admin/orders/{order}/ship": {
+            "post": {
+                "tags": [
+                    "Admin Shipping"
+                ],
+                "summary": "Purchase Shipping Label",
+                "description": "Purchase a shipping label and mark the order as shipped.",
+                "operationId": "b50e9daa5706b196d25b010ba853002e",
+                "parameters": [
+                    {
+                        "name": "order",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "rate_id"
+                                ],
+                                "properties": {
+                                    "rate_id": {
+                                        "type": "string",
+                                        "example": "rate_123456"
+                                    },
+                                    "shipment_id": {
+                                        "description": "Optional if order has easypost_shipment_id stored",
+                                        "type": "string",
+                                        "example": "shp_123456",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Order shipped successfully.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Order shipped successfully."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "example": "shipped"
+                                                },
+                                                "easypost_shipment_id": {
+                                                    "type": "string",
+                                                    "example": "shp_123456"
+                                                },
+                                                "tracking_number": {
+                                                    "type": "string",
+                                                    "example": "9400110898825022567544"
+                                                },
+                                                "label_url": {
+                                                    "type": "string",
+                                                    "example": "https://easypost-files.s3-us-west-2.amazonaws.com/files/postage_label/..."
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Failed to purchase shipping label.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Failed to purchase shipping label."
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        },
+                                        "errors": {
+                                            "properties": {
+                                                "shipping": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "example": [
+                                                        "Order status must be processing or pending to ship."
+                                                    ]
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/orders/{order}/tracking": {
+            "get": {
+                "tags": [
+                    "Admin Shipping"
+                ],
+                "summary": "Get Order Tracking Info",
+                "description": "Get real-time tracking details from EasyPost for a shipped order.",
+                "operationId": "eca933f528bf61b994ff0f46da592784",
+                "parameters": [
+                    {
+                        "name": "order",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Tracking info retrieved successfully.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Tracking info retrieved."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "tracking_code": {
+                                                    "type": "string",
+                                                    "example": "EZ1000000001"
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "example": "in_transit"
+                                                },
+                                                "status_detail": {
+                                                    "type": "string",
+                                                    "example": "en_route"
+                                                },
+                                                "weight": {
+                                                    "type": "number",
+                                                    "example": 10
+                                                },
+                                                "est_delivery_date": {
+                                                    "type": "string",
+                                                    "example": "2026-06-05T13:00:00Z",
+                                                    "nullable": true
+                                                },
+                                                "tracking_details": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "properties": {
+                                                            "message": {
+                                                                "type": "string",
+                                                                "example": "Billing information received"
+                                                            },
+                                                            "status": {
+                                                                "type": "string",
+                                                                "example": "unknown"
+                                                            },
+                                                            "datetime": {
+                                                                "type": "string",
+                                                                "example": "2026-06-01T12:00:00Z"
+                                                            },
+                                                            "city": {
+                                                                "type": "string",
+                                                                "example": "San Francisco"
+                                                            },
+                                                            "state": {
+                                                                "type": "string",
+                                                                "example": "CA"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/admin/skus/generate": {
             "post": {
                 "tags": [
@@ -4433,6 +5111,24 @@
                 ]
             }
         },
+        "/api/v1/webhooks/easypost": {
+            "post": {
+                "tags": [
+                    "Webhooks"
+                ],
+                "summary": "EasyPost Webhook Receiver",
+                "description": "Receives and handles real-time tracking updates from EasyPost webhook service.",
+                "operationId": "e0f3209976ed8ae562db655e37ba64cf",
+                "responses": {
+                    "200": {
+                        "description": "Webhook processed successfully."
+                    },
+                    "401": {
+                        "description": "Invalid signature."
+                    }
+                }
+            }
+        },
         "/api/v1/inspired-leads": {
             "post": {
                 "tags": [
@@ -5375,6 +6071,384 @@
                         "bearerAuth": []
                     }
                 ]
+            }
+        },
+        "/api/v1/shipping/verify-address": {
+            "post": {
+                "tags": [
+                    "Shipping"
+                ],
+                "summary": "Verify Shipping Address",
+                "description": "Validate shipping address details using the EasyPost address verification API.",
+                "operationId": "5d04a4df917bc04701a7a95221a7734f",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "name",
+                                    "street1",
+                                    "city",
+                                    "state",
+                                    "zip",
+                                    "country"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "example": "John Doe"
+                                    },
+                                    "street1": {
+                                        "type": "string",
+                                        "example": "179 N Harbor Dr"
+                                    },
+                                    "street2": {
+                                        "type": "string",
+                                        "example": null,
+                                        "nullable": true
+                                    },
+                                    "city": {
+                                        "type": "string",
+                                        "example": "Redondo Beach"
+                                    },
+                                    "state": {
+                                        "type": "string",
+                                        "example": "CA"
+                                    },
+                                    "zip": {
+                                        "type": "string",
+                                        "example": "90277"
+                                    },
+                                    "country": {
+                                        "description": "2-letter ISO country code",
+                                        "type": "string",
+                                        "example": "US"
+                                    },
+                                    "phone": {
+                                        "type": "string",
+                                        "example": "310-808-5243",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Address is valid.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Address is valid."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "name": {
+                                                    "type": "string",
+                                                    "example": "JOHN DOE"
+                                                },
+                                                "street1": {
+                                                    "type": "string",
+                                                    "example": "179 N HARBOR DR"
+                                                },
+                                                "street2": {
+                                                    "type": "string",
+                                                    "example": null,
+                                                    "nullable": true
+                                                },
+                                                "city": {
+                                                    "type": "string",
+                                                    "example": "REDONDO BEACH"
+                                                },
+                                                "state": {
+                                                    "type": "string",
+                                                    "example": "CA"
+                                                },
+                                                "zip": {
+                                                    "type": "string",
+                                                    "example": "90277-2510"
+                                                },
+                                                "country": {
+                                                    "type": "string",
+                                                    "example": "US"
+                                                },
+                                                "phone": {
+                                                    "type": "string",
+                                                    "example": "3108085243"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Address verification failed.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Address verification failed: street1 is invalid."
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        },
+                                        "errors": {
+                                            "properties": {
+                                                "address": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "example": [
+                                                        "Address verification failed: street1 is invalid."
+                                                    ]
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/shipping/rates": {
+            "post": {
+                "tags": [
+                    "Shipping"
+                ],
+                "summary": "Get Shipping Rates",
+                "description": "Get real-time shipping rates for a checkout shipping address.",
+                "operationId": "6aae3085b2bc8acbdf190dee94206477",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "address"
+                                ],
+                                "properties": {
+                                    "address": {
+                                        "required": [
+                                            "name",
+                                            "street1",
+                                            "city",
+                                            "state",
+                                            "zip",
+                                            "country"
+                                        ],
+                                        "properties": {
+                                            "name": {
+                                                "type": "string",
+                                                "example": "Jane Doe"
+                                            },
+                                            "street1": {
+                                                "type": "string",
+                                                "example": "179 N Harbor Dr"
+                                            },
+                                            "street2": {
+                                                "type": "string",
+                                                "example": null,
+                                                "nullable": true
+                                            },
+                                            "city": {
+                                                "type": "string",
+                                                "example": "Redondo Beach"
+                                            },
+                                            "state": {
+                                                "type": "string",
+                                                "example": "CA"
+                                            },
+                                            "zip": {
+                                                "type": "string",
+                                                "example": "90277"
+                                            },
+                                            "country": {
+                                                "type": "string",
+                                                "example": "US"
+                                            },
+                                            "phone": {
+                                                "type": "string",
+                                                "example": "310-808-5243",
+                                                "nullable": true
+                                            }
+                                        },
+                                        "type": "object"
+                                    },
+                                    "parcel": {
+                                        "properties": {
+                                            "length": {
+                                                "type": "number",
+                                                "example": 10
+                                            },
+                                            "width": {
+                                                "type": "number",
+                                                "example": 8
+                                            },
+                                            "height": {
+                                                "type": "number",
+                                                "example": 4
+                                            },
+                                            "weight": {
+                                                "description": "Weight in ounces",
+                                                "type": "number",
+                                                "example": 16
+                                            }
+                                        },
+                                        "type": "object",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Shipping rates retrieved.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Shipping rates retrieved."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "shipment_id": {
+                                                    "type": "string",
+                                                    "example": "shp_123456"
+                                                },
+                                                "rates": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "properties": {
+                                                            "id": {
+                                                                "type": "string",
+                                                                "example": "rate_abc123"
+                                                            },
+                                                            "carrier": {
+                                                                "type": "string",
+                                                                "example": "USPS"
+                                                            },
+                                                            "service": {
+                                                                "type": "string",
+                                                                "example": "First"
+                                                            },
+                                                            "rate": {
+                                                                "type": "number",
+                                                                "format": "float",
+                                                                "example": 5.5
+                                                            },
+                                                            "currency": {
+                                                                "type": "string",
+                                                                "example": "USD"
+                                                            },
+                                                            "delivery_days": {
+                                                                "type": "integer",
+                                                                "example": 3,
+                                                                "nullable": true
+                                                            },
+                                                            "delivery_date": {
+                                                                "type": "string",
+                                                                "example": null,
+                                                                "nullable": true
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Failed to retrieve rates.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Failed to get shipping rates."
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        },
+                                        "errors": {
+                                            "properties": {
+                                                "shipping": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "example": [
+                                                        "Carrier accounts not configured."
+                                                    ]
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
             }
         },
         "/api/v1/wishlist": {
@@ -6670,6 +7744,10 @@
             "description": "Admin Reviews"
         },
         {
+            "name": "Admin Shipping",
+            "description": "Admin Shipping"
+        },
+        {
             "name": "Admin SKUs",
             "description": "Admin SKUs"
         },
@@ -6712,6 +7790,10 @@
         {
             "name": "Reviews",
             "description": "Reviews"
+        },
+        {
+            "name": "Shipping",
+            "description": "Shipping"
         },
         {
             "name": "Wishlist",
