@@ -27,6 +27,7 @@ class ReviewResource extends JsonResource
                 'name'       => $this->user?->name,
                 'avatar_url' => $this->user?->avatar_url,
             ]),
+            'product'              => new ProductResource($this->whenLoaded('product')),
             // Only included in admin context
             'admin_note'           => $this->when(
                 $user?->hasRole('Admin'),

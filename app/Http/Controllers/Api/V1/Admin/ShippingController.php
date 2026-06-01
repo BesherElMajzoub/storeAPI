@@ -242,8 +242,7 @@ class ShippingController extends Controller
             // Let's look at EasyPostService:
             // $this->client->shipment->retrieve($shipmentId)
             // Let's retrieve the shipment first, which contains the tracker!
-            $client = new \EasyPost\EasyPostClient(config('services.easypost.api_key'));
-            $shipment = $client->shipment->retrieve($order->easypost_shipment_id);
+            $shipment = $this->easyPostService->retrieveShipment($order->easypost_shipment_id);
 
             $tracker = $shipment->tracker;
 

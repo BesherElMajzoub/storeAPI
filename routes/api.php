@@ -54,6 +54,7 @@ Route::prefix('v1')->group(function () {
         Route::middleware('auth:sanctum')->group(function () {
             Route::get('me', [AuthController::class, 'me']);
             Route::put('me', [AuthController::class, 'updateProfile']);
+            Route::post('change-password', [AuthController::class, 'changePassword']);
             Route::post('logout', [AuthController::class, 'logout']);
             Route::post('refresh', [AuthController::class, 'refresh']);
         });
@@ -86,6 +87,7 @@ Route::prefix('v1')->group(function () {
         Route::post('orders', [OrderController::class, 'store']);
         Route::get('orders', [OrderController::class, 'index']);
         Route::get('orders/{id}', [OrderController::class, 'show']);
+        Route::get('orders/{id}/tracking', [OrderController::class, 'getTracking']);
         Route::post('orders/{id}/cancel', [OrderController::class, 'cancel']);
         Route::post('orders/{id}/cancellation-request', [OrderController::class, 'requestCancellation']);
 

@@ -155,6 +155,8 @@ class EasyPostShippingTest extends TestCase
 
     public function test_easypost_webhook_updates_order(): void
     {
+        \Illuminate\Support\Facades\Queue::fake();
+
         $order = Order::create([
             'order_number'         => 'ORD-TEST12345',
             'user_id'              => $this->user->id,
@@ -192,6 +194,59 @@ class EasyPostShippingTest extends TestCase
             'id'     => $order->id,
             'status' => 'delivered',
         ]);
+    }
+
+    public function test_customer_can_retrieve_tracking(): void
+    {
+        $order = Order::create([
+            'order_number'         => 'ORD-CUST12345',
+            'user_id'              => $this->user->id,
+            'status'               => 'shipped',
+            'payment_status'       => 'paid',
+            'subtotal'             => 100.00,
+            'total'                => 105.50,
+            'shipping_cost'        => 5.50,
+            'tracking_number'      => 'EZ1000000001',
+            'easypost_shipment_id' => 'shp_test123',
+            'shipping_address'     => ['name' => 'John', 'street' => '1 Main St', 'city' => 'NYC', 'country' => 'US'],
+        ]);
+
+        $mockShipment = (object)[
+            'id' => 'shp_test123',
+            'tracker' => (object)[
+                'tracking_code' => 'EZ1000000001',
+                'status' => 'in_transit',
+                'status_detail' => 'en_route',
+                'est_delivery_date' => '2026-06-05T13:00:00Z',
+                'tracking_details' => [
+                    (object)[
+                        'message' => 'Billing info received',
+                        'status' => 'unknown',
+                        'datetime' => '2026-06-01T12:00:00Z',
+                        'tracking_location' => (object)[
+                            'city' => 'San Francisco',
+                            'state' => 'CA'
+                        ]
+                    ]
+                ]
+            ]
+        ];
+
+        $this->mock(EasyPostService::class, function ($mock) use ($mockShipment) {
+            $mock->shouldReceive('retrieveShipment')
+                ->once()
+                ->with('shp_test123')
+                ->andReturn($mockShipment);
+        });
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson("/api/v1/orders/{$order->id}/tracking");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.tracking_code', 'EZ1000000001')
+            ->assertJsonPath('data.status', 'in_transit')
+            ->assertJsonPath('data.tracking_details.0.city', 'San Francisco');
     }
 
     protected function tearDown(): void

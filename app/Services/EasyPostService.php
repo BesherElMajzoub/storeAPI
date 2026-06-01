@@ -154,6 +154,27 @@ class EasyPostService
     }
 
     /**
+     * Retrieve a shipment by its ID.
+     *
+     * @param string $shipmentId
+     * @return \EasyPost\Shipment
+     * @throws Exception
+     */
+    public function retrieveShipment(string $shipmentId)
+    {
+        if (!$this->client) {
+            throw new Exception('EasyPost client is not configured.');
+        }
+
+        try {
+            return $this->client->shipment->retrieve($shipmentId);
+        } catch (ApiException $e) {
+            Log::error('EasyPost Shipment Retrieve API error: ' . $e->getMessage());
+            throw new Exception('Failed to retrieve shipment: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Retrieve tracking status for a tracker/shipment.
      *
      * @param string $trackerId

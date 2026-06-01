@@ -27,6 +27,11 @@ class ReviewService
             throw new \Exception('You have reached the daily review limit. Please try again tomorrow.');
         }
 
+        // Check: user must have purchased the product before (verified purchase)
+        if (!$this->isVerifiedPurchase($user, $product->id)) {
+            throw new \Exception('You can only review products you have purchased.');
+        }
+
         $review = Review::create([
             'user_id'              => $user->id,
             'product_id'           => $product->id,

@@ -5701,6 +5701,115 @@
                 ]
             }
         },
+        "/api/v1/orders/{id}/tracking": {
+            "get": {
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Get Customer Order Tracking Info",
+                "description": "Get real-time tracking details from EasyPost for the authenticated user's shipped order.",
+                "operationId": "0080ce8dbaa12262e476d7a112e6d09d",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Tracking info retrieved successfully.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Tracking info retrieved."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "tracking_code": {
+                                                    "type": "string",
+                                                    "example": "EZ1000000001"
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "example": "in_transit"
+                                                },
+                                                "status_detail": {
+                                                    "type": "string",
+                                                    "example": "en_route",
+                                                    "nullable": true
+                                                },
+                                                "est_delivery_date": {
+                                                    "type": "string",
+                                                    "example": "2026-06-05T13:00:00Z",
+                                                    "nullable": true
+                                                },
+                                                "tracking_details": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "properties": {
+                                                            "message": {
+                                                                "type": "string",
+                                                                "example": "Billing information received"
+                                                            },
+                                                            "status": {
+                                                                "type": "string",
+                                                                "example": "unknown"
+                                                            },
+                                                            "datetime": {
+                                                                "type": "string",
+                                                                "example": "2026-06-01T12:00:00Z"
+                                                            },
+                                                            "city": {
+                                                                "type": "string",
+                                                                "example": "San Francisco"
+                                                            },
+                                                            "state": {
+                                                                "type": "string",
+                                                                "example": "CA"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Tracking info not available yet."
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFoundResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/products": {
             "get": {
                 "tags": [

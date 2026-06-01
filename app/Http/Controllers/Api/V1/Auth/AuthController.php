@@ -11,6 +11,7 @@ use App\Http\Requests\Api\V1\Auth\OtpVerifyRequest;
 use App\Http\Requests\Api\V1\Auth\RegisterRequest;
 use App\Http\Requests\Api\V1\Auth\ResetPasswordRequest;
 use App\Http\Requests\Api\V1\Auth\UpdateProfileRequest;
+use App\Http\Requests\Api\V1\Auth\ChangePasswordRequest;
 use App\Mail\ResetPasswordMail;
 use App\Models\Role;
 use App\Models\User;
@@ -243,6 +244,56 @@ class AuthController extends Controller
         $user->save();
 
         return $this->success($user->fresh()->load('roles'), 'Profile updated successfully.');
+    }
+
+    #[OA\Post(
+        path: '/api/v1/auth/change-password',
+        summary: 'Change Password (Logged In)',
+        description: 'Change the password of the currently authenticated user by verifying the old password.',
+        security: [['bearerAuth' => []]],
+        tags: ['Authentication']
+    )]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            required: ['current_password', 'new_password', 'new_password_confirmation'],
+            properties: [
+                new OA\Property(property: 'current_password', type: 'string', format: 'password', example: 'password123'),
+                new OA\Property(property: 'new_password', type: 'string', format: 'password', example: 'newpassword123'),
+                new OA\Property(property: 'new_password_confirmation', type: 'string', format: 'password', example: 'newpassword123'),
+            ]
+        )
+    )]
+    #[OA\Response(
+        response: 200,
+        description: 'Password changed successfully',
+        content: new OA\JsonContent(
+            type: 'object',
+            properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'message', type: 'string', example: 'Password changed successfully.'),
+                new OA\Property(property: 'data', type: 'object', nullable: true, example: null),
+                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null),
+            ]
+        )
+    )]
+    #[OA\Response(response: 401, ref: '#/components/responses/UnauthorizedResponse')]
+    #[OA\Response(response: 422, ref: '#/components/responses/ValidationErrorResponse')]
+    public function changePassword(ChangePasswordRequest $request)
+    {
+        $user = $request->user();
+        $data = $request->validated();
+
+        if (!Hash::check($data['current_password'], $user->password)) {
+            return $this->error('The current password you entered is incorrect.', 422, [
+                'current_password' => ['The current password you entered is incorrect.']
+            ]);
+        }
+
+        $user->password = $data['new_password'];
+        $user->save();
+
+        return $this->success(null, 'Password changed successfully.');
     }
 
     #[OA\Post(
