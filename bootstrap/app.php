@@ -12,6 +12,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->encryptCookies(except: [
+            'visitor_id',
+            'visitor_session_id',
+        ]);
         $middleware->use([
             \Illuminate\Http\Middleware\HandleCors::class,
             \App\Http\Middleware\TrackVisitorSession::class,

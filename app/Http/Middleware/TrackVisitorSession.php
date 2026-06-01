@@ -38,13 +38,8 @@ class TrackVisitorSession
         }
 
         // 4. Resolve or generate visitor and session UUIDs
-        $visitorUuid = $request->header('X-Visitor-ID') 
-            ?? $request->cookie('visitor_id') 
-            ?? (string) Str::uuid();
-
-        $sessionUuid = $request->header('X-Session-ID') 
-            ?? $request->cookie('visitor_session_id') 
-            ?? (string) Str::uuid();
+        $visitorUuid = $this->cleanUuid($request->header('X-Visitor-ID') ?? $request->cookie('visitor_id'));
+        $sessionUuid = $this->cleanUuid($request->header('X-Session-ID') ?? $request->cookie('visitor_session_id'));
 
         // 5. Gather tracking payload
         $payload = [
@@ -125,5 +120,32 @@ class TrackVisitorSession
         }
 
         return false;
+    }
+
+    /**
+     * Clean and validate a UUID. If it is encrypted or too long, decrypt or regenerate it.
+     */
+    private function cleanUuid(?string $uuid): string
+    {
+        if (empty($uuid)) {
+            return (string) \Illuminate\Support\Str::uuid();
+        }
+
+        // If the UUID looks like an encrypted Laravel cookie (it is long)
+        if (strlen($uuid) > 36) {
+            try {
+                // Try to decrypt it manually
+                $decrypted = decrypt($uuid, false);
+                if ($decrypted && strlen($decrypted) === 36) {
+                    return $decrypted;
+                }
+            } catch (\Throwable $e) {
+                // Ignore and fall back to fresh UUID
+            }
+            
+            return (string) \Illuminate\Support\Str::uuid();
+        }
+
+        return $uuid;
     }
 }
