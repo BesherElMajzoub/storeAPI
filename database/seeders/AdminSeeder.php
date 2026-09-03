@@ -11,6 +11,10 @@ class AdminSeeder extends Seeder
 {
     public function run(): void
     {
+        if (app()->environment('production')) {
+            return;
+        }
+
         $admins = [
             [
                 'email' => 'admin@store.com',
@@ -45,7 +49,7 @@ class AdminSeeder extends Seeder
             );
 
             $role = Role::where('name', $adminData['role'])->first();
-            if ($role && !$user->roles()->whereKey($role->id)->exists()) {
+            if ($role && ! $user->roles()->whereKey($role->id)->exists()) {
                 $user->roles()->syncWithoutDetaching([$role->id]);
             }
         }

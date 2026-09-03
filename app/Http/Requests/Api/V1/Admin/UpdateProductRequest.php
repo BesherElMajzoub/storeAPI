@@ -22,19 +22,19 @@ class UpdateProductRequest extends BaseAdminRequest
             }
         }
 
-        if (!empty($merge)) {
+        if (! empty($merge)) {
             $this->merge($merge);
         }
     }
 
     public function rules(): array
     {
-        $productId = (int) $this->route('id');
+        $productId = (int) $this->route('product');
 
         return [
             'name' => ['sometimes', 'string', 'max:255'],
             'slug' => ['sometimes', 'string', 'max:255'],
-            'description' => ['sometimes', 'nullable', 'string'],
+            'description' => ['sometimes', 'nullable', 'string', 'max:10000'],
             'price' => ['sometimes', 'numeric', 'min:0'],
             'discount_price' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'sku' => ['sometimes', 'nullable', 'string', 'max:255', Rule::unique('products', 'sku')->ignore($productId)],
@@ -53,10 +53,12 @@ class UpdateProductRequest extends BaseAdminRequest
             'meta_description' => ['sometimes', 'nullable', 'string', 'max:1000'],
             'rating' => ['sometimes', 'numeric', 'min:0', 'max:5'],
             'reviews_count' => ['sometimes', 'integer', 'min:0'],
-            'images' => ['sometimes', 'array'],
-            'images.*' => ['file', 'image', 'max:5120'], // max 5 MB per image
-            'variants' => ['sometimes', 'array'],
-            'variants.*.name' => ['required_with:variants', 'string', 'max:255'],
+            'images' => ['sometimes', 'array', 'max:8'],
+            'images.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'variants' => ['sometimes', 'array', 'max:100'],
+            'variants.*.id' => ['sometimes', 'integer'],
+            'variants.*._delete' => ['sometimes', 'boolean'],
+            'variants.*.name' => ['required_unless:variants.*._delete,true', 'string', 'max:255'],
             'variants.*.sku' => ['nullable', 'string', 'max:255'],
             'variants.*.price' => ['nullable', 'numeric', 'min:0'],
             'variants.*.stock_qty' => ['nullable', 'integer', 'min:0'],
@@ -72,7 +74,7 @@ class UpdateProductRequest extends BaseAdminRequest
                 if ($discount !== null) {
                     $price = $this->input('price');
                     if ($price === null) {
-                        $product = Product::find($this->route('id'));
+                        $product = Product::find($this->route('product'));
                         $price = $product?->price;
                     }
 
@@ -86,8 +88,8 @@ class UpdateProductRequest extends BaseAdminRequest
                 $variants = $this->input('variants');
                 if (is_array($variants) && count($variants) > 0) {
                     $stockQty = $this->input('stock_qty');
-                    if ($stockQty === null && !$this->has('stock_qty')) {
-                        $product = Product::find($this->route('id'));
+                    if ($stockQty === null && ! $this->has('stock_qty')) {
+                        $product = Product::find($this->route('product'));
                         $stockQty = $product?->stock_qty;
                     }
 
@@ -101,6 +103,17 @@ class UpdateProductRequest extends BaseAdminRequest
                             $validator->errors()->add('variants', 'The total stock quantity of variants cannot exceed the product\'s stock quantity.');
                         }
                     }
+                }
+            }
+
+            $product = Product::find($this->route('product'));
+            foreach ((array) $this->input('variants', []) as $index => $variant) {
+                if (isset($variant['id']) && ! $product?->variants()->whereKey($variant['id'])->exists()) {
+                    $validator->errors()->add("variants.{$index}.id", 'The variant does not belong to this product.');
+                }
+
+                if (($variant['_delete'] ?? false) && ! isset($variant['id'])) {
+                    $validator->errors()->add("variants.{$index}.id", 'A variant id is required for deletion.');
                 }
             }
         });

@@ -2,17 +2,21 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Exceptions\CouponValidationException;
+use App\Exceptions\InsufficientStockException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\StoreCancellationRequestRequest;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Resources\OrderResource;
 use App\Jobs\SendAdminAlert;
+use App\Models\CouponUsage;
 use App\Models\Order;
 use App\Models\OrderCancellationRequest;
-use App\Models\Product;
-use App\Services\StripeCheckoutService;
 use App\Services\CouponService;
 use App\Services\EasyPostService;
+use App\Services\OrderInventoryService;
+use App\Services\StripeCheckoutService;
+use EasyPost\EasyPostClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -48,6 +52,7 @@ class OrderController extends Controller
     public function index(Request $request)
     {
         $orders = $request->user()->orders()
+            ->with(['items.product.media', 'items.variant', 'cancellationRequest'])
             ->latest()
             ->paginate(10);
 
@@ -118,7 +123,7 @@ class OrderController extends Controller
                         new OA\Property(property: 'state', type: 'string', example: 'NY'),
                         new OA\Property(property: 'postal_code', type: 'string', example: '10001'),
                         new OA\Property(property: 'country', type: 'string', example: 'US'),
-                        new OA\Property(property: 'phone', type: 'string', example: '+1234567890')
+                        new OA\Property(property: 'phone', type: 'string', example: '+1234567890'),
                     ]
                 ),
                 new OA\Property(
@@ -133,7 +138,7 @@ class OrderController extends Controller
                         new OA\Property(property: 'state', type: 'string', example: 'NY'),
                         new OA\Property(property: 'postal_code', type: 'string', example: '10001'),
                         new OA\Property(property: 'country', type: 'string', example: 'US'),
-                        new OA\Property(property: 'phone', type: 'string', example: '+1234567890')
+                        new OA\Property(property: 'phone', type: 'string', example: '+1234567890'),
                     ]
                 ),
                 new OA\Property(
@@ -141,7 +146,7 @@ class OrderController extends Controller
                     type: 'string',
                     nullable: true,
                     example: 'SAVE50'
-                )
+                ),
             ]
         )
     )]
@@ -163,12 +168,12 @@ class OrderController extends Controller
                             property: 'payment',
                             type: 'object',
                             properties: [
-                                new OA\Property(property: 'session_id', type: 'string', example: 'cs_test_a1b2c3d4')
+                                new OA\Property(property: 'session_id', type: 'string', example: 'cs_test_a1b2c3d4'),
                             ]
-                        )
+                        ),
                     ]
                 ),
-                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null)
+                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null),
             ]
         )
     )]
@@ -183,60 +188,39 @@ class OrderController extends Controller
                 new OA\Property(property: 'success', type: 'boolean', example: false),
                 new OA\Property(property: 'message', type: 'string', example: 'Payment provider error. Please try again.'),
                 new OA\Property(property: 'data', type: 'object', nullable: true, example: null),
-                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null)
+                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null),
             ]
         )
     )]
-    public function store(StoreOrderRequest $request, StripeCheckoutService $stripe, CouponService $couponService): JsonResponse
+    public function store(StoreOrderRequest $request, StripeCheckoutService $stripe, CouponService $couponService, OrderInventoryService $inventory): JsonResponse
     {
-        $items = $request->items;
-        $subtotal = 0.0;
-        $orderItemsData = [];
-
-        foreach ($items as $item) {
-            $product = Product::findOrFail($item['product_id']);
-            $price = (float) $product->final_price;
-
-            $variant = isset($item['variant_id']) && $item['variant_id']
-                ? \App\Models\ProductVariant::find($item['variant_id'])
-                : null;
-
-            if ($variant && $variant->price !== null) {
-                $price = (float) $variant->price;
-            }
-
-            $lineTotal = $price * $item['quantity'];
-            $subtotal += $lineTotal;
-
-            $orderItemsData[] = [
-                'product_id'         => $product->id,
-                'product_name'       => $product->name,
-                'variant_id'         => $variant?->id,
-                'variant_name'       => $variant?->name,
-                'variant_attributes' => $variant?->attributes,   // JSON snapshot
-                'sku'                => $variant?->sku ?? $product->sku,
-                'price'              => $price,
-                'quantity'           => $item['quantity'],
-                'total'              => $lineTotal,
-            ];
+        if (! $request->user()->email_verified_at) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Email verification is required before checkout.',
+                'data' => null,
+                'errors' => ['email' => ['Verify your email before checkout.']],
+            ], 403);
         }
+
+        $items = $request->validated('items');
 
         $shippingCost = 0.0;
         $easypostShipmentId = null;
 
         if ($request->filled('shipping_rate_id') && $request->filled('easypost_shipment_id')) {
             try {
-                $client = new \EasyPost\EasyPostClient(config('services.easypost.api_key'));
+                $client = new EasyPostClient(config('services.easypost.api_key'));
                 $shipment = $client->shipment->retrieve($request->easypost_shipment_id);
-                
+
                 // Find matching rate
-                $matchingRate = collect($shipment->rates)->first(fn($rate) => $rate->id === $request->shipping_rate_id);
-                
+                $matchingRate = collect($shipment->rates)->first(fn ($rate) => $rate->id === $request->shipping_rate_id);
+
                 if ($matchingRate) {
                     $shippingCost = (float) $matchingRate->rate;
                     $easypostShipmentId = $shipment->id;
                 } else {
-                    throw new \Exception("Selected shipping rate is not valid for this shipment.");
+                    throw new \Exception('Selected shipping rate is not valid for this shipment.');
                 }
             } catch (\Throwable $e) {
                 Log::error('EasyPost rate verification failed during checkout', [
@@ -244,13 +228,13 @@ class OrderController extends Controller
                     'rate_id' => $request->shipping_rate_id,
                     'error' => $e->getMessage(),
                 ]);
-                
+
                 return response()->json([
                     'success' => false,
-                    'message' => 'Invalid shipping rate selected: ' . $e->getMessage(),
-                    'data'    => null,
-                    'errors'  => [
-                        'shipping_rate_id' => ['Invalid shipping rate selected.']
+                    'message' => 'Invalid shipping rate selected.',
+                    'data' => null,
+                    'errors' => [
+                        'shipping_rate_id' => ['Invalid shipping rate selected.'],
                     ],
                 ], 422);
             }
@@ -258,7 +242,10 @@ class OrderController extends Controller
 
         // 1️⃣ Create order in DB (pending_payment, unpaid)
         try {
-            $order = DB::transaction(function () use ($request, $subtotal, $orderItemsData, $couponService, $shippingCost, $easypostShipmentId) {
+            $order = DB::transaction(function () use ($request, $items, $couponService, $inventory, $shippingCost, $easypostShipmentId) {
+                $quote = $inventory->quoteAndReserve($items);
+                $subtotal = $quote['subtotal'];
+                $orderItemsData = $quote['items'];
                 $coupon = null;
                 $discount = 0.0;
 
@@ -271,16 +258,17 @@ class OrderController extends Controller
                 $total = max(0.0, $subtotal + $shippingCost - $discount);
 
                 $order = Order::create([
-                    'order_number'         => 'ORD-'.strtoupper(Str::random(10)),
-                    'user_id'              => $request->user()->id,
-                    'status'               => 'pending_payment',
-                    'payment_status'       => 'unpaid',
-                    'subtotal'             => $subtotal,
-                    'shipping_cost'        => $shippingCost,
+                    'order_number' => 'ORD-'.strtoupper(Str::random(10)),
+                    'user_id' => $request->user()->id,
+                    'status' => 'pending_payment',
+                    'payment_status' => 'unpaid',
+                    'subtotal' => $subtotal,
+                    'shipping_cost' => $shippingCost,
                     'easypost_shipment_id' => $easypostShipmentId,
-                    'total'                => $total,
-                    'shipping_address'     => $request->shipping_address,
-                    'billing_address'      => $request->billing_address ?? $request->shipping_address,
+                    'total' => $total,
+                    'shipping_address' => $request->shipping_address,
+                    'billing_address' => $request->billing_address ?? $request->shipping_address,
+                    'stock_reserved_at' => now(),
                 ]);
 
                 if ($coupon) {
@@ -288,10 +276,10 @@ class OrderController extends Controller
                     $order->save();
 
                     // Create usage record
-                    \App\Models\CouponUsage::create([
-                        'coupon_id'       => $coupon->id,
-                        'user_id'         => $request->user()->id,
-                        'order_id'        => $order->id,
+                    CouponUsage::create([
+                        'coupon_id' => $coupon->id,
+                        'user_id' => $request->user()->id,
+                        'order_id' => $order->id,
                         'discount_amount' => $discount,
                     ]);
 
@@ -304,16 +292,23 @@ class OrderController extends Controller
                 }
 
                 return $order->load('items');
-            });
-        } catch (\App\Exceptions\CouponValidationException $e) {
+            }, 3);
+        } catch (CouponValidationException $e) {
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
-                'data'    => null,
-                'errors'  => [
-                    'coupon_code' => [$e->getMessage()]
+                'data' => null,
+                'errors' => [
+                    'coupon_code' => [$e->getMessage()],
                 ],
             ], 422);
+        } catch (InsufficientStockException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'data' => null,
+                'errors' => [$e->field => [$e->getMessage()]],
+            ], 409);
         }
 
         // 2️⃣ Create Stripe Checkout Session
@@ -326,31 +321,32 @@ class OrderController extends Controller
         } catch (\Throwable $e) {
             Log::error('Stripe checkout session creation failed', [
                 'order_id' => $order->id,
-                'error'    => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
 
-            // Roll back the order so the user can try again
+            // Release the reservation before hiding the failed order.
+            $order->update(['status' => 'cancelled', 'payment_status' => 'failed']);
             $order->delete();
 
             return response()->json([
                 'success' => false,
                 'message' => 'Payment provider error. Please try again.',
-                'data'    => null,
-                'errors'  => null,
+                'data' => null,
+                'errors' => null,
             ], 502);
         }
 
         return response()->json([
             'success' => true,
             'message' => 'Order created. Redirect to Stripe checkout.',
-            'data'    => [
-                'order'        => new OrderResource($order),
+            'data' => [
+                'order' => new OrderResource($order),
                 'checkout_url' => $session->url,
-                'payment'      => [
+                'payment' => [
                     'session_id' => $session->id,
                 ],
             ],
-            'errors'  => null,
+            'errors' => null,
         ], 201);
     }
 
@@ -371,7 +367,7 @@ class OrderController extends Controller
                 new OA\Property(property: 'success', type: 'boolean', example: true),
                 new OA\Property(property: 'message', type: 'string', example: 'Order cancelled successfully.'),
                 new OA\Property(property: 'data', type: 'object', nullable: true, example: null),
-                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null)
+                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null),
             ]
         )
     )]
@@ -384,7 +380,7 @@ class OrderController extends Controller
                 new OA\Property(property: 'success', type: 'boolean', example: false),
                 new OA\Property(property: 'message', type: 'string', example: 'Only pending orders can be cancelled directly.'),
                 new OA\Property(property: 'data', type: 'object', nullable: true, example: null),
-                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null)
+                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null),
             ]
         )
     )]
@@ -449,7 +445,7 @@ class OrderController extends Controller
                 new OA\Property(property: 'success', type: 'boolean', example: true),
                 new OA\Property(property: 'message', type: 'string', example: 'Your cancellation request has been submitted and is under review.'),
                 new OA\Property(property: 'data', type: 'object', nullable: true, example: null),
-                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null)
+                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null),
             ]
         )
     )]
@@ -536,13 +532,13 @@ class OrderController extends Controller
                                     new OA\Property(property: 'status', type: 'string', example: 'unknown'),
                                     new OA\Property(property: 'datetime', type: 'string', example: '2026-06-01T12:00:00Z'),
                                     new OA\Property(property: 'city', type: 'string', example: 'San Francisco'),
-                                    new OA\Property(property: 'state', type: 'string', example: 'CA')
+                                    new OA\Property(property: 'state', type: 'string', example: 'CA'),
                                 ]
                             )
-                        )
+                        ),
                     ]
                 ),
-                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null)
+                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null),
             ]
         )
     )]
@@ -552,13 +548,13 @@ class OrderController extends Controller
     {
         $order = $request->user()->orders()->findOrFail($id);
 
-        if (!$order->tracking_number) {
+        if (! $order->tracking_number) {
             return response()->json([
                 'success' => false,
                 'message' => 'Order has not been shipped yet or does not have a tracking number.',
-                'data'    => null,
-                'errors'  => [
-                    'tracking' => ['No tracking number associated with this order.']
+                'data' => null,
+                'errors' => [
+                    'tracking' => ['No tracking number associated with this order.'],
                 ],
             ], 422);
         }
@@ -567,13 +563,13 @@ class OrderController extends Controller
             $shipment = $easyPostService->retrieveShipment($order->easypost_shipment_id);
             $tracker = $shipment->tracker;
 
-            if (!$tracker) {
+            if (! $tracker) {
                 return response()->json([
                     'success' => false,
                     'message' => 'No tracking details available yet for this shipment.',
-                    'data'    => null,
-                    'errors'  => [
-                        'tracking' => ['Tracker has not been generated by carrier yet.']
+                    'data' => null,
+                    'errors' => [
+                        'tracking' => ['Tracker has not been generated by carrier yet.'],
                     ],
                 ], 422);
             }
@@ -582,11 +578,11 @@ class OrderController extends Controller
             if (isset($tracker->tracking_details)) {
                 foreach ($tracker->tracking_details as $detail) {
                     $trackingDetails[] = [
-                        'message'  => $detail->message,
-                        'status'   => $detail->status,
+                        'message' => $detail->message,
+                        'status' => $detail->status,
                         'datetime' => $detail->datetime,
-                        'city'     => $detail->tracking_location->city ?? null,
-                        'state'    => $detail->tracking_location->state ?? null,
+                        'city' => $detail->tracking_location->city ?? null,
+                        'state' => $detail->tracking_location->state ?? null,
                     ];
                 }
             }
@@ -594,24 +590,25 @@ class OrderController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Tracking info retrieved.',
-                'data'    => [
-                    'tracking_code'     => $tracker->tracking_code,
-                    'status'            => $tracker->status,
-                    'status_detail'     => $tracker->status_detail ?? null,
+                'data' => [
+                    'tracking_code' => $tracker->tracking_code,
+                    'status' => $tracker->status,
+                    'status_detail' => $tracker->status_detail ?? null,
                     'est_delivery_date' => $tracker->est_delivery_date ?? null,
-                    'tracking_details'  => $trackingDetails,
+                    'tracking_details' => $trackingDetails,
                 ],
-                'errors'  => null,
+                'errors' => null,
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Customer Shipping getTracking failed: ' . $e->getMessage());
+            Log::error('Customer Shipping getTracking failed: '.$e->getMessage());
+
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to retrieve tracking info: ' . $e->getMessage(),
-                'data'    => null,
-                'errors'  => [
-                    'tracking' => [$e->getMessage()]
+                'message' => 'Failed to retrieve tracking info.',
+                'data' => null,
+                'errors' => [
+                    'tracking' => ['Tracking provider request failed.'],
                 ],
             ], 422);
         }

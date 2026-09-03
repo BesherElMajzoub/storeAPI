@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Order;
 use Stripe\Checkout\Session as StripeSession;
+use Stripe\Coupon;
 use Stripe\Refund;
 use Stripe\Stripe;
 
@@ -19,13 +20,14 @@ class StripeCheckoutService
      */
     public function createCheckoutSession(Order $order): StripeSession
     {
-        $lineItems = $order->items->map(function ($item) {
+        $currency = config('services.stripe.currency', 'usd');
+        $lineItems = $order->items->map(function ($item) use ($currency) {
             return [
                 'price_data' => [
-                    'currency'     => 'usd',
-                    'unit_amount'  => (int) round($item->price * 100), // cents
+                    'currency' => $currency,
+                    'unit_amount' => (int) round($item->price * 100), // cents
                     'product_data' => [
-                        'name'     => $item->product_name . ($item->variant_name ? ' – ' . $item->variant_name : ''),
+                        'name' => $item->product_name.($item->variant_name ? ' – '.$item->variant_name : ''),
                     ],
                 ],
                 'quantity' => $item->quantity,
@@ -35,10 +37,10 @@ class StripeCheckoutService
         if ($order->shipping_cost > 0) {
             $lineItems[] = [
                 'price_data' => [
-                    'currency'     => 'usd',
-                    'unit_amount'  => (int) round($order->shipping_cost * 100), // cents
+                    'currency' => $currency,
+                    'unit_amount' => (int) round($order->shipping_cost * 100), // cents
                     'product_data' => [
-                        'name'     => 'Shipping Cost',
+                        'name' => 'Shipping Cost',
                     ],
                 ],
                 'quantity' => 1,
@@ -48,26 +50,26 @@ class StripeCheckoutService
         $frontendUrl = rtrim(config('app.frontend_url', config('app.url')), '/');
 
         $sessionParams = [
-            'mode'        => 'payment',
-            'line_items'  => $lineItems,
-            'metadata'    => [
-                'order_id'    => (string) $order->id,
+            'mode' => 'payment',
+            'line_items' => $lineItems,
+            'metadata' => [
+                'order_id' => (string) $order->id,
                 'coupon_code' => (string) $order->coupon_code,
-                'discount'    => (string) $order->discount,
+                'discount' => (string) $order->discount,
             ],
             'success_url' => "{$frontendUrl}/orders/{$order->id}?stripe_status=success",
-            'cancel_url'  => "{$frontendUrl}/checkout?stripe_status=cancelled",
+            'cancel_url' => "{$frontendUrl}/checkout?stripe_status=cancelled",
         ];
 
         if ($order->discount > 0) {
-            $stripeCoupon = \Stripe\Coupon::create([
+            $stripeCoupon = Coupon::create([
                 'amount_off' => (int) round($order->discount * 100),
-                'currency'   => 'usd',
-                'duration'   => 'once',
-                'name'       => $order->coupon_code ?: 'Discount',
+                'currency' => $currency,
+                'duration' => 'once',
+                'name' => $order->coupon_code ?: 'Discount',
             ]);
             $sessionParams['discounts'] = [
-                ['coupon' => $stripeCoupon->id]
+                ['coupon' => $stripeCoupon->id],
             ];
         }
 

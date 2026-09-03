@@ -35,7 +35,7 @@ class ShippingController extends Controller
             required: ['rate_id'],
             properties: [
                 new OA\Property(property: 'rate_id', type: 'string', example: 'rate_123456'),
-                new OA\Property(property: 'shipment_id', type: 'string', nullable: true, example: 'shp_123456', description: 'Optional if order has easypost_shipment_id stored')
+                new OA\Property(property: 'shipment_id', type: 'string', nullable: true, example: 'shp_123456', description: 'Optional if order has easypost_shipment_id stored'),
             ]
         )
     )]
@@ -55,10 +55,10 @@ class ShippingController extends Controller
                         new OA\Property(property: 'status', type: 'string', example: 'shipped'),
                         new OA\Property(property: 'easypost_shipment_id', type: 'string', example: 'shp_123456'),
                         new OA\Property(property: 'tracking_number', type: 'string', example: '9400110898825022567544'),
-                        new OA\Property(property: 'label_url', type: 'string', example: 'https://easypost-files.s3-us-west-2.amazonaws.com/files/postage_label/...')
+                        new OA\Property(property: 'label_url', type: 'string', example: 'https://easypost-files.s3-us-west-2.amazonaws.com/files/postage_label/...'),
                     ]
                 ),
-                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null)
+                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null),
             ]
         )
     )]
@@ -80,25 +80,25 @@ class ShippingController extends Controller
                             type: 'array',
                             items: new OA\Items(type: 'string'),
                             example: ['Order status must be processing or pending to ship.']
-                        )
+                        ),
                     ]
-                )
+                ),
             ]
         )
     )]
     public function createShipment(Request $request, int $orderId): JsonResponse
     {
         $request->validate([
-            'rate_id'     => ['required', 'string'],
+            'rate_id' => ['required', 'string'],
             'shipment_id' => ['nullable', 'string'],
         ]);
 
         $order = Order::findOrFail($orderId);
 
         // Check if order is eligible for shipping
-        if (!in_array($order->status, ['pending', 'processing'])) {
+        if (! in_array($order->status, ['pending', 'processing'])) {
             return $this->error('Order must be in pending or processing status to be shipped.', 422, [
-                'status' => ['Order status must be pending or processing.']
+                'status' => ['Order status must be pending or processing.'],
             ]);
         }
 
@@ -106,24 +106,24 @@ class ShippingController extends Controller
 
         try {
             // If shipment_id is not available, we dynamically create a shipment based on order shipping address
-            if (!$shipmentId) {
+            if (! $shipmentId) {
                 $shippingAddress = $order->shipping_address;
                 if (empty($shippingAddress)) {
                     return $this->error('Order does not have a shipping address.', 422, [
-                        'shipping_address' => ['Shipping address is empty.']
+                        'shipping_address' => ['Shipping address is empty.'],
                     ]);
                 }
 
                 // Format the shipping address to match EasyPost expectations
                 $toAddress = [
-                    'name'    => $shippingAddress['full_name'] ?? $shippingAddress['name'] ?? $order->user?->name ?? 'Customer',
+                    'name' => $shippingAddress['full_name'] ?? $shippingAddress['name'] ?? $order->user?->name ?? 'Customer',
                     'street1' => $shippingAddress['street'] ?? $shippingAddress['street1'] ?? '',
                     'street2' => $shippingAddress['apartment'] ?? $shippingAddress['street2'] ?? '',
-                    'city'    => $shippingAddress['city'] ?? '',
-                    'state'   => $shippingAddress['state'] ?? $shippingAddress['area'] ?? '',
-                    'zip'     => $shippingAddress['postal_code'] ?? $shippingAddress['zip'] ?? '',
+                    'city' => $shippingAddress['city'] ?? '',
+                    'state' => $shippingAddress['state'] ?? $shippingAddress['area'] ?? '',
+                    'zip' => $shippingAddress['postal_code'] ?? $shippingAddress['zip'] ?? '',
                     'country' => $shippingAddress['country'] ?? 'US',
-                    'phone'   => $shippingAddress['phone'] ?? $order->user?->phone ?? '',
+                    'phone' => $shippingAddress['phone'] ?? $order->user?->phone ?? '',
                 ];
 
                 $shipment = $this->easyPostService->getShippingRates($toAddress);
@@ -137,26 +137,27 @@ class ShippingController extends Controller
             $updatedOrder = DB::transaction(function () use ($order, $boughtShipment, $shipmentId) {
                 $order->update([
                     'easypost_shipment_id' => $shipmentId,
-                    'tracking_number'      => $boughtShipment->tracking_code,
-                    'label_url'            => $boughtShipment->postage_label->label_url,
-                    'status'               => 'shipped',
+                    'tracking_number' => $boughtShipment->tracking_code,
+                    'label_url' => $boughtShipment->postage_label->label_url,
+                    'status' => 'shipped',
                 ]);
 
                 return $order->refresh();
             });
 
             return $this->success([
-                'id'                   => $updatedOrder->id,
-                'status'               => $updatedOrder->status,
+                'id' => $updatedOrder->id,
+                'status' => $updatedOrder->status,
                 'easypost_shipment_id' => $updatedOrder->easypost_shipment_id,
-                'tracking_number'      => $updatedOrder->tracking_number,
-                'label_url'            => $updatedOrder->label_url,
+                'tracking_number' => $updatedOrder->tracking_number,
+                'label_url' => $updatedOrder->label_url,
             ], 'Order shipped successfully.');
 
         } catch (Exception $e) {
-            Log::error('Admin Shipping createShipment failed: ' . $e->getMessage());
-            return $this->error('Failed to ship order: ' . $e->getMessage(), 422, [
-                'shipping' => [$e->getMessage()]
+            Log::error('Admin Shipping createShipment failed: '.$e->getMessage());
+
+            return $this->error('Failed to ship order.', 422, [
+                'shipping' => ['Shipping provider request failed.'],
             ]);
         }
     }
@@ -195,13 +196,13 @@ class ShippingController extends Controller
                                     new OA\Property(property: 'status', type: 'string', example: 'unknown'),
                                     new OA\Property(property: 'datetime', type: 'string', example: '2026-06-01T12:00:00Z'),
                                     new OA\Property(property: 'city', type: 'string', example: 'San Francisco'),
-                                    new OA\Property(property: 'state', type: 'string', example: 'CA')
+                                    new OA\Property(property: 'state', type: 'string', example: 'CA'),
                                 ]
                             )
-                        )
+                        ),
                     ]
                 ),
-                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null)
+                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null),
             ]
         )
     )]
@@ -209,46 +210,20 @@ class ShippingController extends Controller
     {
         $order = Order::findOrFail($orderId);
 
-        if (!$order->tracking_number) {
+        if (! $order->tracking_number) {
             return $this->error('Order has not been shipped yet or does not have a tracking number.', 422, [
-                'tracking' => ['No tracking number associated with this order.']
+                'tracking' => ['No tracking number associated with this order.'],
             ]);
         }
 
         try {
-            // In EasyPost, we retrieve tracker by its ID or we can query status
-            // The easypost_shipment_id has trackers, or we can use EasyPostService tracker retrieve
-            // Typically tracker is retrieved using order's tracking_number or a tracker ID.
-            // EasyPost allows retrieving a tracker using its tracker ID. If we don't store tracker ID,
-            // we can retrieve the shipment first and access $shipment->tracker->id, or retrieve tracker directly by tracking number!
-            // Wait, does tracker retrieve accept tracking number? Let's check how EasyPost retrieves trackers.
-            // Actually, you can create a tracker with tracking_number and carrier, or retrieve by tracker ID.
-            // Let's retrieve the shipment from EasyPost if easypost_shipment_id is set, then get its tracker info.
-            // This is extremely reliable!
-            if ($order->easypost_shipment_id) {
-                // If we have shipment ID, let's retrieve shipment to get its tracker
-                $shipment = $this->easyPostService->getShippingRates([], []); // wait, retrieve shipment is needed
-                // Let's add a helper to retrieve shipment in EasyPostService if needed, or retrieve the tracker directly.
-                // In EasyPost, a tracker can be created/retrieved by tracking number. If it already exists, EasyPost returns it!
-                // Let's check if we can retrieve tracker directly or create/retrieve it.
-                // Creating a tracker for an existing tracking number is the standard way to retrieve/register a tracker in EasyPost:
-                // $tracker = $client->tracker->create(['tracking_code' => $trackingCode, 'carrier' => $carrier]);
-                // This is extremely standard and always works!
-            }
-
-            // Since we might not have carrier name, retrieving shipment is the safest way to get tracker.
-            // Let's modify EasyPostService to add retrieveShipment method, OR just fetch shipment and retrieve tracker!
-            // Wait, let's use the shipment ID to retrieve the shipment from EasyPost. Let's add retrieveShipment to EasyPostService.
-            // Let's look at EasyPostService:
-            // $this->client->shipment->retrieve($shipmentId)
-            // Let's retrieve the shipment first, which contains the tracker!
             $shipment = $this->easyPostService->retrieveShipment($order->easypost_shipment_id);
 
             $tracker = $shipment->tracker;
 
-            if (!$tracker) {
+            if (! $tracker) {
                 return $this->error('No tracking details available yet for this shipment.', 422, [
-                    'tracking' => ['Tracker has not been generated by carrier yet.']
+                    'tracking' => ['Tracker has not been generated by carrier yet.'],
                 ]);
             }
 
@@ -256,28 +231,29 @@ class ShippingController extends Controller
             if (isset($tracker->tracking_details)) {
                 foreach ($tracker->tracking_details as $detail) {
                     $trackingDetails[] = [
-                        'message'  => $detail->message,
-                        'status'   => $detail->status,
+                        'message' => $detail->message,
+                        'status' => $detail->status,
                         'datetime' => $detail->datetime,
-                        'city'     => $detail->tracking_location->city ?? null,
-                        'state'    => $detail->tracking_location->state ?? null,
+                        'city' => $detail->tracking_location->city ?? null,
+                        'state' => $detail->tracking_location->state ?? null,
                     ];
                 }
             }
 
             return $this->success([
-                'tracking_code'    => $tracker->tracking_code,
-                'status'           => $tracker->status,
-                'status_detail'    => $tracker->status_detail ?? null,
-                'weight'           => $tracker->weight ?? null,
+                'tracking_code' => $tracker->tracking_code,
+                'status' => $tracker->status,
+                'status_detail' => $tracker->status_detail ?? null,
+                'weight' => $tracker->weight ?? null,
                 'est_delivery_date' => $tracker->est_delivery_date ?? null,
                 'tracking_details' => $trackingDetails,
             ], 'Tracking info retrieved.');
 
         } catch (Exception $e) {
-            Log::error('Admin Shipping getTracking failed: ' . $e->getMessage());
-            return $this->error('Failed to retrieve tracking info: ' . $e->getMessage(), 422, [
-                'tracking' => [$e->getMessage()]
+            Log::error('Admin Shipping getTracking failed: '.$e->getMessage());
+
+            return $this->error('Failed to retrieve tracking info.', 422, [
+                'tracking' => ['Tracking provider request failed.'],
             ]);
         }
     }
@@ -287,8 +263,8 @@ class ShippingController extends Controller
         return response()->json([
             'success' => true,
             'message' => $message,
-            'data'    => $data,
-            'errors'  => null,
+            'data' => $data,
+            'errors' => null,
         ], $status);
     }
 
@@ -297,8 +273,8 @@ class ShippingController extends Controller
         return response()->json([
             'success' => false,
             'message' => $message,
-            'data'    => null,
-            'errors'  => $errors,
+            'data' => null,
+            'errors' => $errors,
         ], $status);
     }
 }

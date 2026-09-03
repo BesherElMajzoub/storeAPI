@@ -1,41 +1,40 @@
 <?php
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\V1\Auth\AuthController;
-use App\Http\Controllers\Api\V1\CategoryController;
-use App\Http\Controllers\Api\V1\ProductController;
-use App\Http\Controllers\Api\V1\ReviewController;
-use App\Http\Controllers\Api\V1\OrderController;
-use App\Http\Controllers\Api\V1\CouponController;
+use App\Http\Controllers\Api\StripeWebhookController;
 use App\Http\Controllers\Api\V1\AddressController;
-use App\Http\Controllers\Api\V1\WishlistController;
-use App\Http\Controllers\Api\V1\ContactMessageController;
-use App\Http\Controllers\Api\V1\InspiredLeadController;
-// Admin Imports
-use App\Http\Controllers\Api\V1\Admin\DashboardController;
-use App\Http\Controllers\Api\V1\Admin\ProductController as AdminProductController;
+use App\Http\Controllers\Api\V1\Admin\AdminAnalyticsController;
+use App\Http\Controllers\Api\V1\Admin\CancellationRequestController;
 use App\Http\Controllers\Api\V1\Admin\CategoryController as AdminCategoryController;
+use App\Http\Controllers\Api\V1\Admin\ContactMessageController as AdminContactMessageController;
+use App\Http\Controllers\Api\V1\Admin\CouponController as AdminCouponController;
+use App\Http\Controllers\Api\V1\Admin\DashboardController;
+use App\Http\Controllers\Api\V1\Admin\GeoController;
+use App\Http\Controllers\Api\V1\Admin\InspiredLeadController as AdminInspiredLeadController;
+use App\Http\Controllers\Api\V1\Admin\MediaController;
+// Admin Imports
 use App\Http\Controllers\Api\V1\Admin\OrderController as AdminOrderController;
+use App\Http\Controllers\Api\V1\Admin\ProductController as AdminProductController;
+use App\Http\Controllers\Api\V1\Admin\ReviewController as AdminReviewController;
+use App\Http\Controllers\Api\V1\Admin\ShippingController as AdminShippingController;
+use App\Http\Controllers\Api\V1\Admin\SkuController;
+use App\Http\Controllers\Api\V1\Admin\TelescopeApiController;
 use App\Http\Controllers\Api\V1\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Api\V1\Admin\WishlistAnalyticsController;
-use App\Http\Controllers\Api\V1\Admin\ContactMessageController as AdminContactMessageController;
-use App\Http\Controllers\Api\V1\Admin\InspiredLeadController as AdminInspiredLeadController;
-use App\Http\Controllers\Api\V1\Admin\ReviewController as AdminReviewController;
-use App\Http\Controllers\Api\V1\Admin\TelescopeApiController;
-use App\Http\Controllers\Api\V1\Admin\CouponController as AdminCouponController;
-use App\Http\Controllers\Api\V1\Admin\MediaController;
-use App\Http\Controllers\Api\V1\Admin\GeoController;
-use App\Http\Controllers\Api\V1\Admin\CancellationRequestController;
-use App\Http\Controllers\Api\V1\Admin\SkuController;
-use App\Http\Controllers\Api\StripeWebhookController;
 use App\Http\Controllers\Api\V1\AnalyticsEventController;
-use App\Http\Controllers\Api\V1\Admin\AdminAnalyticsController;
-use App\Http\Controllers\Api\V1\ShippingController;
-use App\Http\Controllers\Api\V1\Admin\ShippingController as AdminShippingController;
+use App\Http\Controllers\Api\V1\Auth\AuthController;
+use App\Http\Controllers\Api\V1\CategoryController;
+use App\Http\Controllers\Api\V1\ContactMessageController;
+use App\Http\Controllers\Api\V1\CouponController;
 use App\Http\Controllers\Api\V1\EasyPostWebhookController;
+use App\Http\Controllers\Api\V1\InspiredLeadController;
+use App\Http\Controllers\Api\V1\OrderController;
+use App\Http\Controllers\Api\V1\ProductController;
+use App\Http\Controllers\Api\V1\ReviewController;
+use App\Http\Controllers\Api\V1\ShippingController;
+use App\Http\Controllers\Api\V1\WishlistController;
+use Illuminate\Support\Facades\Route;
 
-Route::prefix('v1')->group(function () {
+Route::prefix('v1')->middleware('throttle:api')->group(function () {
 
     // --- STRIPE WEBHOOK (no auth — verified by Stripe signature) ---
     Route::post('webhooks/stripe', [StripeWebhookController::class, 'handle']);
@@ -46,11 +45,11 @@ Route::prefix('v1')->group(function () {
         Route::post('register', [AuthController::class, 'register']);
         Route::post('login', [AuthController::class, 'login'])->middleware('throttle:login');
         Route::post('forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:forgot-password');
-        Route::post('reset-password', [AuthController::class, 'resetPassword']);
+        Route::post('reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:password-reset');
         Route::post('otp/send', [AuthController::class, 'sendOtp'])->middleware('throttle:otp');
         Route::post('otp/verify', [AuthController::class, 'verifyOtp'])->middleware('throttle:otp');
         Route::post('google', [AuthController::class, 'googleLogin'])->middleware('throttle:login');
-        
+
         Route::middleware('auth:sanctum')->group(function () {
             Route::get('me', [AuthController::class, 'me']);
             Route::put('me', [AuthController::class, 'updateProfile']);
@@ -115,7 +114,7 @@ Route::prefix('v1')->group(function () {
     });
 
     // --- ADMIN ---
-    Route::prefix('admin')->middleware(['auth:sanctum', 'can:admin-access'])->group(function () {
+    Route::prefix('admin')->middleware(['auth:sanctum', 'can:admin-access', 'audit.admin'])->group(function () {
         Route::get('dashboard', [DashboardController::class, 'index']);
         Route::get('analytics/dashboard', [AdminAnalyticsController::class, 'dashboard']);
 
@@ -123,7 +122,11 @@ Route::prefix('v1')->group(function () {
         Route::get('geo/me', [GeoController::class, 'me']);
 
         // Products
+        Route::post('products/bulk', [AdminProductController::class, 'bulkUpdate']);
         Route::apiResource('products', AdminProductController::class);
+        Route::post('products/{product}/images', [MediaController::class, 'uploadProductImages']);
+        Route::post('products/{product}/images/reorder', [MediaController::class, 'reorderProductGallery']);
+        Route::delete('products/{product}/images/{media}', [MediaController::class, 'destroyProductImage']);
 
         // Categories
         Route::apiResource('categories', AdminCategoryController::class);
@@ -187,16 +190,16 @@ Route::prefix('v1')->group(function () {
         // متاح فقط إذا كان TELESCOPE_ENABLED=true
         if (config('telescope.enabled')) {
             Route::prefix('telescope')->group(function () {
-                Route::get('summary',       [TelescopeApiController::class, 'summary']);
-                Route::get('requests',      [TelescopeApiController::class, 'requests']);
-                Route::get('queries',       [TelescopeApiController::class, 'queries']);
-                Route::get('exceptions',    [TelescopeApiController::class, 'exceptions']);
-                Route::get('jobs',          [TelescopeApiController::class, 'jobs']);
-                Route::get('logs',          [TelescopeApiController::class, 'logs']);
-                Route::get('events',        [TelescopeApiController::class, 'events']);
-                Route::get('mail',          [TelescopeApiController::class, 'mail']);
+                Route::get('summary', [TelescopeApiController::class, 'summary']);
+                Route::get('requests', [TelescopeApiController::class, 'requests']);
+                Route::get('queries', [TelescopeApiController::class, 'queries']);
+                Route::get('exceptions', [TelescopeApiController::class, 'exceptions']);
+                Route::get('jobs', [TelescopeApiController::class, 'jobs']);
+                Route::get('logs', [TelescopeApiController::class, 'logs']);
+                Route::get('events', [TelescopeApiController::class, 'events']);
+                Route::get('mail', [TelescopeApiController::class, 'mail']);
                 Route::get('notifications', [TelescopeApiController::class, 'notifications']);
-                Route::get('cache',         [TelescopeApiController::class, 'cache']);
+                Route::get('cache', [TelescopeApiController::class, 'cache']);
             });
         }
     });

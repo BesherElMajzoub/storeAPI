@@ -17,13 +17,14 @@ class CategoryCardResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id'    => $this->id,
-            'name'  => $this->name,
-            'slug'  => $this->slug,
+            'id' => $this->id,
+            'name' => $this->name,
+            'slug' => $this->slug,
             'image' => $this->buildImageBlock(
                 $this->getFirstMedia('category_image'),
                 ['category_thumb', 'category_card']
             ),
+            'children' => CategoryCardResource::collection($this->whenLoaded('children')),
         ];
     }
 }

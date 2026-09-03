@@ -3,7 +3,10 @@
 namespace App\Services;
 
 use EasyPost\EasyPostClient;
+use EasyPost\Event;
 use EasyPost\Exception\Api\ApiException;
+use EasyPost\Shipment;
+use EasyPost\Tracker;
 use Exception;
 use Illuminate\Support\Facades\Log;
 
@@ -24,41 +27,39 @@ class EasyPostService
     /**
      * Verify a shipping address using EasyPost Address Verification API.
      *
-     * @param array $address
-     * @return array
      * @throws Exception
      */
     public function verifyAddress(array $address): array
     {
-        if (!$this->client) {
+        if (! $this->client) {
             throw new Exception('EasyPost client is not configured.');
         }
 
         try {
             $addressParams = [
-                'name'    => $address['name'] ?? null,
+                'name' => $address['name'] ?? null,
                 'street1' => $address['street1'] ?? null,
                 'street2' => $address['street2'] ?? null,
-                'city'    => $address['city'] ?? null,
-                'state'   => $address['state'] ?? null,
-                'zip'     => $address['zip'] ?? null,
+                'city' => $address['city'] ?? null,
+                'state' => $address['state'] ?? null,
+                'zip' => $address['zip'] ?? null,
                 'country' => $address['country'] ?? null,
-                'phone'   => $address['phone'] ?? null,
-                'verify'  => [true],
+                'phone' => $address['phone'] ?? null,
+                'verify' => [true],
             ];
 
             $createdAddress = $this->client->address->create($addressParams);
 
             if (isset($createdAddress->verifications->delivery->success) && $createdAddress->verifications->delivery->success) {
                 return [
-                    'name'    => $createdAddress->name,
+                    'name' => $createdAddress->name,
                     'street1' => $createdAddress->street1,
                     'street2' => $createdAddress->street2,
-                    'city'    => $createdAddress->city,
-                    'state'   => $createdAddress->state,
-                    'zip'     => $createdAddress->zip,
+                    'city' => $createdAddress->city,
+                    'state' => $createdAddress->state,
+                    'zip' => $createdAddress->zip,
                     'country' => $createdAddress->country,
-                    'phone'   => $createdAddress->phone,
+                    'phone' => $createdAddress->phone,
                 ];
             }
 
@@ -72,24 +73,22 @@ class EasyPostService
 
             $errorMessage = count($errors) > 0 ? implode('; ', $errors) : 'Address verification failed.';
             throw new Exception($errorMessage);
-
         } catch (ApiException $e) {
-            Log::error('EasyPost Address Verification API error: ' . $e->getMessage());
-            throw new Exception('EasyPost Address Verification failed: ' . $e->getMessage());
+            Log::error('EasyPost Address Verification API error: '.$e->getMessage());
+            throw new Exception('EasyPost Address Verification failed: '.$e->getMessage());
         }
     }
 
     /**
      * Create an EasyPost Shipment and get available rates.
      *
-     * @param array $toAddress
-     * @param array $parcel
-     * @return \EasyPost\Shipment
+     * @return Shipment
+     *
      * @throws Exception
      */
     public function getShippingRates(array $toAddress, array $parcel = [])
     {
-        if (!$this->client) {
+        if (! $this->client) {
             throw new Exception('EasyPost client is not configured.');
         }
 
@@ -101,135 +100,133 @@ class EasyPostService
                 $parcel = [
                     'weight' => 16.0, // 16 oz = 1 lb
                     'length' => 10.0,
-                    'width'  => 8.0,
+                    'width' => 8.0,
                     'height' => 4.0,
                 ];
             }
 
             $shipment = $this->client->shipment->create([
-                'to_address'   => [
-                    'name'    => $toAddress['name'] ?? null,
+                'to_address' => [
+                    'name' => $toAddress['name'] ?? null,
                     'street1' => $toAddress['street1'] ?? null,
                     'street2' => $toAddress['street2'] ?? null,
-                    'city'    => $toAddress['city'] ?? null,
-                    'state'   => $toAddress['state'] ?? null,
-                    'zip'     => $toAddress['zip'] ?? null,
+                    'city' => $toAddress['city'] ?? null,
+                    'state' => $toAddress['state'] ?? null,
+                    'zip' => $toAddress['zip'] ?? null,
                     'country' => $toAddress['country'] ?? null,
-                    'phone'   => $toAddress['phone'] ?? null,
+                    'phone' => $toAddress['phone'] ?? null,
                 ],
                 'from_address' => $fromAddress,
-                'parcel'       => $parcel,
+                'parcel' => $parcel,
             ]);
 
             return $shipment;
 
         } catch (ApiException $e) {
-            Log::error('EasyPost Shipping Rates API error: ' . $e->getMessage());
-            throw new Exception('Failed to get shipping rates: ' . $e->getMessage());
+            Log::error('EasyPost Shipping Rates API error: '.$e->getMessage());
+            throw new Exception('Failed to get shipping rates: '.$e->getMessage());
         }
     }
 
     /**
      * Buy a postage label for a shipment.
      *
-     * @param string $shipmentId
-     * @param string $rateId
-     * @return \EasyPost\Shipment
+     * @return Shipment
+     *
      * @throws Exception
      */
     public function purchaseLabel(string $shipmentId, string $rateId)
     {
-        if (!$this->client) {
+        if (! $this->client) {
             throw new Exception('EasyPost client is not configured.');
         }
 
         try {
             // Purchase the shipment using the selected rate ID
             $shipment = $this->client->shipment->buy($shipmentId, ['rate' => ['id' => $rateId]]);
+
             return $shipment;
         } catch (ApiException $e) {
-            Log::error('EasyPost Shipment Purchase API error: ' . $e->getMessage());
-            throw new Exception('Failed to purchase shipping label: ' . $e->getMessage());
+            Log::error('EasyPost Shipment Purchase API error: '.$e->getMessage());
+            throw new Exception('Failed to purchase shipping label: '.$e->getMessage());
         }
     }
 
     /**
      * Retrieve a shipment by its ID.
      *
-     * @param string $shipmentId
-     * @return \EasyPost\Shipment
+     * @return Shipment
+     *
      * @throws Exception
      */
     public function retrieveShipment(string $shipmentId)
     {
-        if (!$this->client) {
+        if (! $this->client) {
             throw new Exception('EasyPost client is not configured.');
         }
 
         try {
             return $this->client->shipment->retrieve($shipmentId);
         } catch (ApiException $e) {
-            Log::error('EasyPost Shipment Retrieve API error: ' . $e->getMessage());
-            throw new Exception('Failed to retrieve shipment: ' . $e->getMessage());
+            Log::error('EasyPost Shipment Retrieve API error: '.$e->getMessage());
+            throw new Exception('Failed to retrieve shipment: '.$e->getMessage());
         }
     }
 
     /**
      * Retrieve tracking status for a tracker/shipment.
      *
-     * @param string $trackerId
-     * @return \EasyPost\Tracker
+     * @return Tracker
+     *
      * @throws Exception
      */
     public function getTrackingStatus(string $trackerId)
     {
-        if (!$this->client) {
+        if (! $this->client) {
             throw new Exception('EasyPost client is not configured.');
         }
 
         try {
             $tracker = $this->client->tracker->retrieve($trackerId);
+
             return $tracker;
         } catch (ApiException $e) {
-            Log::error('EasyPost Tracker Retrieve error: ' . $e->getMessage());
-            throw new Exception('Failed to retrieve tracking info: ' . $e->getMessage());
+            Log::error('EasyPost Tracker Retrieve error: '.$e->getMessage());
+            throw new Exception('Failed to retrieve tracking info: '.$e->getMessage());
         }
     }
 
     /**
      * Validate an EasyPost webhook signature and return the parsed Event.
      *
-     * @param string $payload Raw request body
-     * @param array $headers Request headers
-     * @return \EasyPost\Event
+     * @param  string  $payload  Raw request body
+     * @param  array  $headers  Request headers
+     * @return Event
+     *
      * @throws Exception
      */
     public function validateWebhook(string $payload, array $headers)
     {
-        if (!$this->client) {
+        if (! $this->client) {
             throw new Exception('EasyPost client is not configured.');
         }
 
         $secret = config('services.easypost.webhook_secret');
         if (empty($secret)) {
-            Log::warning('EasyPost Webhook Secret is not set. Skipping signature verification (ONLY FOR DEV!).');
-            // If secret is not set, decode payload directly for testing
-            $data = json_decode($payload);
-            if (!$data) {
-                throw new Exception('Invalid JSON payload.');
-            }
-            return $data;
+            Log::critical('EasyPost webhook secret is not configured.');
+            throw new Exception('EasyPost webhook is not configured.');
         }
 
         try {
             // Flat map headers to ensure easy resolution
-            $flatHeaders = collect($headers)->map(fn($item) => is_array($item) ? reset($item) : $item)->toArray();
-            
+            $flatHeaders = collect($headers)->map(fn ($item) => is_array($item) ? reset($item) : $item)->toArray();
+
             $event = $this->client->webhook->validateWebhook($payload, $flatHeaders, $secret);
+
             return $event;
         } catch (Exception $e) {
-            Log::error('EasyPost Webhook Signature Validation error: ' . $e->getMessage());
-            throw new Exception('Invalid EasyPost webhook signature: ' . $e->getMessage());
+            Log::error('EasyPost Webhook Signature Validation error: '.$e->getMessage());
+            throw new Exception('Invalid EasyPost webhook signature.');
         }
     }
 }

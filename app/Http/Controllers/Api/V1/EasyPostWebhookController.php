@@ -37,6 +37,15 @@ class EasyPostWebhookController extends Controller
     )]
     public function handle(Request $request): JsonResponse
     {
+        if (! config('services.easypost.webhook_secret')) {
+            Log::critical('EasyPost webhook secret is not configured.');
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Webhook is not configured.',
+            ], 503);
+        }
+
         $payload = $request->getContent();
         $headers = $request->headers->all();
 
@@ -84,10 +93,11 @@ class EasyPostWebhookController extends Controller
             return response()->json(['success' => true, 'message' => 'Event processed successfully.']);
 
         } catch (Exception $e) {
-            Log::error('EasyPost Webhook processing error: ' . $e->getMessage());
+            Log::error('EasyPost Webhook processing error: '.$e->getMessage());
+
             return response()->json([
                 'success' => false,
-                'message' => 'Webhook validation failed: ' . $e->getMessage()
+                'message' => 'Webhook validation failed.',
             ], 401);
         }
     }

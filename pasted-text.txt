@@ -1,0 +1,339 @@
+# Backend Production Readiness — Requirements & Verification Request
+
+**Project:** Otantik Queen e-commerce (`apis.otantikqueen.com`)
+**From:** Frontend team
+**Date:** 2026-07-11
+**Status:** Blocking item for client delivery
+
+---
+
+## Context
+
+The frontend (React SPA at `otantikqueen.com`) has completed its production
+readiness audit: dependency audit clean, security headers + full CSP deployed,
+client-side validation in place, 133 automated tests passing in CI. The
+remaining risk is concentrated in the API, which the frontend team cannot
+audit from its side.
+
+The frontend is a **UI layer only**. Its route guards, `isAdmin` checks, price
+display, coupon handling, and file-type checks are user-experience features —
+**none of them are security controls**. Every rule below must be enforced
+server-side as if the frontend did not exist, because an attacker talks to the
+API directly with curl/Postman, not through our React code.
+
+Please go through every section, implement what's missing, and return the
+checklist with each item marked **Confirmed / Fixed now / Not applicable
+(reason)**. Where a test is described, please actually run it — "the framework
+handles it" is not a confirmation.
+
+---
+
+## 1. Authentication & Session Security
+
+- [ ] **Token validation on every request** — signature, expiry, and revocation
+      checked on all protected routes (verify Sanctum/JWT middleware is applied
+      to every route group, including newly added ones).
+- [ ] **Token expiry & revocation** — access tokens expire in a reasonable
+      window; `POST /auth/logout` (and `all: true`) actually revokes tokens
+      server-side. Test: use a token after logout → must get 401.
+- [ ] **Protected routes return 401 without a valid token** — the SPA relies on
+      401 (not 200-with-empty-body, not 302 redirects) to end sessions.
+- [ ] **Password hashing** — bcrypt/argon2 with adequate cost. Never MD5/SHA.
+- [ ] **Server-side password policy** — minimum 8 chars including at least one
+      letter and one digit (frontend now enforces this; API must match or be
+      stricter, or the rule is decorative).
+- [ ] **Rate limiting / brute force** on `POST /auth/login`,
+      `POST /auth/otp/send`, `POST /auth/otp/verify`, `POST /auth/reset-password`
+      (per-IP and per-account). Test: 20 rapid wrong-password attempts → 429.
+- [ ] **OTP hardening** — codes are single-use, expire within minutes, and
+      verification attempts are limited (max ~5 tries per code). `otp/send` is
+      throttled to prevent SMS/email bombing.
+- [ ] **Password reset token** — single-use, short-lived, bound to the email it
+      was issued for. Test: use a reset token twice → second attempt fails.
+- [ ] **Google Sign-In** — the `id_token` is verified server-side against
+      Google's public keys **and** the `aud` claim is checked against our client
+      ID. Never trust the email field without signature verification.
+- [ ] **No user enumeration** — login, forgot-password, and OTP endpoints return
+      the same response/timing whether or not the email exists.
+
+## 2. Authorization (the most critical section)
+
+- [ ] **Every `/admin/*` endpoint checks the admin role server-side.** Test:
+      call each admin endpoint (products CRUD, categories CRUD, orders list/
+      update, coupons, reviews moderation, cancellation requests, messages,
+      dashboard stats) with a **regular customer token** → all must return
+      403/401. Please run this for the complete route list, not a sample.
+- [ ] **IDOR checks on every per-user resource.** Test with two customer
+      accounts A and B:
+      - `GET /orders/{id}` — A requests B's order → 403/404
+      - Order cancellation — A cancels B's order → rejected
+      - Wishlist, addresses, messages, profile — same test
+- [ ] **Verification gates enforced server-side** — if checkout requires a
+      verified account, `POST /orders` from an unverified account must fail
+      even when called directly.
+- [ ] **Role changes take effect immediately** — demoting/removing an admin
+      invalidates their ability to call admin endpoints with an existing token.
+
+## 3. Input Validation & Injection
+
+- [ ] **All queries parameterized** (Eloquent/query builder — no raw SQL string
+      concatenation anywhere; grep for `DB::raw`/`whereRaw` and audit each).
+- [ ] **Server-side validation on every write endpoint** — types, lengths,
+      formats, enum values — independent of frontend validation. Includes:
+      email format, phone format, quantity as positive integer, address field
+      lengths, review rating range (1–5), coupon code format.
+- [ ] **Search/filter/sort parameters are allowlisted** — `sort`, `filter`,
+      `category` params must not be interpolated into queries. Test:
+      `GET /products?sort=price;DROP--` and `sort[]=` array-type confusion.
+- [ ] **Pagination limits capped** — `per_page=100000` must be clamped.
+- [ ] **Stored XSS defense at write time** — product reviews, contact messages,
+      profile names, and address fields accept `<script>` etc. as inert text.
+      The API must return them JSON-encoded (never render user HTML anywhere,
+      including admin panels and transactional emails — email templates must
+      escape user input).
+- [ ] **Oversized payloads rejected** — request body size limit at the web
+      server and per-field max lengths in validators.
+- [ ] **Unicode/emoji safe** — DB is utf8mb4; names/reviews with emoji don't
+      truncate or error.
+
+## 4. Business Logic Integrity (e-commerce specific)
+
+- [ ] **Prices come only from the database.** `POST /orders` must ignore any
+      client-sent price/total fields. Test: submit an order with a tampered
+      total → server recalculates.
+- [ ] **Coupon rules enforced server-side** — validity window, usage limits
+      (global and per-user), minimum order value, single coupon per order.
+      Test: reuse an exhausted coupon code directly against the API.
+- [ ] **Stock enforced atomically at order time** — decrement inside a DB
+      transaction with row locking (`SELECT ... FOR UPDATE` / optimistic
+      version check). Test: two concurrent orders for the last unit → exactly
+      one succeeds. This is the inventory race condition test — please run it.
+- [ ] **Quantity bounds** — negative, zero, and absurd quantities rejected.
+- [ ] **Order state machine enforced** — cancellation only from cancellable
+      states; customers cannot transition orders to `shipped`/`refunded` etc.
+      Only admins can perform admin transitions.
+- [ ] **Stripe webhooks verified** — `Stripe-Signature` checked with the
+      webhook secret; order is marked paid **only** by the verified webhook
+      (never by the client returning to a success URL). Handlers idempotent
+      (Stripe retries). Amount/currency in the webhook payload compared against
+      the order before marking paid.
+- [ ] **Checkout session amounts** are created server-side from DB prices.
+
+## 5. File Upload Security
+
+The frontend now restricts uploads to JPEG/PNG/WebP/GIF/AVIF, max 5 MB, max 8
+images — but this is trivially bypassed, so the API must enforce:
+
+- [ ] **MIME sniffing of actual file content** (magic bytes), not just the
+      `Content-Type` header or extension.
+- [ ] **Extension allowlist** — reject `.php`, `.phtml`, `.phar`, `.svg`,
+      double extensions (`shirt.php.jpg`), and null-byte tricks.
+- [ ] **Server-side size and count limits** (5 MB / 8 images or stricter).
+- [ ] **Filenames regenerated** (random/UUID), never using the client filename
+      in the storage path (path traversal via `../../` names).
+- [ ] **Storage outside the webroot or with script execution disabled** for the
+      upload directory (e.g. `.htaccess`/nginx rule: no PHP execution there).
+- [ ] **Images re-encoded/resized on the server** (this also strips EXIF and
+      kills polyglot files) — recommended, and it produces the
+      thumb/card/detail/zoom variants the frontend already consumes.
+- [ ] Test: upload a PHP file renamed to `.jpg` with valid JPEG magic bytes
+      stripped/added — confirm it is either rejected or stored somewhere it can
+      never execute, and is re-encoded.
+
+## 6. API Hygiene
+
+- [ ] **CORS** — `Access-Control-Allow-Origin` restricted to
+      `https://otantikqueen.com` (+ staging origin if needed). Never `*` with
+      credentials.
+- [ ] **Debug mode off** (`APP_DEBUG=false`) — error responses contain no stack
+      traces, SQL, or file paths. Test: trigger a 500 and inspect the body.
+- [ ] **Consistent error contract** — validation errors as
+      `{ message, errors: { field: [...] } }` with 422 (the frontend parses
+      this shape); 401 for unauthenticated; 403 for forbidden.
+- [ ] **No sensitive data in responses** — user objects never include password
+      hashes, OTP codes, or internal flags; order objects never leak other
+      users' data through eager-loaded relations.
+- [ ] **Security headers on API responses** — `X-Content-Type-Options:
+      nosniff`, HSTS on the `apis.` subdomain, JSON content type enforced.
+- [ ] **Unused/legacy endpoints removed or disabled** before go-live; no test
+      routes (`/test`, `/debug`, phpinfo) reachable.
+- [ ] **Global rate limiting** on the API (per-IP baseline) beyond the auth
+      endpoints.
+- [ ] **API versioning discipline** — `/api/v1` responses won't change shape
+      without a version bump (the frontend contract-locks against them).
+
+## 7. Database
+
+- [ ] **Indexes** on: products (`slug`, `category_id`, `status`), orders
+      (`user_id`, `status`, `created_at`), order_items (`order_id`,
+      `product_id`), coupons (`code` unique), reviews (`product_id`,
+      `user_id`), users (`email` unique). Run `EXPLAIN` on the shop listing,
+      search, and admin order list queries.
+- [ ] **Foreign keys with explicit `ON DELETE` behavior** — deleting a product
+      must not orphan or cascade-delete order history (order items should
+      snapshot name/price at purchase time).
+- [ ] **Transactions** around multi-table writes (order + items + stock +
+      coupon usage).
+- [ ] **N+1 audit** — orders list with items, products with images/variants,
+      reviews with users: verify eager loading (`with(...)`), check query count
+      per request (Telescope/Debugbar in staging).
+- [ ] **Automated backups** — daily at minimum, stored off-server, **and a
+      documented restore test actually performed once**. An untested backup is
+      not a backup.
+
+## 8. Operations & Deployment
+
+- [ ] **Secrets** — `.env` outside the webroot and never in git; Stripe secret
+      key, DB credentials, and mail credentials not exposed. Rotate anything
+      that was ever committed.
+- [ ] **HTTPS enforced** on `apis.` with a valid cert and HTTP→HTTPS redirect.
+- [ ] **Logging** — auth failures, admin actions, order/payment events logged
+      with timestamps and IPs (no passwords/tokens/card data in logs); logs
+      rotated.
+- [ ] **Monitoring/alerting** — error rate and uptime monitoring on the API
+      (even a simple uptime check + Sentry/Flare-tier error reporting).
+- [ ] **Queue/cron health** — email sending, OTP delivery, and webhook retries
+      have a supervised worker (a dead queue silently breaks registration).
+- [ ] **Remove all test/demo accounts** before go-live — including
+      `admin@store.com` / `password123`, which was shared during testing and
+      must be deleted or given a strong unique password + new email. Please
+      confirm explicitly.
+- [ ] **Timezone/currency consistency** — all money stored in one currency
+      (USD) with decimal columns (never floats); timestamps in UTC.
+
+## 9. Payments & Shipping (in progress — required before delivery)
+
+- [ ] Stripe live keys configured only in production env; test keys never in
+      prod.
+- [ ] Full happy path in test mode: checkout → webhook → order paid → email.
+- [ ] Failure paths: cancelled payment, expired session, webhook replay,
+      partial refund — each leaves the order in a correct state.
+- [ ] Refund flow: who can trigger it, stock restocking policy, customer
+      notification.
+- [ ] Shipping: rates/tracking integration (EasyPost or otherwise) validated
+      against real addresses (US + international), and the tracking number
+      surfaces on `GET /orders/{id}` for the frontend to display.
+
+---
+
+## 10. Admin Product Management — API Questions & Requests
+
+Updated 2026-07-19 after the backend's API reference and Swagger spec answered
+part of the original list (this pass folded in Q3 and Q6, narrowed Q1, and
+resolved the Q4 `meta_title` question). Split into three parts: what was
+answered (frontend is adapting — no backend action unless noted), what is still
+unanswered, and the concrete backend work requests in priority order.
+
+### 10.1 Answered — frontend is adapting
+
+- [x] **A3** `GET /admin/products` supports only `per_page` → this upgrades
+      **R1 (list filters)** below from a question to a confirmed requirement.
+- [x] **A5** Product `status` enum = `draft | published | archived` → the
+      free-text status input is being replaced with a select. **Please
+      confirm the `in:draft,published,archived` validation rule is actually
+      enforced server-side on create AND update** (see R4).
+- [x] **A6** No per-image endpoints exist; `images[]` on product update
+      **replaces the entire gallery** (omitting it keeps existing images) →
+      frontend ships an explicit replace-all flow as an interim. **R2
+      (per-image CRUD)** below remains requested because replace-all is
+      destructive and forces re-uploading every photo the admin wants to keep.
+- [x] **A7** Product/category updates must be sent as `POST` +
+      `_method=PATCH` (multipart form-data); the raw `PATCH` verb is rejected
+      → frontend is converting its admin update mutations to this transport.
+      See **Q6** for the open question about every OTHER `PATCH`/`PUT` route.
+- [x] **A2** Category create accepts only
+      `name / slug / parent_id / is_active / description / image` → see
+      **Q4** for the remaining field the admin UI still shows.
+- [x] **Q3** Category **update** does NOT accept `sort_order` (it silently
+      no-ops). The dedicated `POST /admin/categories/reorder` route takes
+      `{ "categories": [ { "id", "parent_id", "sort_order" } ] }`. → The admin
+      now reorders via that route; the per-category `sort_order` write was
+      removed, and the dead `Sort Order` and `Meta Title` inputs were dropped
+      from the category form.
+- [x] **Q6** Verb spoofing (`POST` + `_method`) is scoped to the two multipart
+      resources (product/category update). `PATCH /admin/contact-messages/{id}/status`,
+      `PUT /admin/coupons/{id}`, `PATCH /admin/coupons/{id}/toggle-status`, and
+      the `PUT` profile update are literal JSON verbs per the spec and are left
+      unchanged. The earlier `PATCH /reviews/{id}` (customer) line was a mistake
+      — the frontend has no customer review-update call (only
+      `POST /products/{id}/reviews`). One residual verb check remains in 10.2.
+
+### 10.2 Still unanswered — please respond to each
+
+- [ ] **Q1 (was A1)** `POST /admin/products` — **partially answered.** The
+      Swagger spec lists `discount_price`, `in_stock`, `meta_title`,
+      `meta_description` as accepted request fields, but they are **absent from
+      the Product response schema**, so persistence is unconfirmed. The frontend
+      keeps sending them; please confirm they are actually stored and returned
+      (a silently ignored field is silent data loss for the admin).
+- [ ] **Q2 (was A4)** Product update `variants` semantics — matched by `id`?
+      created when `id` is absent? are omitted variants deleted or kept?
+      Variant editing stays read-only in the admin until this is documented.
+- [ ] **Q4** Category `meta_title` appears **nowhere** in the create/update/
+      response schema → confirmed dead and **removed from the admin UI**.
+      `meta_description` is contradictory (absent from the request fields but
+      present in the response schema) — the frontend keeps sending it; please
+      confirm whether it is persisted, or we remove it too.
+- [ ] **Q5 (was A8)** Are category siblings ordered by `sort_order` in both
+      the admin and the public `GET` categories responses? The storefront
+      must respect the order the admin sets. (This is the only part of the old
+      Q3/R5 ordering question still open — the reorder route body is now
+      documented and adopted.)
+- [ ] **Q6-b (residual verb check)** `PATCH /admin/reviews/{id}/moderate`
+      (JSON) was not in the originally checked verb list — confirm it accepts
+      the literal `PATCH` verb. All other admin JSON verbs were confirmed
+      unaffected by the multipart spoofing (see Q6 in 10.1).
+
+### 10.3 Requested backend work (priority order)
+
+- [ ] **R1 — Product list filtering (Critical).** `GET /admin/products`
+      params: `search` (name/SKU/slug), `category_id`, `status`,
+      `is_featured`, `sort` (`created_desc` default / `price_asc` /
+      `price_desc` / `stock_asc` / `name_asc`) alongside the existing
+      `per_page` — same pattern `/admin/orders` already uses. Blocks the
+      admin catalog search UI and the dashboard low-stock deep link; without
+      it a 500-product catalog is paged 10 at a time.
+- [ ] **R2 — Per-image management (High).**
+      `POST /admin/products/{id}/images` (append, multipart `images[]`, same
+      validation as create), `DELETE /admin/products/{id}/images/{imageId}`,
+      and an ordering mechanism (`.../images/order` with `{ image_ids: [...] }`,
+      first = primary, or per-image `sort_order` + `is_primary`). Product
+      read responses must expose stable image `id`s. Supersedes the
+      destructive replace-all interim from A6.
+- [ ] **R3 — Variant update semantics (High).** Implement/document the diff
+      contract from Q2 — match-by-`id` update, create-without-`id`, explicit
+      delete flag — executed transactionally. Unblocks in-place variant
+      editing (today: adding a size to an existing product requires
+      recreating the product).
+- [ ] **R4 — Status enum validation (High, likely one line).** Enforce
+      `in:draft,published,archived` on product create and update so a bad
+      client can never write an off-enum status.
+- [ ] **R5 — Category ordering (Medium).** ~~Document the reorder route~~ —
+      **done**: the frontend now uses `POST /admin/categories/reorder`. Only the
+      remaining ask stands: guarantee sibling ordering by `sort_order` in GET
+      responses (Q5).
+- [ ] **R6 — Bulk product update (Medium).** `POST /admin/products/bulk`
+      (`_method` convention as applicable):
+      `{ ids: [...], set: { status?, is_featured?, in_stock?, category_id? } }`,
+      atomic, returning per-id results. Until then the frontend fans out
+      single-item requests — N round-trips and non-atomic.
+- [ ] **R7 — CSV import (Low / later).** `POST /admin/products/import` with a
+      dry-run/preview mode. Defer until catalog size justifies it.
+
+## Deliverable
+
+Please return:
+
+1. This checklist, each item marked **Confirmed / Fixed now / N/A (reason)**.
+2. The route list with its middleware (`php artisan route:list` or equivalent)
+   so we can cross-check guard coverage.
+3. Output/evidence for the four "please actually run it" tests: admin-endpoint
+   sweep with a customer token, IDOR order test, concurrent last-unit order
+   test, and the disguised-PHP upload test.
+4. Confirmation of backup restore test and test-account removal.
+
+Anything marked N/A or deferred should include a one-line risk statement so we
+can make the call explicitly rather than by omission.
+
+Thanks — once this comes back we can sign off the combined frontend + backend
+readiness report for the client.

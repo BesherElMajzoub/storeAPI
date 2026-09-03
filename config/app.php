@@ -41,6 +41,8 @@ return [
 
     'debug' => (bool) env('APP_DEBUG', false),
 
+    'max_request_bytes' => (int) env('MAX_REQUEST_BYTES', 45 * 1024 * 1024),
+
     /*
     |--------------------------------------------------------------------------
     | Application URL

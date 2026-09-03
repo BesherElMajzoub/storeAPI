@@ -6,28 +6,27 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\CategoryCardResource;
 use App\Http\Resources\CategoryDetailResource;
 use App\Models\Category;
-use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 
 class CategoryController extends Controller
 {
     #[OA\Get(
-        path: "/api/v1/categories",
-        summary: "List Categories",
-        description: "Get a list of active top-level categories, including their children",
-        tags: ["Categories"]
+        path: '/api/v1/categories',
+        summary: 'List Categories',
+        description: 'Get a list of active top-level categories, including their children',
+        tags: ['Categories']
     )]
     #[OA\Response(
         response: 200,
-        description: "Successful response",
+        description: 'Successful response',
         content: new OA\JsonContent(
-            type: "object",
+            type: 'object',
             properties: [
                 new OA\Property(
-                    property: "data",
-                    type: "array",
-                    items: new OA\Items(ref: "#/components/schemas/Category")
-                )
+                    property: 'data',
+                    type: 'array',
+                    items: new OA\Items(ref: '#/components/schemas/Category')
+                ),
             ]
         )
     )]
@@ -35,7 +34,7 @@ class CategoryController extends Controller
     {
         $categories = Category::where('is_active', true)
             ->whereNull('parent_id')
-            ->with(['media'])
+            ->with(['media', 'children.media', 'children.children.media'])
             ->orderBy('sort_order')
             ->get();
 
@@ -43,29 +42,29 @@ class CategoryController extends Controller
     }
 
     #[OA\Get(
-        path: "/api/v1/categories/{slug}",
-        summary: "Get Category",
-        description: "Get a single category by slug",
-        tags: ["Categories"]
+        path: '/api/v1/categories/{slug}',
+        summary: 'Get Category',
+        description: 'Get a single category by slug',
+        tags: ['Categories']
     )]
     #[OA\Parameter(
-        name: "slug",
-        in: "path",
+        name: 'slug',
+        in: 'path',
         required: true,
-        schema: new OA\Schema(type: "string"),
-        description: "The slug of the category"
+        schema: new OA\Schema(type: 'string'),
+        description: 'The slug of the category'
     )]
     #[OA\Response(
         response: 200,
-        description: "Successful response",
+        description: 'Successful response',
         content: new OA\JsonContent(
-            type: "object",
+            type: 'object',
             properties: [
-                new OA\Property(property: "data", ref: "#/components/schemas/Category")
+                new OA\Property(property: 'data', ref: '#/components/schemas/Category'),
             ]
         )
     )]
-    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
+    #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
     public function show($slug)
     {
         $category = Category::where('slug', $slug)

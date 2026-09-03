@@ -15,50 +15,50 @@ use OpenApi\Attributes as OA;
 class OrderController extends Controller
 {
     #[OA\Get(
-        path: "/api/v1/admin/orders",
-        summary: "Admin List Orders",
-        description: "List all orders with filtering",
-        security: [["bearerAuth" => []]],
-        tags: ["Admin Orders"]
+        path: '/api/v1/admin/orders',
+        summary: 'Admin List Orders',
+        description: 'List all orders with filtering',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Orders']
     )]
-    #[OA\Parameter(name: "per_page", in: "query", schema: new OA\Schema(type: "integer", default: 20))]
-    #[OA\Parameter(name: "status", in: "query", schema: new OA\Schema(type: "string"))]
-    #[OA\Parameter(name: "payment_status", in: "query", schema: new OA\Schema(type: "string"))]
-    #[OA\Parameter(name: "user_id", in: "query", schema: new OA\Schema(type: "integer"))]
-    #[OA\Parameter(name: "search", in: "query", schema: new OA\Schema(type: "string"))]
-    #[OA\Parameter(name: "date_from", in: "query", schema: new OA\Schema(type: "string", format: "date"))]
-    #[OA\Parameter(name: "date_to", in: "query", schema: new OA\Schema(type: "string", format: "date"))]
+    #[OA\Parameter(name: 'per_page', in: 'query', schema: new OA\Schema(type: 'integer', default: 20))]
+    #[OA\Parameter(name: 'status', in: 'query', schema: new OA\Schema(type: 'string'))]
+    #[OA\Parameter(name: 'payment_status', in: 'query', schema: new OA\Schema(type: 'string'))]
+    #[OA\Parameter(name: 'user_id', in: 'query', schema: new OA\Schema(type: 'integer'))]
+    #[OA\Parameter(name: 'search', in: 'query', schema: new OA\Schema(type: 'string'))]
+    #[OA\Parameter(name: 'date_from', in: 'query', schema: new OA\Schema(type: 'string', format: 'date'))]
+    #[OA\Parameter(name: 'date_to', in: 'query', schema: new OA\Schema(type: 'string', format: 'date'))]
     #[OA\Response(
         response: 200,
-        description: "Orders fetched",
+        description: 'Orders fetched',
         content: new OA\JsonContent(
-            type: "object",
+            type: 'object',
             properties: [
                 new OA\Property(
-                    property: "data",
-                    type: "object",
+                    property: 'data',
+                    type: 'object',
                     properties: [
                         new OA\Property(
-                            property: "data",
-                            type: "array",
-                            items: new OA\Items(ref: "#/components/schemas/Order")
-                        )
+                            property: 'data',
+                            type: 'array',
+                            items: new OA\Items(ref: '#/components/schemas/Order')
+                        ),
                     ]
-                )
+                ),
             ]
         )
     )]
-    #[OA\Response(response: 401, ref: "#/components/responses/UnauthorizedResponse")]
+    #[OA\Response(response: 401, ref: '#/components/responses/UnauthorizedResponse')]
     public function index(Request $request)
     {
         $perPage = min(max((int) $request->get('per_page', 20), 1), 100);
 
         $orders = Order::query()
-            ->with('user')
-            ->when($request->filled('status'), fn($q) => $q->status($request->input('status')))
-            ->when($request->filled('payment_status'), fn($q) => $q->paymentStatus($request->input('payment_status')))
-            ->when($request->filled('user_id'), fn($q) => $q->where('user_id', (int) $request->input('user_id')))
-            ->when($request->filled('search'), fn($q) => $q->search($request->input('search')))
+            ->with(['user', 'items.product.media', 'items.variant', 'payment'])
+            ->when($request->filled('status'), fn ($q) => $q->status($request->input('status')))
+            ->when($request->filled('payment_status'), fn ($q) => $q->paymentStatus($request->input('payment_status')))
+            ->when($request->filled('user_id'), fn ($q) => $q->where('user_id', (int) $request->input('user_id')))
+            ->when($request->filled('search'), fn ($q) => $q->search($request->input('search')))
             ->dateRange($request->input('date_from'), $request->input('date_to'))
             ->latest()
             ->paginate($perPage);
@@ -67,24 +67,24 @@ class OrderController extends Controller
     }
 
     #[OA\Get(
-        path: "/api/v1/admin/orders/{id}",
-        summary: "Admin Show Order",
-        description: "Show details of a specific order",
-        security: [["bearerAuth" => []]],
-        tags: ["Admin Orders"]
+        path: '/api/v1/admin/orders/{id}',
+        summary: 'Admin Show Order',
+        description: 'Show details of a specific order',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Orders']
     )]
-    #[OA\Parameter(name: "id", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
+    #[OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))]
     #[OA\Response(
         response: 200,
-        description: "Order fetched",
+        description: 'Order fetched',
         content: new OA\JsonContent(
-            type: "object",
+            type: 'object',
             properties: [
-                new OA\Property(property: "data", ref: "#/components/schemas/Order")
+                new OA\Property(property: 'data', ref: '#/components/schemas/Order'),
             ]
         )
     )]
-    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
+    #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
     public function show($id)
     {
         $order = Order::with(['items', 'user', 'payment'])->findOrFail($id);
@@ -93,34 +93,34 @@ class OrderController extends Controller
     }
 
     #[OA\Post(
-        path: "/api/v1/admin/orders/{id}/status",
-        summary: "Admin Update Order Status",
-        description: "Transition order status or payment status",
-        security: [["bearerAuth" => []]],
-        tags: ["Admin Orders"]
+        path: '/api/v1/admin/orders/{id}/status',
+        summary: 'Admin Update Order Status',
+        description: 'Transition order status or payment status',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Orders']
     )]
-    #[OA\Parameter(name: "id", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
+    #[OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))]
     #[OA\RequestBody(
         required: true,
         content: new OA\JsonContent(
             properties: [
-                new OA\Property(property: "status", type: "string", description: "pending, processing, shipped, delivered, cancelled", nullable: true),
-                new OA\Property(property: "payment_status", type: "string", description: "unpaid, paid, failed, refunded", nullable: true)
+                new OA\Property(property: 'status', type: 'string', description: 'pending, processing, shipped, delivered, cancelled', nullable: true),
+                new OA\Property(property: 'payment_status', type: 'string', description: 'unpaid or failed. Paid/refunded are controlled by verified payment flows.', nullable: true),
             ]
         )
     )]
     #[OA\Response(
         response: 200,
-        description: "Order status updated",
+        description: 'Order status updated',
         content: new OA\JsonContent(
-            type: "object",
+            type: 'object',
             properties: [
-                new OA\Property(property: "data", ref: "#/components/schemas/Order")
+                new OA\Property(property: 'data', ref: '#/components/schemas/Order'),
             ]
         )
     )]
-    #[OA\Response(response: 409, description: "Status transition not allowed")]
-    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
+    #[OA\Response(response: 409, description: 'Status transition not allowed')]
+    #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
     public function updateStatus(UpdateOrderStatusRequest $request, $id)
     {
         $order = Order::findOrFail($id);
@@ -128,13 +128,13 @@ class OrderController extends Controller
 
         $errors = [];
         if (array_key_exists('status', $data)) {
-            if (!$this->canTransition($order->status, $data['status'], $this->statusTransitions())) {
+            if (! $this->canTransition($order->status, $data['status'], $this->statusTransitions())) {
                 $errors['status'] = ['Invalid status transition.'];
             }
         }
 
         if (array_key_exists('payment_status', $data)) {
-            if (!$this->canTransition($order->payment_status, $data['payment_status'], $this->paymentStatusTransitions())) {
+            if (! $this->canTransition($order->payment_status, $data['payment_status'], $this->paymentStatusTransitions())) {
                 $errors['payment_status'] = ['Invalid payment status transition.'];
             }
         }
@@ -145,6 +145,7 @@ class OrderController extends Controller
 
         $order = DB::transaction(function () use ($order, $data) {
             $order->update($data);
+
             return $order->refresh()->load(['items', 'user', 'payment']);
         });
 
@@ -154,13 +155,13 @@ class OrderController extends Controller
     private function statusTransitions(): array
     {
         return [
-            'pending'         => ['processing', 'cancelled'],
+            'pending' => ['processing', 'cancelled'],
             'pending_payment' => ['cancelled'],
-            'processing'      => ['shipped', 'cancelled'],
-            'shipped'         => ['delivered', 'refunded'],
-            'delivered'       => ['refunded'],
-            'cancelled'       => [],
-            'refunded'        => [],
+            'processing' => ['shipped', 'cancelled'],
+            'shipped' => ['delivered', 'refunded'],
+            'delivered' => ['refunded'],
+            'cancelled' => [],
+            'refunded' => [],
         ];
     }
 
@@ -184,21 +185,21 @@ class OrderController extends Controller
     }
 
     #[OA\Post(
-        path: "/api/v1/admin/orders/{order}/refund",
-        summary: "Admin Refund Order",
-        description: "Issue a full Stripe refund for a paid order and mark it as refunded.",
-        security: [["bearerAuth" => []]],
-        tags: ["Admin Orders"]
+        path: '/api/v1/admin/orders/{order}/refund',
+        summary: 'Admin Refund Order',
+        description: 'Issue a full Stripe refund for a paid order and mark it as refunded.',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Orders']
     )]
-    #[OA\Parameter(name: "order", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
-    #[OA\Response(response: 200, description: "Order refunded")]
-    #[OA\Response(response: 409, description: "Order not eligible for refund")]
-    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
+    #[OA\Parameter(name: 'order', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))]
+    #[OA\Response(response: 200, description: 'Order refunded')]
+    #[OA\Response(response: 409, description: 'Order not eligible for refund')]
+    #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
     public function refund(int $order, StripeCheckoutService $stripe): JsonResponse
     {
         $order = Order::findOrFail($order);
 
-        if (!$order->isPaid()) {
+        if (! $order->isPaid()) {
             return $this->error('Order is not paid and cannot be refunded.', 409);
         }
 
@@ -206,7 +207,7 @@ class OrderController extends Controller
             return $this->error('Order has already been refunded.', 409);
         }
 
-        if (!$order->stripe_payment_intent_id) {
+        if (! $order->stripe_payment_intent_id) {
             return $this->error('No Stripe PaymentIntent found for this order.', 409);
         }
 
@@ -215,15 +216,17 @@ class OrderController extends Controller
         } catch (\Throwable $e) {
             Log::error('Stripe refund failed', [
                 'order_id' => $order->id,
-                'error'    => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
-            return $this->error('Stripe refund failed: ' . $e->getMessage(), 502);
+
+            return $this->error('Stripe refund failed.', 502);
         }
 
         $order->update([
-            'status'         => 'refunded',
+            'status' => 'refunded',
             'payment_status' => 'refunded',
-            'refunded_at'    => now(),
+            'refunded_amount' => $order->total,
+            'refunded_at' => now(),
         ]);
 
         return $this->success(

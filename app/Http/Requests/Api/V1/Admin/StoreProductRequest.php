@@ -21,7 +21,7 @@ class StoreProductRequest extends BaseAdminRequest
             }
         }
 
-        if (!empty($merge)) {
+        if (! empty($merge)) {
             $this->merge($merge);
         }
     }
@@ -31,7 +31,7 @@ class StoreProductRequest extends BaseAdminRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:255'],
-            'description' => ['nullable', 'string'],
+            'description' => ['nullable', 'string', 'max:10000'],
             'price' => ['required', 'numeric', 'min:0'],
             'discount_price' => ['nullable', 'numeric', 'min:0', 'lt:price'],
             'sku' => ['nullable', 'string', 'max:255', Rule::unique('products', 'sku')],
@@ -49,9 +49,9 @@ class StoreProductRequest extends BaseAdminRequest
             'meta_description' => ['nullable', 'string', 'max:1000'],
             'rating' => ['nullable', 'numeric', 'min:0', 'max:5'],
             'reviews_count' => ['nullable', 'integer', 'min:0'],
-            'images' => ['sometimes', 'array'],
+            'images' => ['sometimes', 'array', 'max:8'],
             'images.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'], // max 5 MB per image
-            'variants' => ['sometimes', 'array'],
+            'variants' => ['sometimes', 'array', 'max:100'],
             'variants.*.name' => ['required_with:variants', 'string', 'max:255'],
             'variants.*.sku' => ['nullable', 'string', 'max:255', Rule::unique('product_variants', 'sku')],
             'variants.*.price' => ['nullable', 'numeric', 'min:0'],

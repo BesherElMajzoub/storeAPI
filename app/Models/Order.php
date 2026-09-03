@@ -12,24 +12,27 @@ class Order extends Model
 
     protected $fillable = [
         'order_number', 'user_id', 'coupon_id', 'status', 'payment_status',
-        'subtotal', 'tax', 'shipping_cost', 'discount', 'total',
+        'subtotal', 'tax', 'shipping_cost', 'discount', 'refunded_amount', 'total',
         'coupon_code', 'shipping_address', 'billing_address', 'notes',
         'stripe_session_id', 'stripe_payment_intent_id',
-        'paid_at', 'cancelled_at', 'refunded_at',
+        'paid_at', 'cancelled_at', 'refunded_at', 'stock_reserved_at', 'stock_released_at',
         'easypost_shipment_id', 'tracking_number', 'label_url',
     ];
 
     protected $casts = [
-        'shipping_address'         => 'array',
-        'billing_address'          => 'array',
-        'subtotal'                 => 'decimal:2',
-        'tax'                      => 'decimal:2',
-        'shipping_cost'            => 'decimal:2',
-        'discount'                 => 'decimal:2',
-        'total'                    => 'decimal:2',
-        'paid_at'                  => 'datetime',
-        'cancelled_at'             => 'datetime',
-        'refunded_at'              => 'datetime',
+        'shipping_address' => 'array',
+        'billing_address' => 'array',
+        'subtotal' => 'decimal:2',
+        'tax' => 'decimal:2',
+        'shipping_cost' => 'decimal:2',
+        'discount' => 'decimal:2',
+        'refunded_amount' => 'decimal:2',
+        'total' => 'decimal:2',
+        'paid_at' => 'datetime',
+        'cancelled_at' => 'datetime',
+        'refunded_at' => 'datetime',
+        'stock_reserved_at' => 'datetime',
+        'stock_released_at' => 'datetime',
     ];
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -68,7 +71,7 @@ class Order extends Model
 
     public function cancellationRequest()
     {
-        return $this->hasOne(\App\Models\OrderCancellationRequest::class);
+        return $this->hasOne(OrderCancellationRequest::class);
     }
 
     // ── Scopes ────────────────────────────────────────────────────────────────
@@ -101,11 +104,11 @@ class Order extends Model
 
     public function scopeSearch($query, ?string $term)
     {
-        if (!$term) {
+        if (! $term) {
             return $query;
         }
 
-        return $query->where('order_number', 'like', '%' . $term . '%');
+        return $query->where('order_number', 'like', '%'.$term.'%');
     }
 
     public function scopeDateRange($query, ?string $from, ?string $to)

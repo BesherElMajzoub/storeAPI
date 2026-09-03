@@ -5,17 +5,24 @@ namespace App\Services;
 use App\Mail\OtpCodeMail;
 use App\Models\OtpCode;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 class OtpService
 {
     private int $length;
+
     private int $ttlMinutes;
+
     private int $maxAttempts;
+
     private int $resendCooldownSeconds;
+
     private int $dailySendLimit;
+
     private ?string $emailOverride;
+
     private bool $logCodes;
 
     public function __construct()
@@ -82,37 +89,40 @@ class OtpService
 
     public function verify(string $identifier, string $purpose, string $code, string $channel = 'email'): array
     {
-        $otp = OtpCode::query()
-            ->where('identifier', $identifier)
-            ->where('purpose', $purpose)
-            ->where('channel', $channel)
-            ->first();
+        return DB::transaction(function () use ($identifier, $purpose, $code, $channel): array {
+            $otp = OtpCode::query()
+                ->where('identifier', $identifier)
+                ->where('purpose', $purpose)
+                ->where('channel', $channel)
+                ->lockForUpdate()
+                ->first();
 
-        if (!$otp) {
-            return ['status' => 'invalid'];
-        }
+            if (! $otp) {
+                return ['status' => 'invalid'];
+            }
 
-        if ($otp->consumed_at !== null) {
-            return ['status' => 'consumed'];
-        }
+            if ($otp->consumed_at !== null) {
+                return ['status' => 'consumed'];
+            }
 
-        if ($otp->expires_at && $otp->expires_at->isPast()) {
-            return ['status' => 'expired'];
-        }
+            if ($otp->expires_at && $otp->expires_at->isPast()) {
+                return ['status' => 'expired'];
+            }
 
-        if ($otp->attempts >= $otp->max_attempts) {
-            return ['status' => 'locked'];
-        }
+            if ($otp->attempts >= $otp->max_attempts) {
+                return ['status' => 'locked'];
+            }
 
-        if (!hash_equals($otp->code_hash, hash('sha256', $code))) {
-            $otp->increment('attempts');
-            return ['status' => 'invalid'];
-        }
+            if (! hash_equals($otp->code_hash, hash('sha256', $code))) {
+                $otp->increment('attempts');
 
-        $otp->consumed_at = now();
-        $otp->save();
+                return ['status' => 'invalid'];
+            }
 
-        return ['status' => 'verified'];
+            $otp->forceFill(['consumed_at' => now()])->save();
+
+            return ['status' => 'verified'];
+        });
     }
 
     private function generateCode(): string
@@ -126,9 +136,9 @@ class OtpService
     private function sendEmail(string $identifier, string $code, string $purpose): void
     {
         $sendTo = $this->emailOverride ?: $identifier;
-        $sentToOverride = !empty($this->emailOverride) && $this->emailOverride !== $identifier;
+        $sentToOverride = ! empty($this->emailOverride) && $this->emailOverride !== $identifier;
 
-        Mail::to($sendTo)->send(new OtpCodeMail(
+        Mail::to($sendTo)->queue(new OtpCodeMail(
             code: $code,
             purpose: $purpose,
             expiresInMinutes: $this->ttlMinutes,

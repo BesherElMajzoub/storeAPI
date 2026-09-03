@@ -15,13 +15,14 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [
-        'http://localhost:5173',    // Vite React dev server
-        'http://localhost:3000',    // CRA / Next.js dev server
-        'http://localhost:8000',    // Swagger / Local Laravel server
-        'http://127.0.0.1:8000',    // Swagger / Local Laravel server
-        env('FRONTEND_URL', 'http://localhost:5173'),
-    ],
+    'allowed_origins' => array_values(array_unique(array_filter([
+        env('FRONTEND_URL', 'https://otantikqueen.com'),
+        env('STAGING_FRONTEND_URL'),
+        in_array(env('APP_ENV', 'production'), ['local', 'testing'], true) ? 'http://localhost:5173' : null,
+        in_array(env('APP_ENV', 'production'), ['local', 'testing'], true) ? 'http://localhost:3000' : null,
+        in_array(env('APP_ENV', 'production'), ['local', 'testing'], true) ? 'http://localhost:8000' : null,
+        in_array(env('APP_ENV', 'production'), ['local', 'testing'], true) ? 'http://127.0.0.1:8000' : null,
+    ]))),
 
     'allowed_origins_patterns' => [],
 

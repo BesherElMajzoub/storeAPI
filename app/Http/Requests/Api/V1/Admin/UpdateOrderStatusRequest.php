@@ -19,9 +19,7 @@ class UpdateOrderStatusRequest extends BaseAdminRequest
             ])],
             'payment_status' => ['sometimes', Rule::in([
                 'unpaid',
-                'paid',
                 'failed',
-                'refunded',
             ])],
         ];
     }
@@ -29,7 +27,7 @@ class UpdateOrderStatusRequest extends BaseAdminRequest
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
-            if (!$this->has('status') && !$this->has('payment_status')) {
+            if (! $this->has('status') && ! $this->has('payment_status')) {
                 $validator->errors()->add('status', 'Provide status and/or payment_status.');
             }
         });

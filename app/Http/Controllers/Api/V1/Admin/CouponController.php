@@ -36,7 +36,7 @@ class CouponController extends Controller
                 new OA\Property(property: 'success', type: 'boolean', example: true),
                 new OA\Property(property: 'message', type: 'string', example: 'Coupons retrieved successfully.'),
                 new OA\Property(property: 'data', type: 'object'),
-                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null)
+                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null),
             ]
         )
     )]
@@ -46,7 +46,7 @@ class CouponController extends Controller
 
         // Search by code
         if ($request->filled('search')) {
-            $query->where('code', 'like', '%' . $request->search . '%');
+            $query->where('code', 'like', '%'.$request->search.'%');
         }
 
         // Filter by type
@@ -79,14 +79,14 @@ class CouponController extends Controller
             }
         }
 
-        $perPage = $request->integer('per_page', 15);
+        $perPage = min(max($request->integer('per_page', 15), 1), 100);
         $coupons = $query->latest()->paginate($perPage);
 
         return response()->json([
             'success' => true,
             'message' => 'Coupons retrieved successfully.',
-            'data'    => CouponResource::collection($coupons)->response()->getData(true),
-            'errors'  => null,
+            'data' => CouponResource::collection($coupons)->response()->getData(true),
+            'errors' => null,
         ]);
     }
 
@@ -113,7 +113,7 @@ class CouponController extends Controller
                 new OA\Property(property: 'usage_limit_per_user', type: 'integer', nullable: true, example: 1),
                 new OA\Property(property: 'starts_at', type: 'string', format: 'date-time', nullable: true, example: '2026-06-01T00:00:00Z'),
                 new OA\Property(property: 'expires_at', type: 'string', format: 'date-time', nullable: true, example: '2026-12-31T23:59:59Z'),
-                new OA\Property(property: 'is_active', type: 'boolean', example: true)
+                new OA\Property(property: 'is_active', type: 'boolean', example: true),
             ]
         )
     )]
@@ -125,7 +125,7 @@ class CouponController extends Controller
                 new OA\Property(property: 'success', type: 'boolean', example: true),
                 new OA\Property(property: 'message', type: 'string', example: 'Coupon created successfully.'),
                 new OA\Property(property: 'data', ref: '#/components/schemas/Coupon'),
-                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null)
+                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null),
             ]
         )
     )]
@@ -139,10 +139,10 @@ class CouponController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed.',
-                'data'    => null,
-                'errors'  => [
-                    'code' => ['The coupon code has already been taken.']
-                ]
+                'data' => null,
+                'errors' => [
+                    'code' => ['The coupon code has already been taken.'],
+                ],
             ], 422);
         }
 
@@ -151,8 +151,8 @@ class CouponController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Coupon created successfully.',
-            'data'    => new CouponResource($coupon),
-            'errors'  => null,
+            'data' => new CouponResource($coupon),
+            'errors' => null,
         ], 201);
     }
 
@@ -174,7 +174,7 @@ class CouponController extends Controller
                 new OA\Property(property: 'success', type: 'boolean', example: true),
                 new OA\Property(property: 'message', type: 'string', example: 'Coupon details retrieved successfully.'),
                 new OA\Property(property: 'data', type: 'object'),
-                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null)
+                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null),
             ]
         )
     )]
@@ -185,11 +185,11 @@ class CouponController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Coupon details retrieved successfully.',
-            'data'    => array_merge((new CouponResource($coupon))->toArray(request()), [
+            'data' => array_merge((new CouponResource($coupon))->toArray(request()), [
                 'total_discount_given' => round((float) $coupon->usages()->sum('discount_amount'), 2),
-                'total_orders_used'    => (int) $coupon->usages()->distinct('order_id')->count(),
+                'total_orders_used' => (int) $coupon->usages()->distinct('order_id')->count(),
             ]),
-            'errors'  => null,
+            'errors' => null,
         ]);
     }
 
@@ -217,7 +217,7 @@ class CouponController extends Controller
                 new OA\Property(property: 'usage_limit_per_user', type: 'integer', nullable: true, example: 1),
                 new OA\Property(property: 'starts_at', type: 'string', format: 'date-time', nullable: true, example: '2026-06-01T00:00:00Z'),
                 new OA\Property(property: 'expires_at', type: 'string', format: 'date-time', nullable: true, example: '2026-12-31T23:59:59Z'),
-                new OA\Property(property: 'is_active', type: 'boolean', example: true)
+                new OA\Property(property: 'is_active', type: 'boolean', example: true),
             ]
         )
     )]
@@ -229,7 +229,7 @@ class CouponController extends Controller
                 new OA\Property(property: 'success', type: 'boolean', example: true),
                 new OA\Property(property: 'message', type: 'string', example: 'Coupon updated successfully.'),
                 new OA\Property(property: 'data', ref: '#/components/schemas/Coupon'),
-                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null)
+                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null),
             ]
         )
     )]
@@ -244,10 +244,10 @@ class CouponController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed.',
-                'data'    => null,
-                'errors'  => [
-                    'code' => ['The coupon code has already been taken.']
-                ]
+                'data' => null,
+                'errors' => [
+                    'code' => ['The coupon code has already been taken.'],
+                ],
             ], 422);
         }
 
@@ -259,8 +259,8 @@ class CouponController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Coupon updated successfully.',
-            'data'    => new CouponResource($coupon),
-            'errors'  => null,
+            'data' => new CouponResource($coupon),
+            'errors' => null,
         ]);
     }
 
@@ -290,10 +290,10 @@ class CouponController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed.',
-                'data'    => null,
-                'errors'  => [
-                    'coupon' => ['This coupon has already been used and cannot be deleted. Please deactivate it instead.']
-                ]
+                'data' => null,
+                'errors' => [
+                    'coupon' => ['This coupon has already been used and cannot be deleted. Please deactivate it instead.'],
+                ],
             ], 422);
         }
 
@@ -302,8 +302,8 @@ class CouponController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Coupon deleted successfully.',
-            'data'    => null,
-            'errors'  => null,
+            'data' => null,
+            'errors' => null,
         ]);
     }
 
@@ -325,21 +325,21 @@ class CouponController extends Controller
                 new OA\Property(property: 'success', type: 'boolean', example: true),
                 new OA\Property(property: 'message', type: 'string', example: 'Coupon status updated successfully.'),
                 new OA\Property(property: 'data', ref: '#/components/schemas/Coupon'),
-                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null)
+                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null),
             ]
         )
     )]
     public function toggleStatus(int $id): JsonResponse
     {
         $coupon = Coupon::findOrFail($id);
-        $coupon->is_active = !$coupon->is_active;
+        $coupon->is_active = ! $coupon->is_active;
         $coupon->save();
 
         return response()->json([
             'success' => true,
             'message' => 'Coupon status updated successfully.',
-            'data'    => new CouponResource($coupon),
-            'errors'  => null,
+            'data' => new CouponResource($coupon),
+            'errors' => null,
         ]);
     }
 
@@ -362,21 +362,21 @@ class CouponController extends Controller
                 new OA\Property(property: 'success', type: 'boolean', example: true),
                 new OA\Property(property: 'message', type: 'string', example: 'Coupon usages retrieved successfully.'),
                 new OA\Property(property: 'data', type: 'object'),
-                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null)
+                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null),
             ]
         )
     )]
     public function usages(int $id, Request $request): JsonResponse
     {
         $coupon = Coupon::findOrFail($id);
-        $perPage = $request->integer('per_page', 15);
+        $perPage = min(max($request->integer('per_page', 15), 1), 100);
         $usages = $coupon->usages()->with(['order', 'user'])->latest()->paginate($perPage);
 
         return response()->json([
             'success' => true,
             'message' => 'Coupon usages retrieved successfully.',
-            'data'    => CouponUsageResource::collection($usages)->response()->getData(true),
-            'errors'  => null,
+            'data' => CouponUsageResource::collection($usages)->response()->getData(true),
+            'errors' => null,
         ]);
     }
 }

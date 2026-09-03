@@ -26,6 +26,10 @@ class RolesAndAdminSeeder extends Seeder
             Permission::firstOrCreate(['name' => $name]);
         }
 
+        if (app()->environment('production')) {
+            return;
+        }
+
         // 3) Create Admin User
         $adminRole = Role::where('name', 'Admin')->first();
 

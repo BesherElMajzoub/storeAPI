@@ -2,16 +2,19 @@
 
 namespace App\Providers;
 
+use App\Contracts\LocationServiceInterface;
 use App\Events\WishlistItemAdded;
 use App\Events\WishlistItemRemoved;
 use App\Listeners\RecordWishlistEvent;
 use App\Models\Address;
-use App\Models\Review;
 use App\Models\Order;
-use App\Observers\ReviewObserver;
+use App\Models\Review;
 use App\Observers\OrderObserver;
+use App\Observers\ReviewObserver;
 use App\Policies\AddressPolicy;
 use App\Policies\ReviewPolicy;
+use App\Services\GeoapifyService;
+use App\Services\GooglePlacesService;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
@@ -27,12 +30,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton(\App\Contracts\LocationServiceInterface::class, function ($app) {
+        $this->app->singleton(LocationServiceInterface::class, function ($app) {
             $provider = config('services.location_provider', 'geoapify');
             if ($provider === 'google') {
-                return new \App\Services\GooglePlacesService();
+                return new GooglePlacesService;
             }
-            return new \App\Services\GeoapifyService();
+
+            return new GeoapifyService;
         });
     }
 
@@ -44,17 +48,44 @@ class AppServiceProvider extends ServiceProvider
         // ─── Rate Limiters ────────────────────────────────────────────────────────
         RateLimiter::for('login', function (Request $request) {
             $email = Str::lower((string) $request->input('email'));
-            return Limit::perMinute(5)->by($email . '|' . $request->ip());
+
+            return [
+                Limit::perMinute(10)->by('login-ip|'.$request->ip()),
+                Limit::perMinute(5)->by('login-account|'.$email),
+            ];
         });
 
         RateLimiter::for('forgot-password', function (Request $request) {
             $email = Str::lower((string) $request->input('email'));
-            return Limit::perMinute(3)->by($email . '|' . $request->ip());
+
+            return [
+                Limit::perMinute(5)->by('forgot-ip|'.$request->ip()),
+                Limit::perHour(5)->by('forgot-account|'.$email),
+            ];
         });
 
         RateLimiter::for('otp', function (Request $request) {
             $email = Str::lower((string) $request->input('email'));
-            return Limit::perMinute(3)->by($email . '|' . $request->ip());
+
+            return [
+                Limit::perMinute(5)->by('otp-ip|'.$request->ip()),
+                Limit::perMinute(3)->by('otp-account|'.$email),
+            ];
+        });
+
+        RateLimiter::for('password-reset', function (Request $request) {
+            $email = Str::lower((string) $request->input('email'));
+
+            return [
+                Limit::perMinute(5)->by('reset-ip|'.$request->ip()),
+                Limit::perHour(5)->by('reset-account|'.$email),
+            ];
+        });
+
+        RateLimiter::for('api', function (Request $request) {
+            $key = $request->user()?->getAuthIdentifier() ?: $request->ip();
+
+            return Limit::perMinute(120)->by('api|'.$key);
         });
 
         // ─── Gates ────────────────────────────────────────────────────────────────
@@ -71,8 +102,8 @@ class AppServiceProvider extends ServiceProvider
         Order::observe(OrderObserver::class);
 
         // ─── Event Listeners ──────────────────────────────────────────────────────
-        $listener = new RecordWishlistEvent();
-        Event::listen(WishlistItemAdded::class,   [$listener, 'handleAdded']);
+        $listener = new RecordWishlistEvent;
+        Event::listen(WishlistItemAdded::class, [$listener, 'handleAdded']);
         Event::listen(WishlistItemRemoved::class, [$listener, 'handleRemoved']);
     }
 }

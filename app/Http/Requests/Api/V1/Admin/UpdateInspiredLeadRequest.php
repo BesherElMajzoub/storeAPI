@@ -15,9 +15,9 @@ class UpdateInspiredLeadRequest extends FormRequest
     {
         return [
             'status' => ['nullable', 'string', 'in:new,contacted,converted,closed'],
-            'notes' => ['nullable', 'string'],
+            'notes' => ['nullable', 'string', 'max:2000'],
             'name' => ['nullable', 'string', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:30'],
+            'phone' => ['nullable', 'string', 'max:30', 'regex:/^\+?[0-9][0-9\s().-]{6,29}$/'],
         ];
     }
 }

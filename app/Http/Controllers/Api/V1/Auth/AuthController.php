@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\Auth\ChangePasswordRequest;
 use App\Http\Requests\Api\V1\Auth\ForgotPasswordRequest;
 use App\Http\Requests\Api\V1\Auth\GoogleLoginRequest;
 use App\Http\Requests\Api\V1\Auth\LoginRequest;
@@ -11,7 +12,6 @@ use App\Http\Requests\Api\V1\Auth\OtpVerifyRequest;
 use App\Http\Requests\Api\V1\Auth\RegisterRequest;
 use App\Http\Requests\Api\V1\Auth\ResetPasswordRequest;
 use App\Http\Requests\Api\V1\Auth\UpdateProfileRequest;
-use App\Http\Requests\Api\V1\Auth\ChangePasswordRequest;
 use App\Mail\ResetPasswordMail;
 use App\Models\Role;
 use App\Models\User;
@@ -139,13 +139,25 @@ class AuthController extends Controller
     {
         $data = $request->validated();
         $user = User::query()->where('email', $data['email'])->first();
+        $dummyHash = '$2y$12$wO3jQzH9M9JdEw7C1qMZtePsohAmvF9YDwN8Vvl4VlymYzM8XJ6zG';
+        $passwordMatches = Hash::check($data['password'], $user?->password ?? $dummyHash);
 
-        if (! $user || ! Hash::check($data['password'], $user->password)) {
+        if (! $user || ! $passwordMatches) {
+            Log::warning('Authentication failed.', [
+                'email_hash' => hash('sha256', strtolower($data['email'])),
+                'ip' => $request->ip(),
+            ]);
+
             return $this->error('Invalid credentials.', 401);
         }
 
         if (! $user->is_active) {
-            return $this->error('Account is disabled.', 403);
+            Log::warning('Authentication failed for disabled account.', [
+                'user_id' => $user->id,
+                'ip' => $request->ip(),
+            ]);
+
+            return $this->error('Invalid credentials.', 401);
         }
 
         Auth::login($user);
@@ -284,9 +296,9 @@ class AuthController extends Controller
         $user = $request->user();
         $data = $request->validated();
 
-        if (!Hash::check($data['current_password'], $user->password)) {
+        if (! Hash::check($data['current_password'], $user->password)) {
             return $this->error('The current password you entered is incorrect.', 422, [
-                'current_password' => ['The current password you entered is incorrect.']
+                'current_password' => ['The current password you entered is incorrect.'],
             ]);
         }
 
@@ -410,7 +422,7 @@ class AuthController extends Controller
 
             // 3. SEND THE EMAIL (The missing part)
             // Send synchronously to deliver the verification/reset email immediately
-            Mail::to($user->email)->send(new ResetPasswordMail($token, $user->email));
+            Mail::to($user->email)->queue(new ResetPasswordMail($token, $user->email));
             Log::info('Password reset link sent', ['email' => $user->email]);
 
         } catch (\Throwable $e) {
@@ -447,31 +459,37 @@ class AuthController extends Controller
     public function resetPassword(ResetPasswordRequest $request)
     {
         $data = $request->validated();
-        $user = User::query()->where('email', $data['email'])->first();
-        if (! $user) {
-            return $this->error('Invalid token or email.', 422);
+
+        $reset = DB::transaction(function () use ($data): bool {
+            $record = DB::table('password_reset_tokens')
+                ->where('email', $data['email'])
+                ->lockForUpdate()
+                ->first();
+            $user = User::query()->where('email', $data['email'])->lockForUpdate()->first();
+
+            if (! $record || ! $user) {
+                return false;
+            }
+
+            $expired = Carbon::parse($record->created_at)
+                ->lt(now()->subMinutes($this->resetTokenTtlMinutes));
+            $matches = hash_equals($record->token, hash('sha256', $data['token']));
+
+            if ($expired || ! $matches) {
+                return false;
+            }
+
+            $user->password = $data['password'];
+            $user->save();
+            $user->tokens()->delete();
+            DB::table('password_reset_tokens')->where('email', $data['email'])->delete();
+
+            return true;
+        });
+
+        if (! $reset) {
+            return $this->error('Invalid or expired reset token.', 422);
         }
-
-        $record = DB::table('password_reset_tokens')->where('email', $data['email'])->first();
-        if (! $record) {
-            return $this->error('Invalid token or email.', 422);
-        }
-
-        $expiresAt = now()->subMinutes($this->resetTokenTtlMinutes);
-        $createdAt = Carbon::parse($record->created_at);
-        if ($createdAt->lt($expiresAt)) {
-            return $this->error('Reset token expired.', 422);
-        }
-
-        if (! hash_equals($record->token, hash('sha256', $data['token']))) {
-            return $this->error('Invalid token or email.', 422);
-        }
-
-        $user->password = $data['password'];
-        $user->save();
-
-        $user->tokens()->delete();
-        DB::table('password_reset_tokens')->where('email', $data['email'])->delete();
 
         return $this->success(null, 'Password reset successfully.');
     }
@@ -508,9 +526,6 @@ class AuthController extends Controller
             Log::info('OTP send: before');
             $result = $otpService->send($email, $purpose, $channel);
             Log::info('OTP send: after', $result);
-            if ($result['status'] === 'cooldown' || $result['status'] === 'daily_limit') {
-                return $this->error('OTP rate limit exceeded. Try again later.', 429);
-            }
         }
 
         return $this->success(null, 'If the email exists, an OTP was sent.');
@@ -570,6 +585,12 @@ class AuthController extends Controller
             return $this->error('Invalid or expired OTP.', 422);
         }
 
+        if ($purpose === 'email_verification') {
+            $user->forceFill(['email_verified_at' => now()])->save();
+
+            return $this->success(null, 'Email verified.');
+        }
+
         $token = $this->issuePasswordResetToken($user);
 
         return $this->success([
@@ -624,11 +645,11 @@ class AuthController extends Controller
             $googleData = $googleAuthService->verifyIdToken($request->id_token);
 
             // 2. Find or create user (handles linking existing accounts transparently)
-            $isNewUser = !User::where('email', $googleData['email'])->exists();
-            $user      = $googleAuthService->findOrCreateUser($googleData);
+            $isNewUser = ! User::where('email', $googleData['email'])->exists();
+            $user = $googleAuthService->findOrCreateUser($googleData);
 
             // 3. Check account status
-            if (!$user->is_active) {
+            if (! $user->is_active) {
                 return $this->error('Account is disabled.', 403);
             }
 
@@ -640,26 +661,28 @@ class AuthController extends Controller
 
             // 5. Issue Sanctum token
             $tokenName = $request->input('device_name', 'google_auth');
-            $token     = $user->createToken($tokenName)->plainTextToken;
+            $token = $user->createToken($tokenName)->plainTextToken;
 
             Log::info('Google Auth login', [
                 'user_id' => $user->id,
-                'email'   => $user->email,
-                'is_new'  => $isNewUser,
+                'email' => $user->email,
+                'is_new' => $isNewUser,
             ]);
 
             return $this->success([
                 'access_token' => $token,
-                'token_type'   => 'Bearer',
-                'user'         => $user->load('roles'),
-                'is_new_user'  => $isNewUser,
+                'token_type' => 'Bearer',
+                'user' => $user->load('roles'),
+                'is_new_user' => $isNewUser,
             ], $isNewUser ? 'Account created successfully.' : 'Login successful.');
 
         } catch (\RuntimeException $e) {
             Log::error('Google Auth misconfiguration', ['error' => $e->getMessage()]);
+
             return $this->error('Authentication service is unavailable.', 503);
         } catch (\Exception $e) {
             Log::warning('Google Auth failed', ['error' => $e->getMessage(), 'ip' => $request->ip()]);
+
             return $this->error('Invalid or expired Google token.', 401);
         }
     }
@@ -671,7 +694,7 @@ class AuthController extends Controller
         DB::table('password_reset_tokens')->updateOrInsert(
             ['email' => $user->email],
             [
-                'token'      => hash('sha256', $token),
+                'token' => hash('sha256', $token),
                 'created_at' => now(),
             ]
         );

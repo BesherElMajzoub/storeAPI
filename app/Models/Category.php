@@ -5,23 +5,23 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\Image\Enums\Fit;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
-use Spatie\Image\Enums\Fit;
 
 class Category extends Model implements HasMedia
 {
-    use HasFactory, SoftDeletes, InteractsWithMedia;
+    use HasFactory, InteractsWithMedia, SoftDeletes;
 
     protected $fillable = [
-        'name', 'slug', 'parent_id', 'image', 'is_active', 'sort_order',
-        'meta_title', 'meta_description'
+        'name', 'slug', 'description', 'parent_id', 'image', 'is_active', 'sort_order',
+        'meta_title', 'meta_description',
     ];
 
     protected $casts = [
-        'is_active'  => 'boolean',
-        'parent_id'  => 'integer',
+        'is_active' => 'boolean',
+        'parent_id' => 'integer',
         'sort_order' => 'integer',
     ];
 

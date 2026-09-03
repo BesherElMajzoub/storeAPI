@@ -4,9 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\Review;
 use App\Models\Role;
 use App\Models\User;
-use App\Models\Review;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -15,7 +15,9 @@ class ReviewTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private User $admin;
+
     private Product $product;
 
     protected function setUp(): void
@@ -23,7 +25,7 @@ class ReviewTest extends TestCase
         parent::setUp();
 
         $this->user = User::factory()->create();
-        
+
         $this->admin = User::factory()->create();
         $adminRole = Role::firstOrCreate(['name' => 'Admin'], ['label' => 'Admin']);
         $this->admin->roles()->attach($adminRole);
@@ -93,6 +95,36 @@ class ReviewTest extends TestCase
         $this->assertDatabaseCount('reviews', 1);
     }
 
+    public function test_review_html_and_unicode_are_stored_and_returned_as_inert_json_text(): void
+    {
+        $order = Order::factory()->create([
+            'user_id' => $this->user->id,
+            'status' => 'delivered',
+        ]);
+
+        $order->items()->create([
+            'product_id' => $this->product->id,
+            'product_name' => $this->product->name,
+            'price' => 150.00,
+            'quantity' => 1,
+            'total' => 150.00,
+        ]);
+
+        $comment = 'Great dress 👗 <script>alert("xss")</script>';
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/products/{$this->product->id}/reviews", [
+                'rating' => 5,
+                'comment' => $comment,
+            ]);
+
+        $response->assertCreated()
+            ->assertHeader('Content-Type', 'application/json')
+            ->assertJsonPath('data.comment', $comment);
+
+        $this->assertDatabaseHas('reviews', ['comment' => $comment]);
+    }
+
     /**
      * Test that admin can see product details in the review listing.
      */
@@ -126,10 +158,10 @@ class ReviewTest extends TestCase
                                 'name',
                                 'slug',
                                 'price',
-                            ]
-                        ]
-                    ]
-                ]
+                            ],
+                        ],
+                    ],
+                ],
             ]);
     }
 }

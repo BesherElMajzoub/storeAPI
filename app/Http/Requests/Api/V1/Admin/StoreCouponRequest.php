@@ -22,9 +22,9 @@ class StoreCouponRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'code'                    => ['required', 'string', 'max:50', 'unique:coupons,code'],
-            'type'                    => ['required', 'in:percentage,fixed'],
-            'value'                   => [
+            'code' => ['required', 'string', 'max:50', 'regex:/^[A-Za-z0-9_-]+$/', 'unique:coupons,code'],
+            'type' => ['required', 'in:percentage,fixed'],
+            'value' => [
                 'required',
                 'numeric',
                 'min:0.01',
@@ -32,15 +32,15 @@ class StoreCouponRequest extends FormRequest
                     if ($this->input('type') === 'percentage' && $value > 100) {
                         $fail('The value cannot exceed 100% for a percentage coupon.');
                     }
-                }
+                },
             ],
-            'minimum_order_amount'    => ['nullable', 'numeric', 'min:0'],
+            'minimum_order_amount' => ['nullable', 'numeric', 'min:0'],
             'maximum_discount_amount' => ['nullable', 'numeric', 'min:0'],
-            'usage_limit'             => ['nullable', 'integer', 'min:1'],
-            'usage_limit_per_user'    => ['nullable', 'integer', 'min:1'],
-            'starts_at'               => ['nullable', 'date'],
-            'expires_at'              => ['nullable', 'date', 'after_or_equal:starts_at'],
-            'is_active'               => ['nullable', 'boolean'],
+            'usage_limit' => ['nullable', 'integer', 'min:1'],
+            'usage_limit_per_user' => ['nullable', 'integer', 'min:1'],
+            'starts_at' => ['nullable', 'date'],
+            'expires_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
+            'is_active' => ['nullable', 'boolean'],
         ];
     }
 
@@ -52,8 +52,8 @@ class StoreCouponRequest extends FormRequest
         throw new HttpResponseException(response()->json([
             'success' => false,
             'message' => 'Validation failed.',
-            'data'    => null,
-            'errors'  => $validator->errors(),
+            'data' => null,
+            'errors' => $validator->errors(),
         ], 422));
     }
 }

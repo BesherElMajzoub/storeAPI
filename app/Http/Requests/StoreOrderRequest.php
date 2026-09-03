@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\Exceptions\HttpResponseException;
 
 class StoreOrderRequest extends FormRequest
 {
@@ -14,28 +16,29 @@ class StoreOrderRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'items'                  => 'required|array',
-            'items.*.product_id'     => 'required|exists:products,id',
-            'items.*.variant_id'     => 'nullable|exists:product_variants,id',
-            'items.*.quantity'       => 'required|integer|min:1',
-            'shipping_address'       => 'required|array',
-            'shipping_address.name'  => 'required|string',
-            'shipping_address.line1' => 'required|string',
-            'shipping_address.city'  => 'required|string',
-            'shipping_address.country' => 'required|string',
-            'coupon_code'            => 'nullable|string',
-            'shipping_rate_id'       => 'nullable|string',
-            'easypost_shipment_id'   => 'nullable|string',
+            'items' => 'required|array|min:1|max:50',
+            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.variant_id' => 'nullable|exists:product_variants,id',
+            'items.*.quantity' => 'required|integer|min:1|max:100',
+            'shipping_address' => 'required|array',
+            'shipping_address.name' => 'required|string|max:255',
+            'shipping_address.line1' => 'required|string|max:255',
+            'shipping_address.city' => 'required|string|max:100',
+            'shipping_address.country' => 'required|string|size:2',
+            'billing_address' => 'sometimes|nullable|array',
+            'coupon_code' => 'nullable|string|max:64|regex:/^[A-Za-z0-9_-]+$/',
+            'shipping_rate_id' => 'nullable|string|max:255',
+            'easypost_shipment_id' => 'nullable|string|max:255',
         ];
     }
 
-    protected function failedValidation(\Illuminate\Contracts\Validation\Validator $validator): void
+    protected function failedValidation(Validator $validator): void
     {
-        throw new \Illuminate\Http\Exceptions\HttpResponseException(response()->json([
+        throw new HttpResponseException(response()->json([
             'success' => false,
             'message' => 'Validation failed.',
-            'data'    => null,
-            'errors'  => $validator->errors(),
+            'data' => null,
+            'errors' => $validator->errors(),
         ], 422));
     }
 }

@@ -2495,7 +2495,7 @@
                                         "nullable": true
                                     },
                                     "payment_status": {
-                                        "description": "unpaid, paid, failed, refunded",
+                                        "description": "unpaid or failed. Paid/refunded are controlled by verified payment flows.",
                                         "type": "string",
                                         "nullable": true
                                     }
@@ -7200,6 +7200,24 @@
                         "type": "string",
                         "example": "electronics"
                     },
+                    "description": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "parent_id": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "is_active": {
+                        "type": "boolean"
+                    },
+                    "sort_order": {
+                        "type": "integer"
+                    },
+                    "meta_title": {
+                        "type": "string",
+                        "nullable": true
+                    },
                     "meta_description": {
                         "type": "string",
                         "nullable": true
@@ -7576,6 +7594,14 @@
                         "type": "integer",
                         "example": 10
                     },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "draft",
+                            "published",
+                            "archived"
+                        ]
+                    },
                     "sku": {
                         "type": "string",
                         "example": "APL-MBC-2023",
@@ -7588,6 +7614,14 @@
                     "is_featured": {
                         "type": "boolean",
                         "example": false
+                    },
+                    "meta_title": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "meta_description": {
+                        "type": "string",
+                        "nullable": true
                     },
                     "rating": {
                         "type": "number",

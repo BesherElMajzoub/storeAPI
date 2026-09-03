@@ -13,13 +13,14 @@ class UpdateCategoryRequest extends BaseAdminRequest
         return [
             'name' => ['sometimes', 'string', 'max:255'],
             'slug' => ['sometimes', 'string', 'max:255'],
+            'description' => ['sometimes', 'nullable', 'string', 'max:5000'],
             'parent_id' => [
                 'sometimes',
                 'nullable',
                 'integer',
                 Rule::exists('categories', 'id')->whereNull('deleted_at'),
             ],
-            'image' => ['sometimes', 'nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg,webp', 'max:5120'],
+            'image' => ['sometimes', 'nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:5120'],
             'is_active' => ['sometimes', 'boolean'],
             'sort_order' => ['sometimes', 'integer', 'min:0'],
             'meta_title' => ['sometimes', 'nullable', 'string', 'max:255'],
@@ -30,7 +31,7 @@ class UpdateCategoryRequest extends BaseAdminRequest
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
-            if (!$this->has('parent_id')) {
+            if (! $this->has('parent_id')) {
                 return;
             }
 
@@ -42,7 +43,7 @@ class UpdateCategoryRequest extends BaseAdminRequest
             $routeCategory = $this->route('category');
             $categoryId = $routeCategory instanceof Category
                 ? $routeCategory->id
-                : (int) $this->route('id');
+                : (int) $this->route('category');
 
             if ($categoryId <= 0) {
                 return;

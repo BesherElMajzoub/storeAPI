@@ -20,15 +20,9 @@ Populate the database with Roles, Admin User, and Sample Products:
 php artisan db:seed
 ```
 
-**Admin Credentials:**
-
-- Email: `admin@store.com`
-- Password: `password123`
-
-**Demo User:**
-
-- Email: `user@store.com`
-- Password: `password123`
+Demo accounts are created only in local/testing environments. Database seeders
+refuse to create them in production. Use environment-specific credentials and
+never reuse local demo passwords for deployed accounts.
 
 ## 4. Install API Support (If needed)
 

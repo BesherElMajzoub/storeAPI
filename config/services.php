@@ -23,7 +23,7 @@ return [
     ],
 
     'ses' => [
-        'key'    => env('AWS_ACCESS_KEY_ID'),
+        'key' => env('AWS_ACCESS_KEY_ID'),
         'secret' => env('AWS_SECRET_ACCESS_KEY'),
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
@@ -31,7 +31,7 @@ return [
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
-            'channel'              => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
+            'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
 
@@ -43,9 +43,9 @@ return [
     | Get your Client ID from: https://console.cloud.google.com
     */
     'google' => [
-        'client_id'        => env('GOOGLE_CLIENT_ID'),
-        'places_api_key'   => env('GOOGLE_PLACES_API_KEY'),
-        'places_base_url'  => env('GOOGLE_PLACES_BASE_URL', 'https://places.googleapis.com/v1'),
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'places_api_key' => env('GOOGLE_PLACES_API_KEY'),
+        'places_base_url' => env('GOOGLE_PLACES_BASE_URL', 'https://places.googleapis.com/v1'),
     ],
 
     /*
@@ -54,9 +54,10 @@ return [
     |--------------------------------------------------------------------------
     */
     'stripe' => [
-        'secret'         => env('STRIPE_SECRET'),
+        'secret' => env('STRIPE_SECRET'),
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
-        'publishable'    => env('STRIPE_PUBLISHABLE_KEY'),
+        'publishable' => env('STRIPE_PUBLISHABLE_KEY'),
+        'currency' => strtolower(env('STRIPE_CURRENCY', 'usd')),
     ],
 
     'telegram' => [
@@ -72,18 +73,18 @@ return [
     ],
 
     'easypost' => [
-        'api_key'        => env('EASYPOST_API_KEY'),
+        'api_key' => env('EASYPOST_API_KEY'),
         'webhook_secret' => env('EASYPOST_WEBHOOK_SECRET'),
     ],
 
     'store_origin' => [
-        'name'    => env('STORE_ADDRESS_NAME', 'Otantik Queen'),
+        'name' => env('STORE_ADDRESS_NAME', 'Otantik Queen'),
         'street1' => env('STORE_ADDRESS_STREET1', '123 Main Street'),
-        'city'    => env('STORE_ADDRESS_CITY', 'New York'),
-        'state'   => env('STORE_ADDRESS_STATE', 'NY'),
-        'zip'     => env('STORE_ADDRESS_ZIP', '10001'),
+        'city' => env('STORE_ADDRESS_CITY', 'New York'),
+        'state' => env('STORE_ADDRESS_STATE', 'NY'),
+        'zip' => env('STORE_ADDRESS_ZIP', '10001'),
         'country' => env('STORE_ADDRESS_COUNTRY', 'US'),
-        'phone'   => env('STORE_ADDRESS_PHONE', '+1234567890'),
+        'phone' => env('STORE_ADDRESS_PHONE', '+1234567890'),
     ],
 
 ];

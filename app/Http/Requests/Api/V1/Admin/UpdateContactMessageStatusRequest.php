@@ -15,7 +15,7 @@ class UpdateContactMessageStatusRequest extends FormRequest
     {
         return [
             'status' => ['required', 'string', 'in:new,read,replied,archived'],
-            'notes' => ['nullable', 'string'],
+            'notes' => ['nullable', 'string', 'max:2000'],
         ];
     }
 }

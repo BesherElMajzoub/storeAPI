@@ -2,9 +2,10 @@
 
 namespace App\Services;
 
-use App\Models\SocialAccount;
 use App\Models\Role;
+use App\Models\SocialAccount;
 use App\Models\User;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -37,7 +38,7 @@ class GoogleAuthService
 
         // Verify issuer
         $validIssuers = ['accounts.google.com', 'https://accounts.google.com'];
-        if (!in_array($response['iss'] ?? '', $validIssuers)) {
+        if (! in_array($response['iss'] ?? '', $validIssuers)) {
             throw new \Exception('Invalid Google token issuer.');
         }
 
@@ -49,16 +50,20 @@ class GoogleAuthService
         $email = $response['email'] ?? null;
         $googleId = $response['sub'] ?? null;
 
-        if (!$email || !$googleId) {
+        if (! $email || ! $googleId) {
             throw new \Exception('Incomplete Google profile. Email and sub claims are required.');
         }
 
+        if (! filter_var($response['email_verified'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            throw new \Exception('Google account email is not verified.');
+        }
+
         return [
-            'google_id'  => $googleId,
-            'email'      => $email,
-            'name'       => $response['name'] ?? $response['email'],
+            'google_id' => $googleId,
+            'email' => $email,
+            'name' => $response['name'] ?? $response['email'],
             'avatar_url' => $response['picture'] ?? null,
-            'raw'        => $response,
+            'raw' => $response,
         ];
     }
 
@@ -78,7 +83,7 @@ class GoogleAuthService
             // Update profile data in case avatar/email changed
             $socialAccount->update([
                 'provider_email' => $googleData['email'],
-                'avatar_url'     => $googleData['avatar_url'],
+                'avatar_url' => $googleData['avatar_url'],
             ]);
 
             return $socialAccount->user;
@@ -93,7 +98,7 @@ class GoogleAuthService
 
             Log::info('Google account linked to existing user', [
                 'user_id' => $user->id,
-                'email'   => $user->email,
+                'email' => $user->email,
             ]);
 
             return $user;
@@ -101,11 +106,12 @@ class GoogleAuthService
 
         // 3. Brand new user — create user + social account
         $user = User::create([
-            'name'       => $googleData['name'],
-            'email'      => $googleData['email'],
+            'name' => $googleData['name'],
+            'email' => $googleData['email'],
             'avatar_url' => $googleData['avatar_url'],
-            'password'   => bcrypt(Str::random(32)), // Random, unusable password
-            'is_active'  => true,
+            'password' => bcrypt(Str::random(32)), // Random, unusable password
+            'is_active' => true,
+            'email_verified_at' => now(),
         ]);
 
         // Assign default "User" role
@@ -118,7 +124,7 @@ class GoogleAuthService
 
         Log::info('New user created via Google Auth', [
             'user_id' => $user->id,
-            'email'   => $user->email,
+            'email' => $user->email,
         ]);
 
         return $user;
@@ -130,12 +136,12 @@ class GoogleAuthService
     private function createSocialAccount(User $user, array $googleData): SocialAccount
     {
         return SocialAccount::create([
-            'user_id'        => $user->id,
-            'provider'       => 'google',
-            'provider_id'    => $googleData['google_id'],
+            'user_id' => $user->id,
+            'provider' => 'google',
+            'provider_id' => $googleData['google_id'],
             'provider_email' => $googleData['email'],
-            'avatar_url'     => $googleData['avatar_url'],
-            'provider_data'  => $googleData['raw'],
+            'avatar_url' => $googleData['avatar_url'],
+            'provider_data' => $googleData['raw'],
         ]);
     }
 
@@ -146,29 +152,22 @@ class GoogleAuthService
      */
     private function callGoogleTokenInfo(string $idToken): array
     {
-        $url = 'https://oauth2.googleapis.com/tokeninfo?id_token=' . urlencode($idToken);
-
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => 5,
-                'method'  => 'GET',
-            ],
-            'ssl' => [
-                'verify_peer'      => true,
-                'verify_peer_name' => true,
-            ],
-        ]);
-
-        $result = @file_get_contents($url, false, $context);
-
-        if ($result === false) {
+        try {
+            $response = Http::timeout(5)
+                ->acceptJson()
+                ->get('https://oauth2.googleapis.com/tokeninfo', ['id_token' => $idToken]);
+        } catch (\Throwable $exception) {
             throw new \Exception('Unable to verify Google token. Network error or token validation service unavailable.');
         }
 
-        $data = json_decode($result, true);
+        if (! $response->successful()) {
+            throw new \Exception('Invalid Google token.');
+        }
 
-        if (isset($data['error_description'])) {
-            throw new \Exception('Invalid Google token: ' . $data['error_description']);
+        $data = $response->json();
+
+        if (! is_array($data) || isset($data['error_description'])) {
+            throw new \Exception('Invalid Google token.');
         }
 
         return $data;

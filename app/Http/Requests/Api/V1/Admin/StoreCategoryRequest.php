@@ -11,6 +11,7 @@ class StoreCategoryRequest extends BaseAdminRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:5000'],
             'parent_id' => [
                 'nullable',
                 'integer',

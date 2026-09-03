@@ -17,6 +17,7 @@ class TelegramNotificationTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private Product $product;
 
     protected function setUp(): void
@@ -44,7 +45,7 @@ class TelegramNotificationTest extends TestCase
             'https://api.telegram.org/bottest-bot-token/sendMessage' => Http::response(['ok' => true], 200),
         ]);
 
-        $notifier = new TelegramNotifier();
+        $notifier = new TelegramNotifier;
         $notifier->sendAdminAlert('Hello World');
 
         Http::assertSent(function ($request) {
@@ -67,7 +68,7 @@ class TelegramNotificationTest extends TestCase
 
         Http::fake();
 
-        $notifier = new TelegramNotifier();
+        $notifier = new TelegramNotifier;
         $notifier->sendAdminAlert('Hello World');
 
         Http::assertNothingSent();
@@ -117,6 +118,8 @@ class TelegramNotificationTest extends TestCase
                 'object' => [
                     'id' => 'cs_test_done',
                     'payment_intent' => 'pi_test_abc',
+                    'amount_total' => 10000,
+                    'currency' => 'usd',
                     'metadata' => ['order_id' => (string) $order->id],
                 ],
             ],
@@ -124,7 +127,7 @@ class TelegramNotificationTest extends TestCase
 
         $secret = 'whsec_test_secret';
         $timestamp = time();
-        $sigHeader = "t={$timestamp},v1=" . hash_hmac('sha256', "{$timestamp}.{$payload}", $secret);
+        $sigHeader = "t={$timestamp},v1=".hash_hmac('sha256', "{$timestamp}.{$payload}", $secret);
 
         config(['services.stripe.webhook_secret' => $secret]);
 
@@ -137,8 +140,8 @@ class TelegramNotificationTest extends TestCase
         Queue::assertPushed(SendAdminAlert::class, function ($job) use ($order) {
             return $job->queue === 'notifications'
                 && str_contains($job->message, "🛒 New order {$order->order_number}")
-                && str_contains($job->message, "$100.00")
-                && str_contains($job->message, "2 items");
+                && str_contains($job->message, '$100.00')
+                && str_contains($job->message, '2 items');
         });
     }
 
@@ -160,7 +163,7 @@ class TelegramNotificationTest extends TestCase
 
         Queue::assertPushed(SendAdminAlert::class, function ($job) {
             return $job->queue === 'notifications'
-                && str_contains($job->message, "📩 New message from John Doe (john@example.com): \"Question about my order\"");
+                && str_contains($job->message, '📩 New message from John Doe (john@example.com): "Question about my order"');
         });
     }
 
@@ -188,7 +191,7 @@ class TelegramNotificationTest extends TestCase
         Queue::assertPushed(SendAdminAlert::class, function ($job) use ($order) {
             return $job->queue === 'notifications'
                 && str_contains($job->message, "⚠️ Cancellation request for order {$order->order_number}")
-                && str_contains($job->message, "I ordered by mistake and need to cancel.");
+                && str_contains($job->message, 'I ordered by mistake and need to cancel.');
         });
     }
 }
