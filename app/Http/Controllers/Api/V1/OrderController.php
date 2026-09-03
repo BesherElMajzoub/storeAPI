@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Exceptions\CouponValidationException;
 use App\Exceptions\InsufficientStockException;
+use App\Exceptions\ShippingProviderException;
+use App\Exceptions\ShippingValidationException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\StoreCancellationRequestRequest;
 use App\Http\Requests\StoreOrderRequest;
@@ -15,8 +17,9 @@ use App\Models\OrderCancellationRequest;
 use App\Services\CouponService;
 use App\Services\EasyPostService;
 use App\Services\OrderInventoryService;
+use App\Services\ShipmentTrackingService;
+use App\Services\ShippingQuoteService;
 use App\Services\StripeCheckoutService;
-use EasyPost\EasyPostClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -98,7 +101,7 @@ class OrderController extends Controller
     #[OA\RequestBody(
         required: true,
         content: new OA\JsonContent(
-            required: ['items', 'shipping_address'],
+            required: ['items', 'shipping_address', 'shipping_rate_id'],
             properties: [
                 new OA\Property(
                     property: 'items',
@@ -116,9 +119,8 @@ class OrderController extends Controller
                     property: 'shipping_address',
                     type: 'object',
                     properties: [
-                        new OA\Property(property: 'first_name', type: 'string', example: 'John'),
-                        new OA\Property(property: 'last_name', type: 'string', example: 'Doe'),
-                        new OA\Property(property: 'address_line_1', type: 'string', example: '123 Main St'),
+                        new OA\Property(property: 'name', type: 'string', example: 'John Doe'),
+                        new OA\Property(property: 'line1', type: 'string', example: '123 Main St'),
                         new OA\Property(property: 'city', type: 'string', example: 'New York'),
                         new OA\Property(property: 'state', type: 'string', example: 'NY'),
                         new OA\Property(property: 'postal_code', type: 'string', example: '10001'),
@@ -147,6 +149,7 @@ class OrderController extends Controller
                     nullable: true,
                     example: 'SAVE50'
                 ),
+                new OA\Property(property: 'shipping_rate_id', type: 'string', example: 'rate_abc123'),
             ]
         )
     )]
@@ -192,7 +195,7 @@ class OrderController extends Controller
             ]
         )
     )]
-    public function store(StoreOrderRequest $request, StripeCheckoutService $stripe, CouponService $couponService, OrderInventoryService $inventory): JsonResponse
+    public function store(StoreOrderRequest $request, StripeCheckoutService $stripe, CouponService $couponService, OrderInventoryService $inventory, ShippingQuoteService $quoteService): JsonResponse
     {
         if (! $request->user()->email_verified_at) {
             return response()->json([
@@ -205,44 +208,32 @@ class OrderController extends Controller
 
         $items = $request->validated('items');
 
-        $shippingCost = 0.0;
-        $easypostShipmentId = null;
-
-        if ($request->filled('shipping_rate_id') && $request->filled('easypost_shipment_id')) {
-            try {
-                $client = new EasyPostClient(config('services.easypost.api_key'));
-                $shipment = $client->shipment->retrieve($request->easypost_shipment_id);
-
-                // Find matching rate
-                $matchingRate = collect($shipment->rates)->first(fn ($rate) => $rate->id === $request->shipping_rate_id);
-
-                if ($matchingRate) {
-                    $shippingCost = (float) $matchingRate->rate;
-                    $easypostShipmentId = $shipment->id;
-                } else {
-                    throw new \Exception('Selected shipping rate is not valid for this shipment.');
-                }
-            } catch (\Throwable $e) {
-                Log::error('EasyPost rate verification failed during checkout', [
-                    'shipment_id' => $request->easypost_shipment_id,
-                    'rate_id' => $request->shipping_rate_id,
-                    'error' => $e->getMessage(),
-                ]);
-
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Invalid shipping rate selected.',
-                    'data' => null,
-                    'errors' => [
-                        'shipping_rate_id' => ['Invalid shipping rate selected.'],
-                    ],
-                ], 422);
-            }
+        try {
+            $shippingQuote = $quoteService->validateForCheckout(
+                $request->validated('shipping_rate_id'),
+                $request->validated('shipping_address'),
+                $items
+            );
+        } catch (ShippingValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'data' => null,
+                'errors' => ['shipping_rate_id' => [$e->getMessage()], 'code' => $e->errorCode],
+            ], 422);
+        } catch (ShippingProviderException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'data' => null,
+                'errors' => ['shipping_rate_id' => ['Shipping provider verification failed.']],
+            ], 503);
         }
 
         // 1️⃣ Create order in DB (pending_payment, unpaid)
         try {
-            $order = DB::transaction(function () use ($request, $items, $couponService, $inventory, $shippingCost, $easypostShipmentId) {
+            $order = DB::transaction(function () use ($request, $items, $couponService, $inventory, $shippingQuote, $quoteService) {
+                $lockedQuote = $quoteService->lockAvailableQuote($shippingQuote->id);
                 $quote = $inventory->quoteAndReserve($items);
                 $subtotal = $quote['subtotal'];
                 $orderItemsData = $quote['items'];
@@ -255,6 +246,7 @@ class OrderController extends Controller
                     $discount = $couponService->calculateDiscount($coupon, $subtotal);
                 }
 
+                $shippingCost = (float) $lockedQuote->amount;
                 $total = max(0.0, $subtotal + $shippingCost - $discount);
 
                 $order = Order::create([
@@ -264,7 +256,10 @@ class OrderController extends Controller
                     'payment_status' => 'unpaid',
                     'subtotal' => $subtotal,
                     'shipping_cost' => $shippingCost,
-                    'easypost_shipment_id' => $easypostShipmentId,
+                    'easypost_shipment_id' => $lockedQuote->shipment_id,
+                    'shipping_rate_id' => $lockedQuote->rate_id,
+                    'shipping_carrier' => $lockedQuote->carrier,
+                    'shipping_service' => $lockedQuote->service,
                     'total' => $total,
                     'shipping_address' => $request->shipping_address,
                     'billing_address' => $request->billing_address ?? $request->shipping_address,
@@ -291,6 +286,8 @@ class OrderController extends Controller
                     $order->items()->create($data);
                 }
 
+                $lockedQuote->update(['consumed_at' => now(), 'order_id' => $order->id]);
+
                 return $order->load('items');
             }, 3);
         } catch (CouponValidationException $e) {
@@ -309,6 +306,13 @@ class OrderController extends Controller
                 'data' => null,
                 'errors' => [$e->field => [$e->getMessage()]],
             ], 409);
+        } catch (ShippingValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'data' => null,
+                'errors' => ['shipping_rate_id' => [$e->getMessage()], 'code' => $e->errorCode],
+            ], 422);
         }
 
         // 2️⃣ Create Stripe Checkout Session
@@ -544,7 +548,7 @@ class OrderController extends Controller
     )]
     #[OA\Response(response: 422, description: 'Tracking info not available yet.')]
     #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
-    public function getTracking(Request $request, int $id, EasyPostService $easyPostService): JsonResponse
+    public function getTracking(Request $request, int $id, EasyPostService $easyPostService, ShipmentTrackingService $trackingService): JsonResponse
     {
         $order = $request->user()->orders()->findOrFail($id);
 
@@ -574,6 +578,8 @@ class OrderController extends Controller
                 ], 422);
             }
 
+            $order = $trackingService->sync($order, $tracker);
+
             $trackingDetails = [];
             if (isset($tracker->tracking_details)) {
                 foreach ($tracker->tracking_details as $detail) {
@@ -596,6 +602,7 @@ class OrderController extends Controller
                     'status_detail' => $tracker->status_detail ?? null,
                     'est_delivery_date' => $tracker->est_delivery_date ?? null,
                     'tracking_details' => $trackingDetails,
+                    'events' => $order->tracking_events ?? [],
                 ],
                 'errors' => null,
             ]);

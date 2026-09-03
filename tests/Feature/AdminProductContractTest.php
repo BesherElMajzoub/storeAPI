@@ -26,6 +26,7 @@ class AdminProductContractTest extends TestCase
 
     public function test_product_metadata_fields_are_persisted_and_returned(): void
     {
+        $category = Category::create(['name' => 'Contracts', 'slug' => 'contracts']);
         $response = $this->postJson('/api/v1/admin/products', [
             'name' => 'Contract Product',
             'price' => 100,
@@ -33,6 +34,11 @@ class AdminProductContractTest extends TestCase
             'stock_qty' => 5,
             'in_stock' => true,
             'status' => 'published',
+            'category_id' => $category->id,
+            'weight_oz' => 8,
+            'length_in' => 8,
+            'width_in' => 6,
+            'height_in' => 2,
             'meta_title' => 'Contract title',
             'meta_description' => 'Contract description',
         ])->assertCreated();
@@ -115,7 +121,7 @@ class AdminProductContractTest extends TestCase
         $this->postJson('/api/v1/admin/products/bulk', [
             'ids' => $products->pluck('id')->all(),
             'set' => ['status' => 'archived', 'is_featured' => true],
-        ])->assertOk();
+        ])->assertOk()->assertJsonPath('data.0.status', 'updated');
 
         foreach ($products as $product) {
             $this->assertDatabaseHas('products', ['id' => $product->id, 'status' => 'archived', 'is_featured' => true]);

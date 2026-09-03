@@ -75,6 +75,13 @@ return [
     'easypost' => [
         'api_key' => env('EASYPOST_API_KEY'),
         'webhook_secret' => env('EASYPOST_WEBHOOK_SECRET'),
+        'quote_ttl_minutes' => (int) env('EASYPOST_QUOTE_TTL_MINUTES', 15),
+        'supported_countries' => ['US'],
+        'packages' => [
+            ['name' => 'small', 'length' => 10.0, 'width' => 8.0, 'height' => 4.0, 'max_weight' => 64.0],
+            ['name' => 'medium', 'length' => 14.0, 'width' => 10.0, 'height' => 6.0, 'max_weight' => 160.0],
+            ['name' => 'large', 'length' => 18.0, 'width' => 14.0, 'height' => 10.0, 'max_weight' => 320.0],
+        ],
     ],
 
     'store_origin' => [

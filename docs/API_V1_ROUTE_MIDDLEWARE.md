@@ -1,9 +1,9 @@
 # API v1 route and middleware inventory
 
-Generated from `php artisan route:list --json` on 2026-09-02 after the readiness changes.
+Generated from `php artisan route:list --json` on 2026-09-03 after the shipping/import changes.
 
-- API v1 routes: 117
-- Admin routes: 70
+- API v1 routes: 121
+- Admin routes: 73
 - Every admin route has `auth:sanctum`, `throttle:api`, `can:admin-access`, and `audit.admin`.
 - Every API v1 route has the global `throttle:api` inherited from the v1 group. Rows with an additional limiter show both.
 
@@ -45,15 +45,18 @@ Generated from `php artisan route:list --json` on 2026-09-02 after the readiness
 | GET | `api/v1/admin/orders/{id}` | api, auth:sanctum, throttle:api, can:admin-access, audit.admin |
 | POST | `api/v1/admin/orders/{id}/status` | api, auth:sanctum, throttle:api, can:admin-access, audit.admin |
 | POST | `api/v1/admin/orders/{order}/refund` | api, auth:sanctum, throttle:api, can:admin-access, audit.admin |
+| POST | `api/v1/admin/orders/{order}/label` | api, auth:sanctum, throttle:api, can:admin-access, audit.admin |
 | POST | `api/v1/admin/orders/{order}/ship` | api, auth:sanctum, throttle:api, can:admin-access, audit.admin |
 | GET | `api/v1/admin/orders/{order}/tracking` | api, auth:sanctum, throttle:api, can:admin-access, audit.admin |
 | GET | `api/v1/admin/products` | api, auth:sanctum, throttle:api, can:admin-access, audit.admin |
 | POST | `api/v1/admin/products` | api, auth:sanctum, throttle:api, can:admin-access, audit.admin |
 | POST | `api/v1/admin/products/bulk` | api, auth:sanctum, throttle:api, can:admin-access, audit.admin |
+| POST | `api/v1/admin/products/import` | api, auth:sanctum, throttle:api, can:admin-access, audit.admin |
 | GET | `api/v1/admin/products/{product}` | api, auth:sanctum, throttle:api, can:admin-access, audit.admin |
 | PUT|PATCH | `api/v1/admin/products/{product}` | api, auth:sanctum, throttle:api, can:admin-access, audit.admin |
 | DELETE | `api/v1/admin/products/{product}` | api, auth:sanctum, throttle:api, can:admin-access, audit.admin |
 | POST | `api/v1/admin/products/{product}/images` | api, auth:sanctum, throttle:api, can:admin-access, audit.admin |
+| POST | `api/v1/admin/products/{product}/images/order` | api, auth:sanctum, throttle:api, can:admin-access, audit.admin |
 | POST | `api/v1/admin/products/{product}/images/reorder` | api, auth:sanctum, throttle:api, can:admin-access, audit.admin |
 | DELETE | `api/v1/admin/products/{product}/images/{media}` | api, auth:sanctum, throttle:api, can:admin-access, audit.admin |
 | POST | `api/v1/admin/products/{product}/media` | api, auth:sanctum, throttle:api, can:admin-access, audit.admin |
@@ -117,6 +120,7 @@ Generated from `php artisan route:list --json` on 2026-09-02 after the readiness
 | PUT | `api/v1/profile/addresses/{id}` | api, auth:sanctum, throttle:api |
 | DELETE | `api/v1/profile/addresses/{id}` | api, auth:sanctum, throttle:api |
 | POST | `api/v1/profile/addresses/{id}/default` | api, auth:sanctum, throttle:api |
+| POST | `api/v1/orders/track` | api, throttle:api, throttle:order-tracking |
 | POST | `api/v1/shipping/rates` | api, throttle:api |
 | POST | `api/v1/shipping/verify-address` | api, throttle:api |
 | POST | `api/v1/webhooks/easypost` | api, throttle:api |
@@ -126,4 +130,3 @@ Generated from `php artisan route:list --json` on 2026-09-02 after the readiness
 | GET | `api/v1/wishlist/check/{productId}` | api, auth:sanctum, throttle:api |
 | GET | `api/v1/wishlist/count` | api, auth:sanctum, throttle:api |
 | DELETE | `api/v1/wishlist/{productId}` | api, auth:sanctum, throttle:api |
-

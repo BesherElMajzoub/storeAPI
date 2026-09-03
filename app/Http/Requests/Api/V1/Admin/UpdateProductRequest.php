@@ -39,6 +39,10 @@ class UpdateProductRequest extends BaseAdminRequest
             'discount_price' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'sku' => ['sometimes', 'nullable', 'string', 'max:255', Rule::unique('products', 'sku')->ignore($productId)],
             'stock_qty' => ['sometimes', 'integer', 'min:0'],
+            'weight_oz' => ['sometimes', 'nullable', 'numeric', 'gt:0', 'max:2400'],
+            'length_in' => ['sometimes', 'nullable', 'numeric', 'gt:0', 'max:200'],
+            'width_in' => ['sometimes', 'nullable', 'numeric', 'gt:0', 'max:200'],
+            'height_in' => ['sometimes', 'nullable', 'numeric', 'gt:0', 'max:200'],
             'status' => ['sometimes', Rule::in(['draft', 'published', 'archived'])],
             'category_id' => [
                 'sometimes',
@@ -63,12 +67,30 @@ class UpdateProductRequest extends BaseAdminRequest
             'variants.*.price' => ['nullable', 'numeric', 'min:0'],
             'variants.*.stock_qty' => ['nullable', 'integer', 'min:0'],
             'variants.*.attributes' => ['nullable', 'array'],
+            'variants.*.weight_oz' => ['nullable', 'numeric', 'gt:0', 'max:2400'],
+            'variants.*.length_in' => ['nullable', 'numeric', 'gt:0', 'max:200'],
+            'variants.*.width_in' => ['nullable', 'numeric', 'gt:0', 'max:200'],
+            'variants.*.height_in' => ['nullable', 'numeric', 'gt:0', 'max:200'],
         ];
     }
 
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
+            if ($this->input('status') === 'published') {
+                $product = Product::find($this->route('product'));
+                $categoryId = $this->has('category_id') ? $this->input('category_id') : $product?->category_id;
+                if (! $categoryId) {
+                    $validator->errors()->add('category_id', 'Published products require a category.');
+                }
+                foreach (['weight_oz', 'length_in', 'width_in', 'height_in'] as $field) {
+                    $value = $this->has($field) ? $this->input($field) : $product?->{$field};
+                    if (! is_numeric($value) || (float) $value <= 0) {
+                        $validator->errors()->add($field, 'Published products require complete shipping weight and dimensions.');
+                    }
+                }
+            }
+
             if ($this->has('discount_price')) {
                 $discount = $this->input('discount_price');
                 if ($discount !== null) {

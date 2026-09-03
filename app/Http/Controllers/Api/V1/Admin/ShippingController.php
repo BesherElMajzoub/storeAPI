@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\V1\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Services\EasyPostService;
+use App\Services\ShipmentTrackingService;
+use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,15 +18,15 @@ class ShippingController extends Controller
 {
     protected EasyPostService $easyPostService;
 
-    public function __construct(EasyPostService $easyPostService)
+    public function __construct(EasyPostService $easyPostService, private readonly ShipmentTrackingService $tracking)
     {
         $this->easyPostService = $easyPostService;
     }
 
     #[OA\Post(
-        path: '/api/v1/admin/orders/{order}/ship',
+        path: '/api/v1/admin/orders/{order}/label',
         summary: 'Purchase Shipping Label',
-        description: 'Purchase a shipping label and mark the order as shipped.',
+        description: 'Idempotently purchase a shipping label for a paid processing order. /ship remains a deprecated API v1 alias.',
         security: [['bearerAuth' => []]],
         tags: ['Admin Shipping']
     )]
@@ -32,10 +34,9 @@ class ShippingController extends Controller
     #[OA\RequestBody(
         required: true,
         content: new OA\JsonContent(
-            required: ['rate_id'],
             properties: [
-                new OA\Property(property: 'rate_id', type: 'string', example: 'rate_123456'),
-                new OA\Property(property: 'shipment_id', type: 'string', nullable: true, example: 'shp_123456', description: 'Optional if order has easypost_shipment_id stored'),
+                new OA\Property(property: 'rate_id', type: 'string', nullable: true, example: 'rate_123456', description: 'Defaults to the rate selected at checkout'),
+                new OA\Property(property: 'shipment_id', type: 'string', nullable: true, deprecated: true, example: 'shp_123456'),
             ]
         )
     )]
@@ -89,75 +90,80 @@ class ShippingController extends Controller
     public function createShipment(Request $request, int $orderId): JsonResponse
     {
         $request->validate([
-            'rate_id' => ['required', 'string'],
+            'rate_id' => ['nullable', 'string'],
             'shipment_id' => ['nullable', 'string'],
         ]);
 
         $order = Order::findOrFail($orderId);
 
+        if ($order->tracking_number && $order->label_url) {
+            return $this->shipmentResponse($order, 'Shipping label already exists.');
+        }
+
         // Check if order is eligible for shipping
-        if (! in_array($order->status, ['pending', 'processing'])) {
-            return $this->error('Order must be in pending or processing status to be shipped.', 422, [
-                'status' => ['Order status must be pending or processing.'],
+        if ($order->status !== 'processing' || ! $order->isPaid()) {
+            return $this->error('Only paid processing orders can be shipped.', 409, [
+                'status' => ['Order must be paid and in processing status.'],
             ]);
         }
 
         $shipmentId = $request->input('shipment_id') ?: $order->easypost_shipment_id;
+        $rateId = $request->input('rate_id') ?: $order->shipping_rate_id;
+
+        if (! $shipmentId || ! $rateId) {
+            return $this->error('The order does not have a usable shipping quote.', 422, [
+                'shipping' => ['Request new shipping rates for this order.'],
+            ]);
+        }
+
+        if ($order->easypost_shipment_id && $shipmentId !== $order->easypost_shipment_id) {
+            return $this->error('The selected shipment does not belong to this order.', 422);
+        }
+
+        if ($order->shipping_rate_id && $rateId !== $order->shipping_rate_id) {
+            return $this->error('The selected rate does not belong to this order.', 422);
+        }
 
         try {
-            // If shipment_id is not available, we dynamically create a shipment based on order shipping address
-            if (! $shipmentId) {
-                $shippingAddress = $order->shipping_address;
-                if (empty($shippingAddress)) {
-                    return $this->error('Order does not have a shipping address.', 422, [
-                        'shipping_address' => ['Shipping address is empty.'],
-                    ]);
+            if (! $order->shipping_rate_id) {
+                $rate = $this->easyPostService->retrieveRate($rateId);
+                if (($rate->shipment_id ?? null) !== $shipmentId) {
+                    return $this->error('The selected rate does not belong to this shipment.', 422);
                 }
-
-                // Format the shipping address to match EasyPost expectations
-                $toAddress = [
-                    'name' => $shippingAddress['full_name'] ?? $shippingAddress['name'] ?? $order->user?->name ?? 'Customer',
-                    'street1' => $shippingAddress['street'] ?? $shippingAddress['street1'] ?? '',
-                    'street2' => $shippingAddress['apartment'] ?? $shippingAddress['street2'] ?? '',
-                    'city' => $shippingAddress['city'] ?? '',
-                    'state' => $shippingAddress['state'] ?? $shippingAddress['area'] ?? '',
-                    'zip' => $shippingAddress['postal_code'] ?? $shippingAddress['zip'] ?? '',
-                    'country' => $shippingAddress['country'] ?? 'US',
-                    'phone' => $shippingAddress['phone'] ?? $order->user?->phone ?? '',
-                ];
-
-                $shipment = $this->easyPostService->getShippingRates($toAddress);
-                $shipmentId = $shipment->id;
             }
 
-            // Purchase the label
-            $boughtShipment = $this->easyPostService->purchaseLabel($shipmentId, $request->input('rate_id'));
+            $boughtShipment = $this->easyPostService->purchaseLabel($shipmentId, $rateId);
 
             // Update the order in a transaction
-            $updatedOrder = DB::transaction(function () use ($order, $boughtShipment, $shipmentId) {
+            $updatedOrder = DB::transaction(function () use ($order, $boughtShipment, $shipmentId, $rateId) {
                 $order->update([
                     'easypost_shipment_id' => $shipmentId,
+                    'shipping_rate_id' => $rateId,
                     'tracking_number' => $boughtShipment->tracking_code,
                     'label_url' => $boughtShipment->postage_label->label_url,
+                    'tracking_url' => $boughtShipment->tracker->public_url ?? null,
+                    'shipment_status' => $boughtShipment->tracker->status ?? 'pre_transit',
+                    'shipped_at' => now(),
+                    'estimated_delivery' => isset($boughtShipment->tracker->est_delivery_date)
+                        ? Carbon::parse($boughtShipment->tracker->est_delivery_date)->toDateString()
+                        : null,
                     'status' => 'shipped',
                 ]);
 
                 return $order->refresh();
             });
 
-            return $this->success([
-                'id' => $updatedOrder->id,
-                'status' => $updatedOrder->status,
-                'easypost_shipment_id' => $updatedOrder->easypost_shipment_id,
-                'tracking_number' => $updatedOrder->tracking_number,
-                'label_url' => $updatedOrder->label_url,
-            ], 'Order shipped successfully.');
+            if (isset($boughtShipment->tracker)) {
+                $updatedOrder = $this->tracking->sync($updatedOrder, $boughtShipment->tracker);
+            }
+
+            return $this->shipmentResponse($updatedOrder, 'Order shipped successfully.');
 
         } catch (Exception $e) {
             Log::error('Admin Shipping createShipment failed: '.$e->getMessage());
 
-            return $this->error('Failed to ship order.', 422, [
-                'shipping' => ['Shipping provider request failed.'],
+            return $this->error('Shipping label could not be purchased.', 422, [
+                'shipping' => ['Check the carrier balance, address, and selected rate.'],
             ]);
         }
     }
@@ -227,6 +233,8 @@ class ShippingController extends Controller
                 ]);
             }
 
+            $order = $this->tracking->sync($order, $tracker);
+
             $trackingDetails = [];
             if (isset($tracker->tracking_details)) {
                 foreach ($tracker->tracking_details as $detail) {
@@ -247,6 +255,7 @@ class ShippingController extends Controller
                 'weight' => $tracker->weight ?? null,
                 'est_delivery_date' => $tracker->est_delivery_date ?? null,
                 'tracking_details' => $trackingDetails,
+                'events' => $order->tracking_events ?? [],
             ], 'Tracking info retrieved.');
 
         } catch (Exception $e) {
@@ -276,5 +285,26 @@ class ShippingController extends Controller
             'data' => null,
             'errors' => $errors,
         ], $status);
+    }
+
+    private function shipmentResponse(Order $order, string $message): JsonResponse
+    {
+        return $this->success([
+            'id' => $order->id,
+            'status' => $order->status,
+            'easypost_shipment_id' => $order->easypost_shipment_id,
+            'tracking_number' => $order->tracking_number,
+            'label_url' => $order->label_url,
+            'shipment' => [
+                'tracking_number' => $order->tracking_number,
+                'carrier' => $order->shipping_carrier,
+                'service' => $order->shipping_service,
+                'tracking_url' => $order->tracking_url,
+                'label_url' => $order->label_url,
+                'shipped_at' => $order->shipped_at?->toIso8601String(),
+                'estimated_delivery' => $order->estimated_delivery?->format('Y-m-d'),
+                'status' => $order->shipment_status ?? 'unknown',
+            ],
+        ], $message);
     }
 }

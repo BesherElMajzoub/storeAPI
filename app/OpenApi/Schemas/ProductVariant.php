@@ -5,20 +5,24 @@ namespace App\OpenApi\Schemas;
 use OpenApi\Attributes as OA;
 
 #[OA\Schema(
-    schema: "ProductVariant",
-    title: "ProductVariant",
-    description: "Product variant (color/size combination)",
+    schema: 'ProductVariant',
+    title: 'ProductVariant',
+    description: 'Product variant (color/size combination)',
     properties: [
-        new OA\Property(property: "id", type: "integer", example: 1),
-        new OA\Property(property: "name", type: "string", example: "Red / XL"),
-        new OA\Property(property: "sku", type: "string", nullable: true, example: "SHIRT-RED-XL"),
-        new OA\Property(property: "price", type: "number", format: "float", nullable: true, example: 35.00),
-        new OA\Property(property: "stock_qty", type: "integer", example: 50),
+        new OA\Property(property: 'id', type: 'integer', example: 1),
+        new OA\Property(property: 'name', type: 'string', example: 'Red / XL'),
+        new OA\Property(property: 'sku', type: 'string', nullable: true, example: 'SHIRT-RED-XL'),
+        new OA\Property(property: 'price', type: 'number', format: 'float', nullable: true, example: 35.00),
+        new OA\Property(property: 'stock_qty', type: 'integer', example: 50),
+        new OA\Property(property: 'weight_oz', type: 'number', format: 'float', nullable: true),
+        new OA\Property(property: 'length_in', type: 'number', format: 'float', nullable: true),
+        new OA\Property(property: 'width_in', type: 'number', format: 'float', nullable: true),
+        new OA\Property(property: 'height_in', type: 'number', format: 'float', nullable: true),
         new OA\Property(
-            property: "attributes",
-            type: "object",
+            property: 'attributes',
+            type: 'object',
             nullable: true,
-            example: ["Color" => "Red", "Size" => "XL"]
+            example: ['Color' => 'Red', 'Size' => 'XL']
         ),
     ]
 )]

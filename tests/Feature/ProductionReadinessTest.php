@@ -8,6 +8,7 @@ use App\Models\OtpCode;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\User;
+use App\Models\WishlistItem;
 use App\Services\OtpService;
 use App\Services\StripeCheckoutService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -184,12 +185,21 @@ class ProductionReadinessTest extends TestCase
             'city' => 'New York',
             'country' => 'US',
         ]);
+        $product = Product::factory()->create();
+        WishlistItem::create(['user_id' => $owner->id, 'product_id' => $product->id]);
 
         $this->actingAs($attacker, 'sanctum');
         $this->getJson("/api/v1/orders/{$order->id}")->assertNotFound();
         $this->postJson("/api/v1/orders/{$order->id}/cancel")->assertNotFound();
         $this->putJson("/api/v1/profile/addresses/{$address->id}", ['city' => 'Damascus'])->assertForbidden();
         $this->deleteJson("/api/v1/profile/addresses/{$address->id}")->assertForbidden();
+        $this->getJson('/api/v1/wishlist/count')->assertJsonPath('data.count', 0);
+        $this->getJson("/api/v1/wishlist/check/{$product->id}")->assertJsonPath('data.in_wishlist', false);
+        $this->deleteJson("/api/v1/wishlist/{$product->id}")->assertNotFound();
+        $this->getJson('/api/v1/auth/me')->assertJsonPath('data.email', $attacker->email);
+        $this->putJson('/api/v1/auth/me', ['name' => 'Attacker Updated'])->assertOk();
+        $this->assertNotSame('Attacker Updated', $owner->fresh()->name);
+        $this->assertDatabaseHas('wishlist_items', ['user_id' => $owner->id, 'product_id' => $product->id]);
     }
 
     public function test_order_ignores_client_prices_and_reserves_database_stock(): void
@@ -198,11 +208,13 @@ class ProductionReadinessTest extends TestCase
         $product = Product::factory()->create(['price' => 25, 'stock_qty' => 2]);
         $session = StripeSession::constructFrom(['id' => 'cs_price', 'url' => 'https://checkout.stripe.test/cs_price']);
         $this->mock(StripeCheckoutService::class, fn ($mock) => $mock->shouldReceive('createCheckoutSession')->once()->andReturn($session));
+        $shipping = $this->createShippingQuote($product);
 
         $response = $this->actingAs($user, 'sanctum')->postJson('/api/v1/orders', [
-            'items' => [['product_id' => $product->id, 'quantity' => 1, 'price' => 0]],
+            'items' => [array_merge($shipping['items'][0], ['price' => 0])],
             'total' => 0,
-            'shipping_address' => ['name' => 'Buyer', 'line1' => 'Street', 'city' => 'City', 'country' => 'US'],
+            'shipping_address' => $shipping['address'],
+            'shipping_rate_id' => $shipping['rateId'],
         ])->assertCreated();
 
         $orderId = $response->json('data.order.id');
@@ -215,10 +227,12 @@ class ProductionReadinessTest extends TestCase
     {
         $user = User::factory()->unverified()->create();
         $product = Product::factory()->create();
+        $shipping = $this->createShippingQuote($product);
 
         $this->actingAs($user, 'sanctum')->postJson('/api/v1/orders', [
-            'items' => [['product_id' => $product->id, 'quantity' => 1]],
-            'shipping_address' => ['name' => 'Buyer', 'line1' => 'Street', 'city' => 'City', 'country' => 'US'],
+            'items' => $shipping['items'],
+            'shipping_address' => $shipping['address'],
+            'shipping_rate_id' => $shipping['rateId'],
         ])->assertForbidden();
     }
 

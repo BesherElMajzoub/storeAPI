@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Jobs\SendAdminAlert;
 use App\Models\Order;
 use App\Services\EasyPostService;
+use App\Services\ShipmentTrackingService;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,7 +17,7 @@ class EasyPostWebhookController extends Controller
 {
     protected EasyPostService $easyPostService;
 
-    public function __construct(EasyPostService $easyPostService)
+    public function __construct(EasyPostService $easyPostService, private readonly ShipmentTrackingService $tracking)
     {
         $this->easyPostService = $easyPostService;
     }
@@ -67,6 +68,7 @@ class EasyPostWebhookController extends Controller
 
                     if ($order) {
                         Log::info("Updating tracking for Order #{$order->order_number} to status: {$trackerStatus}");
+                        $this->tracking->sync($order, $result);
 
                         if ($trackerStatus === 'delivered' && $order->status !== 'delivered') {
                             $order->status = 'delivered';

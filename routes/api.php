@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\V1\EasyPostWebhookController;
 use App\Http\Controllers\Api\V1\InspiredLeadController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\ProductController;
+use App\Http\Controllers\Api\V1\PublicOrderTrackingController;
 use App\Http\Controllers\Api\V1\ReviewController;
 use App\Http\Controllers\Api\V1\ShippingController;
 use App\Http\Controllers\Api\V1\WishlistController;
@@ -68,6 +69,8 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
     // Shipping
     Route::post('shipping/verify-address', [ShippingController::class, 'verifyAddress']);
     Route::post('shipping/rates', [ShippingController::class, 'getRates']);
+    Route::post('orders/track', [PublicOrderTrackingController::class, 'track'])
+        ->middleware('throttle:order-tracking');
 
     Route::get('categories', [CategoryController::class, 'index']);
     Route::get('categories/{slug}', [CategoryController::class, 'show']);
@@ -123,9 +126,11 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
 
         // Products
         Route::post('products/bulk', [AdminProductController::class, 'bulkUpdate']);
+        Route::post('products/import', [AdminProductController::class, 'import']);
         Route::apiResource('products', AdminProductController::class);
         Route::post('products/{product}/images', [MediaController::class, 'uploadProductImages']);
         Route::post('products/{product}/images/reorder', [MediaController::class, 'reorderProductGallery']);
+        Route::post('products/{product}/images/order', [MediaController::class, 'reorderProductGallery']);
         Route::delete('products/{product}/images/{media}', [MediaController::class, 'destroyProductImage']);
 
         // Categories
@@ -154,6 +159,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
 
         // Shipping / Label purchase
         Route::post('orders/{order}/ship', [AdminShippingController::class, 'createShipment']);
+        Route::post('orders/{order}/label', [AdminShippingController::class, 'createShipment']);
         Route::get('orders/{order}/tracking', [AdminShippingController::class, 'getTracking']);
 
         // Cancellation Requests

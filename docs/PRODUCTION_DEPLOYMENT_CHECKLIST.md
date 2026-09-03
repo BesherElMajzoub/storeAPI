@@ -80,7 +80,7 @@ curl -i -X OPTIONS https://apis.otantikqueen.com/api/v1/products \
 ## 7. Shipping
 
 - [ ] Verify a deliverable US address and obtain rates.
-- [ ] Verify an international address and obtain rates/customs-compatible output where applicable.
+- [ ] Verify a non-US address returns 422 with `unsupported_destination`; international customs shipping is outside v1 scope.
 - [ ] Purchase a test label, receive a signed tracking webhook, and retrieve tracking through the customer order endpoint.
 - [ ] Confirm missing/invalid EasyPost webhook signatures fail closed.
 - [ ] Confirm the customer response includes `tracking_number` and no other customer's data.

@@ -23,11 +23,15 @@ class StoreOrderRequest extends FormRequest
             'shipping_address' => 'required|array',
             'shipping_address.name' => 'required|string|max:255',
             'shipping_address.line1' => 'required|string|max:255',
+            'shipping_address.line2' => 'nullable|string|max:255',
             'shipping_address.city' => 'required|string|max:100',
+            'shipping_address.state' => 'required|string|max:100',
+            'shipping_address.postal_code' => 'required|string|max:20',
             'shipping_address.country' => 'required|string|size:2',
+            'shipping_address.phone' => 'nullable|string|max:50',
             'billing_address' => 'sometimes|nullable|array',
             'coupon_code' => 'nullable|string|max:64|regex:/^[A-Za-z0-9_-]+$/',
-            'shipping_rate_id' => 'nullable|string|max:255',
+            'shipping_rate_id' => 'required|string|max:255',
             'easypost_shipment_id' => 'nullable|string|max:255',
         ];
     }

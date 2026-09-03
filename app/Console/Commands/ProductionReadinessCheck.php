@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Category;
+use App\Models\Product;
 use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
@@ -24,12 +26,15 @@ class ProductionReadinessCheck extends Command
             ['Stripe live secret', Str::startsWith((string) config('services.stripe.secret'), 'sk_live_'), $this->masked(config('services.stripe.secret'))],
             ['Stripe webhook secret', Str::startsWith((string) config('services.stripe.webhook_secret'), 'whsec_'), $this->masked(config('services.stripe.webhook_secret'))],
             ['EasyPost configured', filled(config('services.easypost.api_key')) && filled(config('services.easypost.webhook_secret')), filled(config('services.easypost.api_key')) ? 'configured' : 'missing'],
+            ['Warehouse origin configured', $this->warehouseOriginIsConfigured(), config('services.store_origin.street1', 'missing')],
+            ['Shipping packages configured', count(config('services.easypost.packages', [])) > 0, count(config('services.easypost.packages', [])).' package(s)'],
             ['Durable queue enabled', config('queue.default') !== 'sync', (string) config('queue.default')],
             ['Production mailer enabled', ! in_array(config('mail.default'), ['log', 'array'], true), (string) config('mail.default')],
             ['Telescope disabled', ! config('telescope.enabled'), config('telescope.enabled') ? 'enabled' : 'disabled'],
             ['UTC timestamps', config('app.timezone') === 'UTC', (string) config('app.timezone')],
             ['MySQL utf8mb4', config('database.default') !== 'mysql' || config('database.connections.mysql.charset') === 'utf8mb4', (string) config('database.connections.mysql.charset')],
             ['No known demo accounts', $this->demoAccountCount() === 0, $this->demoAccountCount().' found'],
+            ['No known demo catalogue', $this->demoContentCount() === 0, $this->demoContentCount().' found'],
             ['No test/debug routes', ! $this->hasTestRoutes(), $this->hasTestRoutes() ? 'found' : 'none'],
         ];
 
@@ -64,6 +69,22 @@ class ProductionReadinessCheck extends Command
     {
         return collect(app('router')->getRoutes()->getRoutes())
             ->contains(fn ($route) => preg_match('#(^|/)(test|debug|phpinfo)(/|$)#i', $route->uri()));
+    }
+
+    private function demoContentCount(): int
+    {
+        return Product::withTrashed()->where('name', 'like', 'Extra Demo Product%')->count()
+            + Category::withTrashed()->whereIn('slug', ['electronics', 'empty-category'])->count();
+    }
+
+    private function warehouseOriginIsConfigured(): bool
+    {
+        $origin = config('services.store_origin', []);
+
+        return collect(['street1', 'city', 'state', 'zip', 'country'])
+            ->every(fn (string $field) => filled($origin[$field] ?? null))
+            && ($origin['street1'] ?? null) !== '123 Main Street'
+            && strtoupper((string) ($origin['country'] ?? '')) === 'US';
     }
 
     private function masked(?string $value): string

@@ -17,20 +17,28 @@ class GetShippingRatesRequest extends FormRequest
     {
         return [
             'address' => ['required', 'array'],
-            'address.name' => ['required', 'string', 'max:255'],
-            'address.street1' => ['required', 'string', 'max:255'],
+            'address.name' => ['nullable', 'string', 'max:255'],
+            'address.line1' => ['required_without:address.street1', 'string', 'max:255'],
+            'address.street1' => ['required_without:address.line1', 'string', 'max:255'],
+            'address.line2' => ['nullable', 'string', 'max:255'],
             'address.street2' => ['nullable', 'string', 'max:255'],
             'address.city' => ['required', 'string', 'max:255'],
             'address.state' => ['required', 'string', 'max:255'],
-            'address.zip' => ['required', 'string', 'max:20'],
+            'address.postal_code' => ['required_without:address.zip', 'string', 'max:20'],
+            'address.zip' => ['required_without:address.postal_code', 'string', 'max:20'],
             'address.country' => ['required', 'string', 'size:2'], // 2-letter ISO code
             'address.phone' => ['nullable', 'string', 'max:50'],
 
-            'parcel' => ['nullable', 'array'],
-            'parcel.length' => ['nullable', 'numeric', 'between:0.1,200'],
-            'parcel.width' => ['nullable', 'numeric', 'between:0.1,200'],
-            'parcel.height' => ['nullable', 'numeric', 'between:0.1,200'],
-            'parcel.weight' => ['nullable', 'numeric', 'between:0.1,2400'], // in ounces
+            'items' => ['required_without:parcel', 'array', 'min:1', 'max:50'],
+            'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
+            'items.*.variant_id' => ['nullable', 'integer', 'exists:product_variants,id'],
+            'items.*.quantity' => ['required', 'integer', 'min:1', 'max:100'],
+
+            'parcel' => ['required_without:items', 'array'],
+            'parcel.length' => ['required_with:parcel', 'numeric', 'between:0.1,200'],
+            'parcel.width' => ['required_with:parcel', 'numeric', 'between:0.1,200'],
+            'parcel.height' => ['required_with:parcel', 'numeric', 'between:0.1,200'],
+            'parcel.weight' => ['required_with:parcel', 'numeric', 'between:0.1,2400'], // in ounces
         ];
     }
 

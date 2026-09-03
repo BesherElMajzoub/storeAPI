@@ -1,19 +1,21 @@
 # Production-readiness test evidence
 
-**Run date:** 2026-09-02  
-**Database:** isolated MySQL test database (`storeapi_testing`)  
+**Run date:** 2026-09-03
+
+**Database:** isolated MySQL test database (`storeapi_testing`)
+
 **Final command:** `php artisan test --compact`
 
 ```text
 ...........................................................................................................
 
-Tests:    107 passed (542 assertions)
+Tests:    124 passed (644 assertions)
 Duration: 21.60s
 ```
 
 The suite was run again after the Composer security update, EasyPost hardening, payment-email addition, Pint formatting, and final webhook tests.
 
-## Four explicitly requested tests
+## Four automated evidence tests
 
 ### 1. Complete admin endpoint sweep with a customer token
 
@@ -21,7 +23,7 @@ Test: `ProductionReadinessTest::test_every_admin_route_rejects_a_regular_custome
 
 The test discovers routes from Laravel's registered route collection rather than maintaining a hand-picked list. It selects every URI beginning with `api/v1/admin/`, replaces route parameters with non-existent IDs, invokes the declared HTTP method while authenticated as a regular customer, and asserts every response is 401 or 403.
 
-Result: **PASS**. The current inventory contains 70 admin routes; all 70 also show `auth:sanctum` and `can:admin-access` in `API_V1_ROUTE_MIDDLEWARE.md`.
+Result: **PASS**. The current inventory contains 73 admin routes; all 73 also show `auth:sanctum` and `can:admin-access` in `API_V1_ROUTE_MIDDLEWARE.md`.
 
 ### 2. IDOR order/resource test
 
@@ -33,6 +35,8 @@ Two customers are created. Customer B attempts to use Customer A's identifiers:
 - `POST /api/v1/orders/{A-order}/cancel` → 404
 - `PUT /api/v1/profile/addresses/{A-address}` → 403
 - `DELETE /api/v1/profile/addresses/{A-address}` → 403
+- wishlist count/check/delete remain scoped to customer B and cannot expose/remove customer A's item
+- profile read/update acts only on customer B and leaves customer A unchanged
 
 Result: **PASS**. The test verifies both read and mutation paths without relying on frontend route guards.
 
@@ -64,6 +68,12 @@ Result: **PASS**. The same class also confirms the eight-image gallery limit.
 
 ## Other notable passing evidence
 
+- Canonical shipping rates use server-side weights/package selection and persist expiring quotes.
+- Checkout re-prices EasyPost rates and rejects missing, expired, consumed, or address/cart-changed quotes.
+- Provider outages return 503; unserviceable/configuration failures return 422 without empty-success fallbacks.
+- Customer order resources never contain label/provider IDs; admin resources retain them.
+- Public order tracking has indistinguishable missing/email-mismatch responses and dedicated throttling.
+- CSV preview performs no writes; valid product/variant files commit atomically and invalid rows roll back the whole import.
 - Revoked-token replay returns 401.
 - Twenty invalid logins trigger 429.
 - Password-reset and OTP tokens are single-use.

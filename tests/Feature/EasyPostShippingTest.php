@@ -95,19 +95,20 @@ class EasyPostShippingTest extends TestCase
 
         $response = $this->postJson('/api/v1/shipping/rates', [
             'address' => [
-                'name' => 'Jane Doe',
-                'street1' => '179 N Harbor Dr',
+                'line1' => '179 N Harbor Dr',
                 'city' => 'Redondo Beach',
                 'state' => 'CA',
-                'zip' => '90277',
+                'postal_code' => '90277',
                 'country' => 'US',
             ],
+            'items' => [['product_id' => $this->product->id, 'quantity' => 1]],
         ]);
 
         $response->assertStatus(200)
             ->assertJsonPath('success', true)
-            ->assertJsonPath('data.shipment_id', 'shp_test123')
-            ->assertJsonPath('data.rates.0.rate', 5.50);
+            ->assertJsonPath('data.0.rate_id', 'rate_test123')
+            ->assertJsonPath('data.0.amount', 5.50)
+            ->assertJsonPath('data.0.eta_days', 3);
     }
 
     public function test_admin_can_purchase_label(): void
@@ -121,6 +122,7 @@ class EasyPostShippingTest extends TestCase
             'total' => 105.50,
             'shipping_cost' => 5.50,
             'easypost_shipment_id' => 'shp_test123',
+            'shipping_rate_id' => 'rate_test123',
             'shipping_address' => ['name' => 'John', 'street' => '1 Main St', 'city' => 'NYC', 'country' => 'US'],
         ]);
 

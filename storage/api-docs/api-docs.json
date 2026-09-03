@@ -2674,6 +2674,22 @@
                                         "example": 50,
                                         "nullable": true
                                     },
+                                    "weight_oz": {
+                                        "type": "number",
+                                        "nullable": true
+                                    },
+                                    "length_in": {
+                                        "type": "number",
+                                        "nullable": true
+                                    },
+                                    "width_in": {
+                                        "type": "number",
+                                        "nullable": true
+                                    },
+                                    "height_in": {
+                                        "type": "number",
+                                        "nullable": true
+                                    },
                                     "status": {
                                         "type": "string",
                                         "nullable": true,
@@ -2857,6 +2873,22 @@
                                         "type": "integer",
                                         "nullable": true
                                     },
+                                    "weight_oz": {
+                                        "type": "number",
+                                        "nullable": true
+                                    },
+                                    "length_in": {
+                                        "type": "number",
+                                        "nullable": true
+                                    },
+                                    "width_in": {
+                                        "type": "number",
+                                        "nullable": true
+                                    },
+                                    "height_in": {
+                                        "type": "number",
+                                        "nullable": true
+                                    },
                                     "status": {
                                         "type": "string",
                                         "nullable": true,
@@ -2956,6 +2988,51 @@
                     },
                     "404": {
                         "$ref": "#/components/responses/NotFoundResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/products/import": {
+            "post": {
+                "tags": [
+                    "Admin Products"
+                ],
+                "summary": "Preview or atomically import products and variants from CSV",
+                "operationId": "caa8d14f6a27f28cc06cb804cf020e95",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "required": [
+                                    "file",
+                                    "dry_run"
+                                ],
+                                "properties": {
+                                    "file": {
+                                        "type": "string",
+                                        "format": "binary"
+                                    },
+                                    "dry_run": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Preview completed or import committed"
+                    },
+                    "422": {
+                        "description": "CSV or row validation failed; no writes performed"
                     }
                 },
                 "security": [
@@ -3132,14 +3209,14 @@
                 ]
             }
         },
-        "/api/v1/admin/orders/{order}/ship": {
+        "/api/v1/admin/orders/{order}/label": {
             "post": {
                 "tags": [
                     "Admin Shipping"
                 ],
                 "summary": "Purchase Shipping Label",
-                "description": "Purchase a shipping label and mark the order as shipped.",
-                "operationId": "b50e9daa5706b196d25b010ba853002e",
+                "description": "Idempotently purchase a shipping label for a paid processing order. /ship remains a deprecated API v1 alias.",
+                "operationId": "b0dcd685f29683ce6d1d47c59ea4fdb1",
                 "parameters": [
                     {
                         "name": "order",
@@ -3155,19 +3232,18 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "required": [
-                                    "rate_id"
-                                ],
                                 "properties": {
                                     "rate_id": {
+                                        "description": "Defaults to the rate selected at checkout",
                                         "type": "string",
-                                        "example": "rate_123456"
+                                        "example": "rate_123456",
+                                        "nullable": true
                                     },
                                     "shipment_id": {
-                                        "description": "Optional if order has easypost_shipment_id stored",
                                         "type": "string",
                                         "example": "shp_123456",
-                                        "nullable": true
+                                        "nullable": true,
+                                        "deprecated": true
                                     }
                                 },
                                 "type": "object"
@@ -5358,7 +5434,8 @@
                             "schema": {
                                 "required": [
                                     "items",
-                                    "shipping_address"
+                                    "shipping_address",
+                                    "shipping_rate_id"
                                 ],
                                 "properties": {
                                     "items": {
@@ -5384,15 +5461,11 @@
                                     },
                                     "shipping_address": {
                                         "properties": {
-                                            "first_name": {
+                                            "name": {
                                                 "type": "string",
-                                                "example": "John"
+                                                "example": "John Doe"
                                             },
-                                            "last_name": {
-                                                "type": "string",
-                                                "example": "Doe"
-                                            },
-                                            "address_line_1": {
+                                            "line1": {
                                                 "type": "string",
                                                 "example": "123 Main St"
                                             },
@@ -5461,6 +5534,10 @@
                                         "type": "string",
                                         "example": "SAVE50",
                                         "nullable": true
+                                    },
+                                    "shipping_rate_id": {
+                                        "type": "string",
+                                        "example": "rate_abc123"
                                     }
                                 },
                                 "type": "object"
@@ -6073,6 +6150,50 @@
                 }
             }
         },
+        "/api/v1/orders/track": {
+            "post": {
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Track an order by order number and customer email",
+                "operationId": "4ba8ad4bb1169e1241fc389a544f5c8a",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "order_number",
+                                    "email"
+                                ],
+                                "properties": {
+                                    "order_number": {
+                                        "type": "string",
+                                        "example": "OQ-10234"
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Tracking snapshot returned"
+                    },
+                    "404": {
+                        "description": "Generic not-found response for both missing orders and email mismatch"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/TooManyRequestsResponse"
+                    }
+                }
+            }
+        },
         "/api/v1/products/{product}/reviews": {
             "post": {
                 "tags": [
@@ -6442,7 +6563,7 @@
                     "Shipping"
                 ],
                 "summary": "Get Shipping Rates",
-                "description": "Get real-time shipping rates for a checkout shipping address.",
+                "description": "Get real-time US shipping rates from server-side product dimensions. The legacy address + parcel shape remains deprecated in API v1.",
                 "operationId": "6aae3085b2bc8acbdf190dee94206477",
                 "requestBody": {
                     "required": true,
@@ -6450,28 +6571,24 @@
                         "application/json": {
                             "schema": {
                                 "required": [
-                                    "address"
+                                    "address",
+                                    "items"
                                 ],
                                 "properties": {
                                     "address": {
                                         "required": [
-                                            "name",
-                                            "street1",
+                                            "line1",
                                             "city",
                                             "state",
-                                            "zip",
+                                            "postal_code",
                                             "country"
                                         ],
                                         "properties": {
-                                            "name": {
-                                                "type": "string",
-                                                "example": "Jane Doe"
-                                            },
-                                            "street1": {
+                                            "line1": {
                                                 "type": "string",
                                                 "example": "179 N Harbor Dr"
                                             },
-                                            "street2": {
+                                            "line2": {
                                                 "type": "string",
                                                 "example": null,
                                                 "nullable": true
@@ -6484,7 +6601,7 @@
                                                 "type": "string",
                                                 "example": "CA"
                                             },
-                                            "zip": {
+                                            "postal_code": {
                                                 "type": "string",
                                                 "example": "90277"
                                             },
@@ -6500,28 +6617,28 @@
                                         },
                                         "type": "object"
                                     },
-                                    "parcel": {
-                                        "properties": {
-                                            "length": {
-                                                "type": "number",
-                                                "example": 10
+                                    "items": {
+                                        "type": "array",
+                                        "items": {
+                                            "required": [
+                                                "product_id",
+                                                "quantity"
+                                            ],
+                                            "properties": {
+                                                "product_id": {
+                                                    "type": "integer"
+                                                },
+                                                "variant_id": {
+                                                    "type": "integer",
+                                                    "nullable": true
+                                                },
+                                                "quantity": {
+                                                    "type": "integer",
+                                                    "minimum": 1
+                                                }
                                             },
-                                            "width": {
-                                                "type": "number",
-                                                "example": 8
-                                            },
-                                            "height": {
-                                                "type": "number",
-                                                "example": 4
-                                            },
-                                            "weight": {
-                                                "description": "Weight in ounces",
-                                                "type": "number",
-                                                "example": 16
-                                            }
-                                        },
-                                        "type": "object",
-                                        "nullable": true
+                                            "type": "object"
+                                        }
                                     }
                                 },
                                 "type": "object"
@@ -6545,52 +6662,34 @@
                                             "example": "Shipping rates retrieved."
                                         },
                                         "data": {
-                                            "properties": {
-                                                "shipment_id": {
-                                                    "type": "string",
-                                                    "example": "shp_123456"
-                                                },
-                                                "rates": {
-                                                    "type": "array",
-                                                    "items": {
-                                                        "properties": {
-                                                            "id": {
-                                                                "type": "string",
-                                                                "example": "rate_abc123"
-                                                            },
-                                                            "carrier": {
-                                                                "type": "string",
-                                                                "example": "USPS"
-                                                            },
-                                                            "service": {
-                                                                "type": "string",
-                                                                "example": "First"
-                                                            },
-                                                            "rate": {
-                                                                "type": "number",
-                                                                "format": "float",
-                                                                "example": 5.5
-                                                            },
-                                                            "currency": {
-                                                                "type": "string",
-                                                                "example": "USD"
-                                                            },
-                                                            "delivery_days": {
-                                                                "type": "integer",
-                                                                "example": 3,
-                                                                "nullable": true
-                                                            },
-                                                            "delivery_date": {
-                                                                "type": "string",
-                                                                "example": null,
-                                                                "nullable": true
-                                                            }
-                                                        },
-                                                        "type": "object"
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "rate_id": {
+                                                        "type": "string",
+                                                        "example": "rate_abc123"
+                                                    },
+                                                    "carrier": {
+                                                        "type": "string",
+                                                        "example": "USPS"
+                                                    },
+                                                    "service": {
+                                                        "type": "string",
+                                                        "example": "Priority"
+                                                    },
+                                                    "amount": {
+                                                        "type": "number",
+                                                        "format": "float",
+                                                        "example": 8.45
+                                                    },
+                                                    "eta_days": {
+                                                        "type": "integer",
+                                                        "example": 3,
+                                                        "nullable": true
                                                     }
-                                                }
-                                            },
-                                            "type": "object"
+                                                },
+                                                "type": "object"
+                                            }
                                         },
                                         "errors": {
                                             "type": "object",
@@ -6602,6 +6701,9 @@
                                 }
                             }
                         }
+                    },
+                    "503": {
+                        "description": "Shipping provider unavailable"
                     },
                     "422": {
                         "description": "Failed to retrieve rates.",
@@ -7422,6 +7524,19 @@
                             "$ref": "#/components/schemas/OrderItem"
                         }
                     },
+                    "tracking_number": {
+                        "type": "string",
+                        "nullable": true,
+                        "deprecated": true
+                    },
+                    "shipment": {
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/Shipment"
+                            }
+                        ],
+                        "nullable": true
+                    },
                     "stripe_session_id": {
                         "type": "string",
                         "example": "cs_test_a1b2c3d4",
@@ -7594,6 +7709,26 @@
                         "type": "integer",
                         "example": 10
                     },
+                    "weight_oz": {
+                        "type": "number",
+                        "format": "float",
+                        "nullable": true
+                    },
+                    "length_in": {
+                        "type": "number",
+                        "format": "float",
+                        "nullable": true
+                    },
+                    "width_in": {
+                        "type": "number",
+                        "format": "float",
+                        "nullable": true
+                    },
+                    "height_in": {
+                        "type": "number",
+                        "format": "float",
+                        "nullable": true
+                    },
                     "status": {
                         "type": "string",
                         "enum": [
@@ -7747,6 +7882,26 @@
                         "type": "integer",
                         "example": 50
                     },
+                    "weight_oz": {
+                        "type": "number",
+                        "format": "float",
+                        "nullable": true
+                    },
+                    "length_in": {
+                        "type": "number",
+                        "format": "float",
+                        "nullable": true
+                    },
+                    "width_in": {
+                        "type": "number",
+                        "format": "float",
+                        "nullable": true
+                    },
+                    "height_in": {
+                        "type": "number",
+                        "format": "float",
+                        "nullable": true
+                    },
                     "attributes": {
                         "type": "object",
                         "example": {
@@ -7794,6 +7949,59 @@
                     "created_at": {
                         "type": "string",
                         "format": "date-time"
+                    }
+                },
+                "type": "object"
+            },
+            "Shipment": {
+                "title": "Shipment",
+                "properties": {
+                    "tracking_number": {
+                        "type": "string"
+                    },
+                    "carrier": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "service": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "tracking_url": {
+                        "type": "string",
+                        "format": "uri",
+                        "nullable": true
+                    },
+                    "label_url": {
+                        "description": "Admin responses only",
+                        "type": "string",
+                        "format": "uri",
+                        "nullable": true
+                    },
+                    "shipped_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "estimated_delivery": {
+                        "type": "string",
+                        "format": "date",
+                        "nullable": true
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "unknown",
+                            "pre_transit",
+                            "in_transit",
+                            "out_for_delivery",
+                            "available_for_pickup",
+                            "delivered",
+                            "return_to_sender",
+                            "failure",
+                            "cancelled",
+                            "error"
+                        ]
                     }
                 },
                 "type": "object"

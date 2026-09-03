@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Admin\BulkUpdateProductsRequest;
+use App\Http\Requests\Api\V1\Admin\ImportProductsRequest;
 use App\Http\Requests\Api\V1\Admin\ListProductsRequest;
 use App\Http\Requests\Api\V1\Admin\StoreProductRequest;
 use App\Http\Requests\Api\V1\Admin\UpdateProductRequest;
 use App\Http\Resources\ProductDetailResource;
 use App\Models\Product;
+use App\Services\ProductImportService;
 use App\Services\ProductService;
 use App\Traits\LogsActivity;
 use Illuminate\Http\JsonResponse;
@@ -127,6 +129,10 @@ class ProductController extends Controller
                     new OA\Property(property: 'category_id', type: 'integer', example: 1),
                     new OA\Property(property: 'sku', type: 'string', nullable: true),
                     new OA\Property(property: 'stock_qty', type: 'integer', nullable: true, example: 50),
+                    new OA\Property(property: 'weight_oz', type: 'number', nullable: true),
+                    new OA\Property(property: 'length_in', type: 'number', nullable: true),
+                    new OA\Property(property: 'width_in', type: 'number', nullable: true),
+                    new OA\Property(property: 'height_in', type: 'number', nullable: true),
                     new OA\Property(property: 'status', type: 'string', enum: ['draft', 'published', 'archived'], nullable: true),
                     new OA\Property(property: 'in_stock', type: 'boolean', nullable: true),
                     new OA\Property(property: 'is_featured', type: 'boolean', nullable: true),
@@ -192,6 +198,10 @@ class ProductController extends Controller
                         'price' => $variant['price'] ?? null,
                         'stock_qty' => $variant['stock_qty'] ?? 0,
                         'attributes' => $variant['attributes'] ?? null,
+                        'weight_oz' => $variant['weight_oz'] ?? null,
+                        'length_in' => $variant['length_in'] ?? null,
+                        'width_in' => $variant['width_in'] ?? null,
+                        'height_in' => $variant['height_in'] ?? null,
                     ]);
                 }
             }
@@ -225,6 +235,10 @@ class ProductController extends Controller
                     new OA\Property(property: 'category_id', type: 'integer', nullable: true),
                     new OA\Property(property: 'sku', type: 'string', nullable: true),
                     new OA\Property(property: 'stock_qty', type: 'integer', nullable: true),
+                    new OA\Property(property: 'weight_oz', type: 'number', nullable: true),
+                    new OA\Property(property: 'length_in', type: 'number', nullable: true),
+                    new OA\Property(property: 'width_in', type: 'number', nullable: true),
+                    new OA\Property(property: 'height_in', type: 'number', nullable: true),
                     new OA\Property(property: 'status', type: 'string', enum: ['draft', 'published', 'archived'], nullable: true),
                     new OA\Property(property: 'in_stock', type: 'boolean', nullable: true),
                     new OA\Property(property: 'is_featured', type: 'boolean', nullable: true),
@@ -305,6 +319,10 @@ class ProductController extends Controller
                         'price' => $variant['price'] ?? null,
                         'stock_qty' => $variant['stock_qty'] ?? 0,
                         'attributes' => $variant['attributes'] ?? null,
+                        'weight_oz' => $variant['weight_oz'] ?? null,
+                        'length_in' => $variant['length_in'] ?? null,
+                        'width_in' => $variant['width_in'] ?? null,
+                        'height_in' => $variant['height_in'] ?? null,
                     ];
 
                     if (isset($variant['id'])) {
@@ -363,7 +381,62 @@ class ProductController extends Controller
                 ->get();
         });
 
-        return $this->success(ProductDetailResource::collection($products), 'Products updated.');
+        $results = $products->map(fn (Product $product) => [
+            'id' => $product->id,
+            'status' => 'updated',
+            'product' => new ProductDetailResource($product),
+        ]);
+
+        return $this->success($results, 'Products updated atomically.');
+    }
+
+    #[OA\Post(
+        path: '/api/v1/admin/products/import',
+        summary: 'Preview or atomically import products and variants from CSV',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Products']
+    )]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\MediaType(
+            mediaType: 'multipart/form-data',
+            schema: new OA\Schema(
+                required: ['file', 'dry_run'],
+                properties: [
+                    new OA\Property(property: 'file', type: 'string', format: 'binary'),
+                    new OA\Property(property: 'dry_run', type: 'boolean'),
+                ]
+            )
+        )
+    )]
+    #[OA\Response(response: 200, description: 'Preview completed or import committed')]
+    #[OA\Response(response: 422, description: 'CSV or row validation failed; no writes performed')]
+    public function import(ImportProductsRequest $request, ProductImportService $importer): JsonResponse
+    {
+        try {
+            $result = $importer->process(
+                $request->file('file'),
+                (bool) $request->validated('dry_run')
+            );
+        } catch (\RuntimeException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'data' => null,
+                'errors' => ['file' => [$e->getMessage()]],
+            ], 422);
+        }
+
+        $hasErrors = $result['summary']['errors'] > 0;
+
+        return response()->json([
+            'success' => ! $hasErrors,
+            'message' => $hasErrors
+                ? 'CSV validation failed; no products were changed.'
+                : ($result['committed'] ? 'Products imported successfully.' : 'CSV preview completed.'),
+            'data' => $result,
+            'errors' => $hasErrors ? ['rows' => $result['rows']] : null,
+        ], $hasErrors ? 422 : 200);
     }
 
     private function success($data, string $message, int $status = 200): JsonResponse

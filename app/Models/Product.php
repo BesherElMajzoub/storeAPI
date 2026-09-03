@@ -6,28 +6,33 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\Image\Enums\Fit;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
-use Spatie\Image\Enums\Fit;
 
 class Product extends Model implements HasMedia
 {
-    use HasFactory, SoftDeletes, InteractsWithMedia;
+    use HasFactory, InteractsWithMedia, SoftDeletes;
 
     protected $fillable = [
         'name', 'slug', 'description', 'price', 'discount_price', 'sku',
-        'stock_qty', 'status', 'category_id', 'options', 'in_stock', 'is_featured',
-        'meta_title', 'meta_description', 'rating', 'reviews_count'
+        'stock_qty', 'weight_oz', 'length_in', 'width_in', 'height_in',
+        'status', 'category_id', 'options', 'in_stock', 'is_featured',
+        'meta_title', 'meta_description', 'rating', 'reviews_count',
     ];
 
     protected $casts = [
-        'options'        => 'array',
-        'in_stock'       => 'boolean',
-        'is_featured'    => 'boolean',
-        'price'          => 'decimal:2',
+        'options' => 'array',
+        'in_stock' => 'boolean',
+        'is_featured' => 'boolean',
+        'price' => 'decimal:2',
         'discount_price' => 'decimal:2',
-        'rating'         => 'decimal:2',
+        'rating' => 'decimal:2',
+        'weight_oz' => 'decimal:2',
+        'length_in' => 'decimal:2',
+        'width_in' => 'decimal:2',
+        'height_in' => 'decimal:2',
     ];
 
     // ──────────────────────────────────────────
@@ -129,6 +134,7 @@ class Product extends Model implements HasMedia
         $query->when($filters['category'] ?? null, function ($q, $slug) {
             if (is_numeric($slug)) {
                 $q->where('category_id', (int) $slug);
+
                 return;
             }
             $q->whereHas('category', fn ($c) => $c->where('slug', $slug));

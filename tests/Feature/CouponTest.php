@@ -6,7 +6,6 @@ use App\Models\Coupon;
 use App\Models\CouponUsage;
 use App\Models\Order;
 use App\Models\Product;
-use App\Models\ProductVariant;
 use App\Models\User;
 use App\Services\StripeCheckoutService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -19,6 +18,7 @@ class CouponTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private Product $product;
 
     protected function setUp(): void
@@ -27,9 +27,9 @@ class CouponTest extends TestCase
 
         $this->user = User::factory()->create();
         $this->product = Product::factory()->create([
-            'price'    => 100.00,
+            'price' => 100.00,
             'in_stock' => true,
-            'status'   => 'published',
+            'status' => 'published',
         ]);
     }
 
@@ -38,19 +38,19 @@ class CouponTest extends TestCase
     public function test_valid_percentage_coupon(): void
     {
         $coupon = Coupon::create([
-            'code'        => 'PERCENT50',
-            'type'        => 'percentage',
-            'value'       => 50.00,
-            'is_active'   => true,
-            'starts_at'   => now()->subDay(),
-            'expires_at'  => now()->addDay(),
+            'code' => 'PERCENT50',
+            'type' => 'percentage',
+            'value' => 50.00,
+            'is_active' => true,
+            'starts_at' => now()->subDay(),
+            'expires_at' => now()->addDay(),
         ]);
 
         $response = $this->postJson('/api/v1/coupons/validate', [
-            'code'  => 'PERCENT50',
+            'code' => 'PERCENT50',
             'items' => [
-                ['product_id' => $this->product->id, 'quantity' => 1]
-            ]
+                ['product_id' => $this->product->id, 'quantity' => 1],
+            ],
         ]);
 
         $response->assertStatus(200)
@@ -66,17 +66,17 @@ class CouponTest extends TestCase
     public function test_valid_fixed_coupon(): void
     {
         $coupon = Coupon::create([
-            'code'       => 'FIXED20',
-            'type'       => 'fixed',
-            'value'      => 20.00,
-            'is_active'  => true,
+            'code' => 'FIXED20',
+            'type' => 'fixed',
+            'value' => 20.00,
+            'is_active' => true,
         ]);
 
         $response = $this->postJson('/api/v1/coupons/validate', [
-            'code'  => 'FIXED20',
+            'code' => 'FIXED20',
             'items' => [
-                ['product_id' => $this->product->id, 'quantity' => 2]
-            ]
+                ['product_id' => $this->product->id, 'quantity' => 2],
+            ],
         ]);
 
         $response->assertStatus(200)
@@ -92,18 +92,18 @@ class CouponTest extends TestCase
     public function test_expired_coupon(): void
     {
         $coupon = Coupon::create([
-            'code'       => 'EXPIRED10',
-            'type'       => 'fixed',
-            'value'      => 10.00,
+            'code' => 'EXPIRED10',
+            'type' => 'fixed',
+            'value' => 10.00,
             'expires_at' => now()->subDay(),
-            'is_active'  => true,
+            'is_active' => true,
         ]);
 
         $response = $this->postJson('/api/v1/coupons/validate', [
-            'code'  => 'EXPIRED10',
+            'code' => 'EXPIRED10',
             'items' => [
-                ['product_id' => $this->product->id, 'quantity' => 1]
-            ]
+                ['product_id' => $this->product->id, 'quantity' => 1],
+            ],
         ]);
 
         $response->assertStatus(422)
@@ -116,17 +116,17 @@ class CouponTest extends TestCase
     public function test_inactive_coupon(): void
     {
         $coupon = Coupon::create([
-            'code'      => 'INACTIVE',
-            'type'      => 'fixed',
-            'value'     => 10.00,
+            'code' => 'INACTIVE',
+            'type' => 'fixed',
+            'value' => 10.00,
             'is_active' => false,
         ]);
 
         $response = $this->postJson('/api/v1/coupons/validate', [
-            'code'  => 'INACTIVE',
+            'code' => 'INACTIVE',
             'items' => [
-                ['product_id' => $this->product->id, 'quantity' => 1]
-            ]
+                ['product_id' => $this->product->id, 'quantity' => 1],
+            ],
         ]);
 
         $response->assertStatus(422)
@@ -139,18 +139,18 @@ class CouponTest extends TestCase
     public function test_minimum_amount_failure(): void
     {
         $coupon = Coupon::create([
-            'code'                 => 'MIN150',
-            'type'                 => 'fixed',
-            'value'                => 15.00,
+            'code' => 'MIN150',
+            'type' => 'fixed',
+            'value' => 15.00,
             'minimum_order_amount' => 150.00,
-            'is_active'            => true,
+            'is_active' => true,
         ]);
 
         $response = $this->postJson('/api/v1/coupons/validate', [
-            'code'  => 'MIN150',
+            'code' => 'MIN150',
             'items' => [
-                ['product_id' => $this->product->id, 'quantity' => 1]
-            ]
+                ['product_id' => $this->product->id, 'quantity' => 1],
+            ],
         ]);
 
         $response->assertStatus(422)
@@ -163,19 +163,19 @@ class CouponTest extends TestCase
     public function test_usage_limit_failure(): void
     {
         $coupon = Coupon::create([
-            'code'        => 'LIMIT_REACHED',
-            'type'        => 'fixed',
-            'value'       => 10.00,
+            'code' => 'LIMIT_REACHED',
+            'type' => 'fixed',
+            'value' => 10.00,
             'usage_limit' => 5,
-            'used_count'  => 5,
-            'is_active'   => true,
+            'used_count' => 5,
+            'is_active' => true,
         ]);
 
         $response = $this->postJson('/api/v1/coupons/validate', [
-            'code'  => 'LIMIT_REACHED',
+            'code' => 'LIMIT_REACHED',
             'items' => [
-                ['product_id' => $this->product->id, 'quantity' => 1]
-            ]
+                ['product_id' => $this->product->id, 'quantity' => 1],
+            ],
         ]);
 
         $response->assertStatus(422)
@@ -188,19 +188,19 @@ class CouponTest extends TestCase
     public function test_per_user_usage_limit_failure(): void
     {
         $coupon = Coupon::create([
-            'code'                 => 'ONCE_PER_USER',
-            'type'                 => 'fixed',
-            'value'                => 10.00,
+            'code' => 'ONCE_PER_USER',
+            'type' => 'fixed',
+            'value' => 10.00,
             'usage_limit_per_user' => 1,
-            'is_active'            => true,
+            'is_active' => true,
         ]);
 
         // Scenario 1: Guest tries to validate coupon with per-user limit
         $response = $this->postJson('/api/v1/coupons/validate', [
-            'code'  => 'ONCE_PER_USER',
+            'code' => 'ONCE_PER_USER',
             'items' => [
-                ['product_id' => $this->product->id, 'quantity' => 1]
-            ]
+                ['product_id' => $this->product->id, 'quantity' => 1],
+            ],
         ]);
         $response->assertStatus(422)
             ->assertJsonPath('success', false)
@@ -208,17 +208,17 @@ class CouponTest extends TestCase
 
         // Scenario 2: Authenticated user has already used the coupon
         CouponUsage::create([
-            'coupon_id'       => $coupon->id,
-            'user_id'         => $this->user->id,
+            'coupon_id' => $coupon->id,
+            'user_id' => $this->user->id,
             'discount_amount' => 10.00,
         ]);
 
         $response = $this->actingAs($this->user, 'sanctum')
             ->postJson('/api/v1/coupons/validate', [
-                'code'  => 'ONCE_PER_USER',
+                'code' => 'ONCE_PER_USER',
                 'items' => [
-                    ['product_id' => $this->product->id, 'quantity' => 1]
-                ]
+                    ['product_id' => $this->product->id, 'quantity' => 1],
+                ],
             ]);
 
         $response->assertStatus(422)
@@ -231,18 +231,18 @@ class CouponTest extends TestCase
     public function test_max_discount_cap(): void
     {
         $coupon = Coupon::create([
-            'code'                    => 'CAPPED50PERCENT',
-            'type'                    => 'percentage',
-            'value'                   => 50.00,
+            'code' => 'CAPPED50PERCENT',
+            'type' => 'percentage',
+            'value' => 50.00,
             'maximum_discount_amount' => 30.00,
-            'is_active'               => true,
+            'is_active' => true,
         ]);
 
         $response = $this->postJson('/api/v1/coupons/validate', [
-            'code'  => 'CAPPED50PERCENT',
+            'code' => 'CAPPED50PERCENT',
             'items' => [
-                ['product_id' => $this->product->id, 'quantity' => 1] // subtotal 100.00
-            ]
+                ['product_id' => $this->product->id, 'quantity' => 1], // subtotal 100.00
+            ],
         ]);
 
         $response->assertStatus(200)
@@ -256,17 +256,17 @@ class CouponTest extends TestCase
     public function test_discount_not_exceeding_subtotal(): void
     {
         $coupon = Coupon::create([
-            'code'      => 'HUGE_DISCOUNT',
-            'type'      => 'fixed',
-            'value'     => 150.00,
+            'code' => 'HUGE_DISCOUNT',
+            'type' => 'fixed',
+            'value' => 150.00,
             'is_active' => true,
         ]);
 
         $response = $this->postJson('/api/v1/coupons/validate', [
-            'code'  => 'HUGE_DISCOUNT',
+            'code' => 'HUGE_DISCOUNT',
             'items' => [
-                ['product_id' => $this->product->id, 'quantity' => 1] // subtotal 100.00
-            ]
+                ['product_id' => $this->product->id, 'quantity' => 1], // subtotal 100.00
+            ],
         ]);
 
         $response->assertStatus(200)
@@ -280,26 +280,28 @@ class CouponTest extends TestCase
     public function test_order_creation_with_coupon(): void
     {
         $coupon = Coupon::create([
-            'code'      => 'WELCOME10',
-            'type'      => 'fixed',
-            'value'     => 10.00,
+            'code' => 'WELCOME10',
+            'type' => 'fixed',
+            'value' => 10.00,
             'is_active' => true,
         ]);
 
         $mockSession = StripeSession::constructFrom([
-            'id'  => 'cs_test_123',
+            'id' => 'cs_test_123',
             'url' => 'https://checkout.stripe.com/pay/cs_test_123',
         ]);
 
         $this->mock(StripeCheckoutService::class, function ($mock) use ($mockSession) {
             $mock->shouldReceive('createCheckoutSession')->once()->andReturn($mockSession);
         });
+        $shipping = $this->createShippingQuote($this->product);
 
         $response = $this->actingAs($this->user, 'sanctum')
             ->postJson('/api/v1/orders', [
-                'coupon_code'      => 'WELCOME10',
-                'items'            => [['product_id' => $this->product->id, 'quantity' => 1]],
-                'shipping_address' => ['name' => 'John Doe', 'line1' => '123 St', 'city' => 'NYC', 'country' => 'US'],
+                'coupon_code' => 'WELCOME10',
+                'items' => $shipping['items'],
+                'shipping_address' => $shipping['address'],
+                'shipping_rate_id' => $shipping['rateId'],
             ]);
 
         $response->assertStatus(201)
@@ -309,15 +311,15 @@ class CouponTest extends TestCase
             ->assertJsonPath('data.order.coupon_code', 'WELCOME10');
 
         $this->assertDatabaseHas('orders', [
-            'user_id'     => $this->user->id,
+            'user_id' => $this->user->id,
             'coupon_code' => 'WELCOME10',
-            'discount'    => 10.00,
-            'total'       => 90.00,
+            'discount' => 10.00,
+            'total' => 90.00,
         ]);
 
         $this->assertDatabaseHas('coupon_usages', [
-            'coupon_id'       => $coupon->id,
-            'user_id'         => $this->user->id,
+            'coupon_id' => $coupon->id,
+            'user_id' => $this->user->id,
             'discount_amount' => 10.00,
         ]);
 
@@ -329,14 +331,14 @@ class CouponTest extends TestCase
     public function test_stripe_checkout_amount_after_discount(): void
     {
         $coupon = Coupon::create([
-            'code'      => 'PERCENT10',
-            'type'      => 'percentage',
-            'value'     => 10.00,
+            'code' => 'PERCENT10',
+            'type' => 'percentage',
+            'value' => 10.00,
             'is_active' => true,
         ]);
 
         $mockSession = StripeSession::constructFrom([
-            'id'  => 'cs_test_abc',
+            'id' => 'cs_test_abc',
             'url' => 'https://checkout.stripe.com/pay/cs_test_abc',
         ]);
 
@@ -350,12 +352,14 @@ class CouponTest extends TestCase
                 }))
                 ->andReturn($mockSession);
         });
+        $shipping = $this->createShippingQuote($this->product);
 
         $response = $this->actingAs($this->user, 'sanctum')
             ->postJson('/api/v1/orders', [
-                'coupon_code'      => 'PERCENT10',
-                'items'            => [['product_id' => $this->product->id, 'quantity' => 1]],
-                'shipping_address' => ['name' => 'John Doe', 'line1' => '123 St', 'city' => 'NYC', 'country' => 'US'],
+                'coupon_code' => 'PERCENT10',
+                'items' => $shipping['items'],
+                'shipping_address' => $shipping['address'],
+                'shipping_rate_id' => $shipping['rateId'],
             ]);
 
         $response->assertStatus(201);

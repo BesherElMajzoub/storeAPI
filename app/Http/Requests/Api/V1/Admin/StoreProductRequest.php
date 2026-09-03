@@ -36,6 +36,10 @@ class StoreProductRequest extends BaseAdminRequest
             'discount_price' => ['nullable', 'numeric', 'min:0', 'lt:price'],
             'sku' => ['nullable', 'string', 'max:255', Rule::unique('products', 'sku')],
             'stock_qty' => ['nullable', 'integer', 'min:0'],
+            'weight_oz' => ['nullable', 'numeric', 'gt:0', 'max:2400'],
+            'length_in' => ['nullable', 'numeric', 'gt:0', 'max:200'],
+            'width_in' => ['nullable', 'numeric', 'gt:0', 'max:200'],
+            'height_in' => ['nullable', 'numeric', 'gt:0', 'max:200'],
             'status' => ['nullable', Rule::in(['draft', 'published', 'archived'])],
             'category_id' => [
                 'nullable',
@@ -57,12 +61,27 @@ class StoreProductRequest extends BaseAdminRequest
             'variants.*.price' => ['nullable', 'numeric', 'min:0'],
             'variants.*.stock_qty' => ['nullable', 'integer', 'min:0'],
             'variants.*.attributes' => ['nullable', 'array'],
+            'variants.*.weight_oz' => ['nullable', 'numeric', 'gt:0', 'max:2400'],
+            'variants.*.length_in' => ['nullable', 'numeric', 'gt:0', 'max:200'],
+            'variants.*.width_in' => ['nullable', 'numeric', 'gt:0', 'max:200'],
+            'variants.*.height_in' => ['nullable', 'numeric', 'gt:0', 'max:200'],
         ];
     }
 
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
+            if ($this->input('status', 'draft') === 'published') {
+                if (! $this->filled('category_id')) {
+                    $validator->errors()->add('category_id', 'Published products require a category.');
+                }
+                foreach (['weight_oz', 'length_in', 'width_in', 'height_in'] as $field) {
+                    if (! is_numeric($this->input($field)) || (float) $this->input($field) <= 0) {
+                        $validator->errors()->add($field, 'Published products require complete shipping weight and dimensions.');
+                    }
+                }
+            }
+
             $stockQty = $this->input('stock_qty');
             $variants = $this->input('variants');
 

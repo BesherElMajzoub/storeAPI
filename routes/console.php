@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ShippingRateQuote;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -14,3 +15,6 @@ Schedule::command('telescope:prune --hours=48')->daily();
 
 // ─── EasyPost: تحديث حالة الشحنات تلقائياً كل 4 ساعات ─────────────────────────
 Schedule::command('shipping:track')->everyFourHours();
+Schedule::call(fn () => ShippingRateQuote::where('expires_at', '<', now()->subDay())->delete())
+    ->daily()
+    ->name('shipping-quotes:prune');

@@ -6,18 +6,18 @@
 
 ## Decision
 
-The backend code and API contract are ready for frontend integration. The production deployment is **conditionally ready**, not fully signed off: the code-side blockers found in the audit were fixed and all 107 automated tests pass, but the live infrastructure evidence listed under "Deployment blockers" must be completed by the deployment owner before client go-live.
+The backend code and API contract are ready for frontend integration. The production deployment is **conditionally ready**, not fully signed off: the code-side blockers found in the audit were fixed and all 124 automated tests pass, but the live infrastructure evidence listed under "Deployment blockers" must be completed by the deployment owner before client go-live.
 
 This distinction is deliberate. A local repository cannot prove a live certificate, off-server backup restore, production account cleanup, supervised workers, live Stripe keys, real-carrier shipping, or monitoring.
 
 ## Automated evidence
 
-- `php artisan test --compact`: **107 passed, 542 assertions**.
+- `php artisan test --compact`: **124 passed, 644 assertions**.
 - `composer audit --locked`: **no security vulnerability advisories found** after updating the lock file.
 - PHP syntax scan: all application, migration, route, and test PHP files passed.
 - `vendor/bin/pint --dirty`: passed.
 - `php artisan l5-swagger:generate`: passed; `storage/api-docs/api-docs.json` regenerated.
-- Route inventory: **117 API v1 routes**, including **70 admin routes**. All 70 admin routes include `auth:sanctum`, `throttle:api`, `can:admin-access`, and `audit.admin`.
+- Route inventory: **121 API v1 routes**, including **73 admin routes**. All 73 admin routes include `auth:sanctum`, `throttle:api`, `can:admin-access`, and `audit.admin`.
 - Database checks: required indexes exist and `EXPLAIN` ran successfully for storefront listing, storefront search, and admin order listing queries.
 
 ## 1. Authentication and session security
@@ -36,7 +36,7 @@ This distinction is deliberate. A local repository cannot prove a live certifica
 ## 2. Authorization
 
 - **Confirmed — complete admin sweep.** A dynamic test calls every registered `/api/v1/admin/*` route with a regular customer identity; all 70 return 401/403. This includes products, categories, orders, coupons, reviews, cancellation requests, messages, users, analytics, shipping, and dashboard endpoints.
-- **Confirmed — IDOR protection.** Cross-account order read/cancel and address update/delete tests are rejected. Wishlist/profile operations are scoped to the authenticated user; public messages have no customer read-by-ID endpoint.
+- **Confirmed — IDOR protection.** Cross-account order read/cancel and address update/delete tests are rejected. The same test proves wishlist count/check/delete and profile read/update remain scoped to the authenticated customer; public messages have no customer read-by-ID endpoint.
 - **Fixed now — checkout verification gate.** An unverified account receives 403 from `POST /api/v1/orders`.
 - **Confirmed — immediate role changes.** Removing an admin role blocks the same authenticated session on its next admin request.
 
@@ -106,9 +106,10 @@ This distinction is deliberate. A local repository cannot prove a live certifica
 - **Fixed now — automated happy path.** Checkout creation, a genuinely signed webhook, matching payment, idempotent customer confirmation email, and admin alert are covered.
 - **Fixed now — failure paths.** Invalid signature, amount/currency mismatch, expired session, replay, unpaid refund, partial refund, and full admin refund are covered.
 - **Fixed now — refund policy.** Only an admin can call the dedicated full-refund route; a full refund restocks once, while a partial refund records `refunded_amount` and does not restock/close the order.
-- **Fixed now — EasyPost fail-closed behavior.** Missing webhook secrets return 503; invalid signatures return 401; unsigned fallback was removed. A redundant live rates request in admin tracking was removed.
-- **Confirmed — tracking contract.** Customer order/tracking endpoints expose tracking number/status/details only for the authenticated customer's order.
-- **Pending production evidence — carrier validation.** Automated tests mock EasyPost. Real US and international address/rate/label/tracking checks must be performed against the deployment account.
+- **Fixed now — EasyPost quote and checkout contract.** Rates use server-side product dimensions and configured package sizes, persist 15-minute quotes, and are re-priced at checkout. Invalid, expired, consumed, changed, or provider-unverifiable rates fail closed.
+- **Fixed now — shipment privacy and tracking.** Customer resources expose a nested shipment without label/provider IDs; admin resources include the label. Signed webhooks and scheduled polling persist a normalized tracking snapshot.
+- **Fixed now — public tracking.** `POST /api/v1/orders/track` requires order number plus email, returns generic not-found responses, and has dedicated rate limits.
+- **Pending production evidence — carrier validation.** Automated tests mock EasyPost. A real US address/rate/label/tracking flow must be performed against the deployment account. International shipping is intentionally rejected in v1 until customs data is implemented.
 
 ## 10. Admin product-management answers and changes
 
@@ -121,7 +122,7 @@ This distinction is deliberate. A local repository cannot prove a live certifica
 - **R2 — Fixed now.** Added append, delete, and reorder image endpoints. Stable media IDs are already returned. Existing `/media` routes remain temporarily as compatible aliases.
 - **R4 — Confirmed.** Product create/update enforce `draft | published | archived`.
 - **R6 — Fixed now.** `POST /api/v1/admin/products/bulk` atomically allowlists `status`, `is_featured`, `in_stock`, and `category_id`, for at most 100 IDs.
-- **R7 — N/A for this release / deferred as requested.** CSV import remains unimplemented. Risk: large catalog onboarding remains manual until a dry-run import workflow is designed and tested.
+- **R7 — Fixed now.** `POST /api/v1/admin/products/import` previews or atomically imports UTF-8 CSV product/variant rows, upserts by SKU, reports errors by row, and performs no writes when any row is invalid.
 
 ### Product image endpoint contract
 
@@ -138,7 +139,7 @@ This distinction is deliberate. A local repository cannot prove a live certifica
 5. Enable supervised queue workers and scheduler heartbeat checks.
 6. Enable uptime/error monitoring and prove an alert reaches the owner.
 7. Execute Stripe test-mode end-to-end from the deployed host, then validate live-key configuration without making a real charge.
-8. Validate EasyPost with real US and international addresses and confirm tracking appears in the customer response.
+8. Validate EasyPost with a real US address and confirm rate, label, webhook, and tracking responses; verify non-US destinations are rejected with `unsupported_destination`.
 9. Run `php artisan app:production-readiness` on the deployment; it must exit successfully.
 
 See `PRODUCTION_DEPLOYMENT_CHECKLIST.md` for commands and sign-off fields and `API_V1_ROUTE_MIDDLEWARE.md` for the complete route/middleware inventory.

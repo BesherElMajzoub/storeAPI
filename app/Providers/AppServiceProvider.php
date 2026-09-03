@@ -88,6 +88,17 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(120)->by('api|'.$key);
         });
 
+        RateLimiter::for('order-tracking', function (Request $request) {
+            $fingerprint = hash('sha256', Str::lower(
+                trim((string) $request->input('order_number')).'|'.trim((string) $request->input('email'))
+            ));
+
+            return [
+                Limit::perMinute(5)->by('tracking-ip|'.$request->ip()),
+                Limit::perMinute(3)->by('tracking-query|'.$fingerprint),
+            ];
+        });
+
         // ─── Gates ────────────────────────────────────────────────────────────────
         Gate::define('admin-access', function ($user) {
             return $user->roles()->whereIn('name', ['Admin', 'Owner', 'Manager', 'Support'])->exists();

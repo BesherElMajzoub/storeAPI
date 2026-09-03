@@ -16,7 +16,9 @@ class Order extends Model
         'coupon_code', 'shipping_address', 'billing_address', 'notes',
         'stripe_session_id', 'stripe_payment_intent_id',
         'paid_at', 'cancelled_at', 'refunded_at', 'stock_reserved_at', 'stock_released_at',
-        'easypost_shipment_id', 'tracking_number', 'label_url',
+        'easypost_shipment_id', 'shipping_rate_id', 'shipping_carrier', 'shipping_service',
+        'tracking_number', 'shipment_status', 'tracking_url', 'label_url', 'shipped_at',
+        'estimated_delivery', 'tracking_events',
     ];
 
     protected $casts = [
@@ -33,6 +35,9 @@ class Order extends Model
         'refunded_at' => 'datetime',
         'stock_reserved_at' => 'datetime',
         'stock_released_at' => 'datetime',
+        'shipped_at' => 'datetime',
+        'estimated_delivery' => 'date:Y-m-d',
+        'tracking_events' => 'array',
     ];
 
     // ── Helpers ───────────────────────────────────────────────────────────────

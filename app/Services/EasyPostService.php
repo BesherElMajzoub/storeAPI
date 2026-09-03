@@ -153,6 +153,25 @@ class EasyPostService
     }
 
     /**
+     * Retrieve a rate so checkout can re-price it server-side.
+     *
+     * @throws Exception
+     */
+    public function retrieveRate(string $rateId)
+    {
+        if (! $this->client) {
+            throw new Exception('EasyPost client is not configured.');
+        }
+
+        try {
+            return $this->client->rate->retrieve($rateId);
+        } catch (ApiException $e) {
+            Log::error('EasyPost Rate Retrieve error: '.$e->getMessage());
+            throw new Exception('Failed to retrieve shipping rate.', previous: $e);
+        }
+    }
+
+    /**
      * Retrieve a shipment by its ID.
      *
      * @return Shipment

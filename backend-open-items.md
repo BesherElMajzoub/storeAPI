@@ -21,11 +21,61 @@ the ID list — mark each one:
 Items marked *(evidence required)* are not satisfiable by "the framework handles
 it" — we need the test actually run and the output pasted.
 
-The long security/ops checklist is **not duplicated here**. It lives in
-`docs/backend-production-readiness.md` and is still unanswered; §D below indexes
-it so nothing is lost.
+The security/ops response and remaining deployment gates live in
+`docs/BACKEND_PRODUCTION_READINESS_RESPONSE.md` and
+`docs/PRODUCTION_DEPLOYMENT_CHECKLIST.md`; §D below indexes them so nothing is lost.
 
 **Legend:** 🔴 blocks delivery · 🟠 blocks admin usability · 🟡 quality/cleanup
+
+## Backend response — 2026-09-03
+
+Automated baseline: `php artisan test --compact` — **124 passed, 644 assertions**.
+
+Route inventory: **121 API v1 routes / 73 admin routes**; every admin route has
+`auth:sanctum`, `throttle:api`, `can:admin-access`, and `audit.admin`.
+
+| ID | Status | Resolution / evidence |
+|---|---|---|
+| A1 | **Fixed now** | Canonical `address + items` contract returns a rate array from EasyPost; product dimensions and configured packages are server-side. Validation/unserviceable failures return 422 and provider outages return 503. The old `address + parcel` response remains deprecated in v1. |
+| A2 | **Fixed now** | Orders require a stored 15-minute `shipping_rate_id`; address/cart/parcel fingerprints are checked and the EasyPost rate is retrieved again. Invalid, expired, consumed, or changed quotes fail closed. |
+| A3 | **Fixed now** | Customer/admin order resources return `shipment` or `null`. Label/provider IDs are admin-only. Tracking enum is `unknown`, `pre_transit`, `in_transit`, `out_for_delivery`, `available_for_pickup`, `delivered`, `return_to_sender`, `failure`, `cancelled`, `error`. |
+| A4 | **Fixed now** | Explicit idempotent `POST /api/v1/admin/orders/{id}/label`; only paid processing orders are eligible. `/ship` remains a deprecated alias. |
+| A5 | **Fixed now** | Public `POST /api/v1/orders/track` requires order number + email, exposes only the tracking snapshot, returns identical generic 404s, and has dedicated 5/IP + 3/query per-minute limits. |
+| A6 | **Will do by `<production date>`** | Code/config/schema safeguards are complete. Deployment owner must enter the real date and attach the real EasyPost US rates → order → payment → label → webhook → tracking run. Non-US shipping is intentionally N/A for v1 because customs data is not implemented. |
+| B1 | **Fixed now** | Search, filters, allowlisted sorting, and bounded pagination are implemented and tested. |
+| B2 | **Fixed now** | Append/delete/reorder endpoints and stable media IDs are implemented. Both `/images/order` and deprecated `/images/reorder` are available. |
+| B3 | **Fixed now** | Transactional variant diff: ID updates, no ID creates, `_delete` deletes, omitted variants remain. Cross-product IDs are rejected. |
+| B4 | **Confirmed** | Create/update enforce `draft`, `published`, or `archived`; publishing now also requires category and shipping measurements. |
+| B5 | **Fixed now** | Bulk update is all-or-nothing and returns an `updated` result per ID; validation failure performs no writes. |
+| B6 | **Fixed now** | CSV preview/import supports product and variant rows, SKU upsert, 5 MB/5,000-row limits, per-row errors, and atomic commit. Images remain on the dedicated media endpoints. |
+| B7 | **Confirmed** | Authenticated API ceiling is 120/minute; importer uses one request. Product SKU is unique with clean 422 validation. Request/image limits are 45 MB, 8 images, and 5 MB/image. |
+| C1 | **Confirmed** | Product discount/stock/meta fields are persisted and returned. |
+| C2 | **Fixed now** | Resolved by B3. |
+| C3 | **Confirmed** | Category `meta_description` is accepted, persisted, and returned. |
+| C4 | **Confirmed** | Admin/public category trees order siblings by `sort_order`. |
+| C5 | **Confirmed** | Literal PATCH moderation route exists and is admin-guarded. |
+| D1 | **Fixed now** | Sanctum expiry/revocation, password/OTP/reset hardening, Google token verification, enumeration resistance, and endpoint limiters are covered by the readiness suite. |
+| D2 | **Confirmed** | Dynamic sweep rejects a customer on all 73 admin routes; two-account IDOR test covers orders, addresses, wishlist, and profile. |
+| D3 | **Fixed now** | Allowlists, pagination caps, request limits, bound queries, Unicode, and stored-text behavior are tested. |
+| D4 | **Fixed now** | Trusted prices, transactional coupons/inventory, constrained states, and signed/idempotent Stripe flows are tested. |
+| D5 | **Fixed now** | MIME/image validation, UUID names, limits, re-encoding, and non-executable storage defenses are tested. |
+| D6 | **Fixed now** | Restricted CORS, production error posture, security headers, global throttling, and removal of test routes are covered. |
+| D7 | **Will do by `<production date>`** | Code indexes/transactions/query checks pass; deployment owner must enter the date and attach a successful off-server backup restore. |
+| D8 | **Will do by `<production date>`** | Safe defaults/runbook exist; secret rotation, HTTPS, supervised workers/scheduler, monitoring, and alert delivery require host-side evidence. |
+| D9 | **Will do by `<production date>`** | Automated Stripe/EasyPost failure and happy-path contracts pass; deployed live/test credential and carrier evidence remains. |
+| D-E1 | **Confirmed** | Dynamic test sweeps every registered admin route; all 73 return 401/403 for a regular customer. |
+| D-E2 | **Fixed now** | Expanded two-customer test covers order read/cancel, address update/delete, wishlist count/check/delete, and profile read/update. |
+| D-E3 | **Confirmed** | Two synchronized PHP processes compete for the last unit; exactly one succeeds. |
+| D-E4 | **Confirmed** | Renamed PHP is rejected; JPEG/PHP polyglot is stored under a safe name and served only after re-encoding. |
+| D-E5 | **Will do by `<production date>`** | Backup restore and deployed demo-account removal cannot be certified from the repository; follow the production checklist and attach evidence. |
+| D10 | **Will do by `<production date>`** | Live read-only check still finds `Extra Demo Product`, `Electronics`, and `Empty Category`. Back up first, import the real catalogue as drafts, verify it, then remove demo data and rerun preflight. |
+
+Detailed evidence: `docs/PRODUCTION_READINESS_TEST_EVIDENCE.md`. Complete route list:
+`docs/API_V1_ROUTE_MIDDLEWARE.md`. Deployment-only actions:
+`docs/PRODUCTION_DEPLOYMENT_CHECKLIST.md`.
+
+Frontend integration handoff and consolidated response:
+`docs/FRONTEND_API_INTEGRATION_HANDOFF.md`.
 
 ---
 

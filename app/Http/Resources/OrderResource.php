@@ -25,11 +25,8 @@ class OrderResource extends JsonResource
             'items' => OrderItemResource::collection($this->whenLoaded('items')),
             'shipping_address' => $this->shipping_address,
             'billing_address' => $this->billing_address,
-            'stripe_session_id' => $this->stripe_session_id,
-            'stripe_payment_intent_id' => $this->stripe_payment_intent_id,
-            'easypost_shipment_id' => $this->easypost_shipment_id,
             'tracking_number' => $this->tracking_number,
-            'label_url' => $this->label_url,
+            'shipment' => $this->shipmentPayload(false),
             'paid_at' => $this->paid_at?->toIso8601String(),
             'cancelled_at' => $this->cancelled_at?->toIso8601String(),
             'refunded_at' => $this->refunded_at?->toIso8601String(),
@@ -41,5 +38,28 @@ class OrderResource extends JsonResource
                     : null
             ),
         ];
+    }
+
+    protected function shipmentPayload(bool $includeLabel): ?array
+    {
+        if (! $this->tracking_number) {
+            return null;
+        }
+
+        $shipment = [
+            'tracking_number' => $this->tracking_number,
+            'carrier' => $this->shipping_carrier,
+            'service' => $this->shipping_service,
+            'tracking_url' => $this->tracking_url,
+            'shipped_at' => $this->shipped_at?->toIso8601String(),
+            'estimated_delivery' => $this->estimated_delivery?->format('Y-m-d'),
+            'status' => $this->shipment_status ?? 'unknown',
+        ];
+
+        if ($includeLabel) {
+            $shipment['label_url'] = $this->label_url;
+        }
+
+        return $shipment;
     }
 }

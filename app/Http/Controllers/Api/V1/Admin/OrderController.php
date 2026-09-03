@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Admin\UpdateOrderStatusRequest;
+use App\Http\Resources\AdminOrderResource;
 use App\Models\Order;
 use App\Services\StripeCheckoutService;
 use Illuminate\Http\JsonResponse;
@@ -63,7 +64,10 @@ class OrderController extends Controller
             ->latest()
             ->paginate($perPage);
 
-        return $this->success($orders, 'Orders fetched.');
+        return $this->success(
+            AdminOrderResource::collection($orders)->response()->getData(true),
+            'Orders fetched.'
+        );
     }
 
     #[OA\Get(
@@ -89,7 +93,7 @@ class OrderController extends Controller
     {
         $order = Order::with(['items', 'user', 'payment'])->findOrFail($id);
 
-        return $this->success($order, 'Order fetched.');
+        return $this->success(new AdminOrderResource($order), 'Order fetched.');
     }
 
     #[OA\Post(

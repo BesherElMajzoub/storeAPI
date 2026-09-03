@@ -4,12 +4,14 @@ namespace Tests\Feature;
 
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\Role;
 use App\Models\User;
 use App\Services\StripeCheckoutService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Http;
 use Mockery;
 use Stripe\Checkout\Session as StripeSession;
+use Stripe\Refund;
+use Stripe\Stripe;
 use Stripe\Webhook;
 use Tests\TestCase;
 
@@ -18,23 +20,25 @@ class StripeCheckoutTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private User $admin;
+
     private Product $product;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->user    = User::factory()->create();
-        $this->admin   = User::factory()->create();
+        $this->user = User::factory()->create();
+        $this->admin = User::factory()->create();
         $this->product = Product::factory()->create([
-            'price'    => 50.00,
+            'price' => 50.00,
             'in_stock' => true,
-            'status'   => 'published',
+            'status' => 'published',
         ]);
 
         // Grant admin role
-        $role = \App\Models\Role::firstOrCreate(['name' => 'admin']);
+        $role = Role::firstOrCreate(['name' => 'admin']);
         $this->admin->roles()->attach($role->id);
     }
 
@@ -43,18 +47,20 @@ class StripeCheckoutTest extends TestCase
     public function test_order_creation_returns_checkout_url(): void
     {
         $mockSession = StripeSession::constructFrom([
-            'id'  => 'cs_test_abc123',
+            'id' => 'cs_test_abc123',
             'url' => 'https://checkout.stripe.com/pay/cs_test_abc123',
         ]);
 
         $this->mock(StripeCheckoutService::class, function ($mock) use ($mockSession) {
             $mock->shouldReceive('createCheckoutSession')->once()->andReturn($mockSession);
         });
+        $shipping = $this->createShippingQuote($this->product, quantity: 2);
 
         $response = $this->actingAs($this->user, 'sanctum')
             ->postJson('/api/v1/orders', [
-                'items'            => [['product_id' => $this->product->id, 'quantity' => 2]],
-                'shipping_address' => ['name' => 'John Doe', 'line1' => '123 Test St', 'city' => 'NYC', 'country' => 'US'],
+                'items' => $shipping['items'],
+                'shipping_address' => $shipping['address'],
+                'shipping_rate_id' => $shipping['rateId'],
             ]);
 
         $response->assertStatus(201)
@@ -70,24 +76,26 @@ class StripeCheckoutTest extends TestCase
     public function test_order_remains_unpaid_after_creation(): void
     {
         $mockSession = StripeSession::constructFrom([
-            'id'  => 'cs_test_xyz',
+            'id' => 'cs_test_xyz',
             'url' => 'https://checkout.stripe.com/pay/cs_test_xyz',
         ]);
 
         $this->mock(StripeCheckoutService::class, function ($mock) use ($mockSession) {
             $mock->shouldReceive('createCheckoutSession')->once()->andReturn($mockSession);
         });
+        $shipping = $this->createShippingQuote($this->product);
 
         $this->actingAs($this->user, 'sanctum')
             ->postJson('/api/v1/orders', [
-                'items'            => [['product_id' => $this->product->id, 'quantity' => 1]],
-                'shipping_address' => ['name' => 'John Doe', 'line1' => '1 Street', 'city' => 'City', 'country' => 'US'],
+                'items' => $shipping['items'],
+                'shipping_address' => $shipping['address'],
+                'shipping_rate_id' => $shipping['rateId'],
             ]);
 
         $this->assertDatabaseHas('orders', [
-            'user_id'         => $this->user->id,
-            'payment_status'  => 'unpaid',
-            'status'          => 'pending_payment',
+            'user_id' => $this->user->id,
+            'payment_status' => 'unpaid',
+            'status' => 'pending_payment',
         ]);
     }
 
@@ -96,32 +104,32 @@ class StripeCheckoutTest extends TestCase
     public function test_webhook_completed_marks_order_paid(): void
     {
         $order = Order::factory()->create([
-            'user_id'           => $this->user->id,
-            'status'            => 'pending_payment',
-            'payment_status'    => 'unpaid',
+            'user_id' => $this->user->id,
+            'status' => 'pending_payment',
+            'payment_status' => 'unpaid',
             'stripe_session_id' => 'cs_test_done',
-            'total'             => 100.00,
+            'total' => 100.00,
         ]);
 
         $payload = json_encode([
             'type' => 'checkout.session.completed',
             'data' => [
                 'object' => [
-                    'id'             => 'cs_test_done',
+                    'id' => 'cs_test_done',
                     'payment_intent' => 'pi_test_abc',
-                    'metadata'       => ['order_id' => (string) $order->id],
+                    'metadata' => ['order_id' => (string) $order->id],
                 ],
             ],
         ]);
 
-        $secret    = 'whsec_test_secret';
+        $secret = 'whsec_test_secret';
         $timestamp = time();
-        $sigHeader = "t={$timestamp},v1=" . hash_hmac('sha256', "{$timestamp}.{$payload}", $secret);
+        $sigHeader = "t={$timestamp},v1=".hash_hmac('sha256', "{$timestamp}.{$payload}", $secret);
 
         config(['services.stripe.webhook_secret' => $secret]);
 
         // Bypass actual Stripe signature check by mocking Webhook::constructEvent
-        \Stripe\Stripe::setApiKey('sk_test_dummy');
+        Stripe::setApiKey('sk_test_dummy');
 
         // Use the test helper approach — patch webhook construct
         $this->withoutExceptionHandling();
@@ -129,16 +137,16 @@ class StripeCheckoutTest extends TestCase
         // Since we can't easily mock static Stripe::constructEvent, we'll test the DB state
         // by calling the handler directly (unit-test style for the DB part)
         $order->update([
-            'status'                   => 'processing',
-            'payment_status'           => 'paid',
+            'status' => 'processing',
+            'payment_status' => 'paid',
             'stripe_payment_intent_id' => 'pi_test_abc',
-            'paid_at'                  => now(),
+            'paid_at' => now(),
         ]);
 
         $this->assertDatabaseHas('orders', [
-            'id'             => $order->id,
+            'id' => $order->id,
             'payment_status' => 'paid',
-            'status'         => 'processing',
+            'status' => 'processing',
         ]);
 
         $this->assertNotNull($order->fresh()->paid_at);
@@ -149,23 +157,23 @@ class StripeCheckoutTest extends TestCase
     public function test_webhook_expired_cancels_order(): void
     {
         $order = Order::factory()->create([
-            'user_id'           => $this->user->id,
-            'status'            => 'pending_payment',
-            'payment_status'    => 'unpaid',
+            'user_id' => $this->user->id,
+            'status' => 'pending_payment',
+            'payment_status' => 'unpaid',
             'stripe_session_id' => 'cs_test_expired',
-            'total'             => 100.00,
+            'total' => 100.00,
         ]);
 
         // Simulate the handler directly
         $order->update([
-            'status'         => 'cancelled',
+            'status' => 'cancelled',
             'payment_status' => 'failed',
-            'cancelled_at'   => now(),
+            'cancelled_at' => now(),
         ]);
 
         $this->assertDatabaseHas('orders', [
-            'id'             => $order->id,
-            'status'         => 'cancelled',
+            'id' => $order->id,
+            'status' => 'cancelled',
             'payment_status' => 'failed',
         ]);
 
@@ -190,15 +198,15 @@ class StripeCheckoutTest extends TestCase
     public function test_admin_can_refund_paid_order(): void
     {
         $order = Order::factory()->create([
-            'user_id'                    => $this->user->id,
-            'status'                     => 'processing',
-            'payment_status'             => 'paid',
-            'stripe_payment_intent_id'   => 'pi_test_refund',
-            'total'                      => 100.00,
+            'user_id' => $this->user->id,
+            'status' => 'processing',
+            'payment_status' => 'paid',
+            'stripe_payment_intent_id' => 'pi_test_refund',
+            'total' => 100.00,
         ]);
 
         $this->mock(StripeCheckoutService::class, function ($mock) {
-            $mock->shouldReceive('refundOrder')->once()->andReturn(new \Stripe\Refund());
+            $mock->shouldReceive('refundOrder')->once()->andReturn(new Refund);
         });
 
         $response = $this->actingAs($this->admin, 'sanctum')
@@ -208,8 +216,8 @@ class StripeCheckoutTest extends TestCase
             ->assertJsonPath('success', true);
 
         $this->assertDatabaseHas('orders', [
-            'id'             => $order->id,
-            'status'         => 'refunded',
+            'id' => $order->id,
+            'status' => 'refunded',
             'payment_status' => 'refunded',
         ]);
     }
@@ -219,10 +227,10 @@ class StripeCheckoutTest extends TestCase
     public function test_admin_cannot_refund_unpaid_order(): void
     {
         $order = Order::factory()->create([
-            'user_id'        => $this->user->id,
-            'status'         => 'pending_payment',
+            'user_id' => $this->user->id,
+            'status' => 'pending_payment',
             'payment_status' => 'unpaid',
-            'total'          => 100.00,
+            'total' => 100.00,
         ]);
 
         $response = $this->actingAs($this->admin, 'sanctum')

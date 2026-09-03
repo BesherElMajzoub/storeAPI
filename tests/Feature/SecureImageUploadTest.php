@@ -68,4 +68,18 @@ class SecureImageUploadTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors('images');
     }
+
+    public function test_canonical_image_order_endpoint_accepts_stable_image_ids(): void
+    {
+        $product = Product::factory()->create();
+        $first = $product->addMedia(UploadedFile::fake()->image('first.jpg', 10, 10))->toMediaCollection('product_images');
+        $second = $product->addMedia(UploadedFile::fake()->image('second.jpg', 10, 10))->toMediaCollection('product_images');
+
+        $this->postJson("/api/v1/admin/products/{$product->id}/images/order", [
+            'image_ids' => [$second->id, $first->id],
+        ])->assertOk();
+
+        $this->assertSame(1, $second->fresh()->order_column);
+        $this->assertSame(2, $first->fresh()->order_column);
+    }
 }
