@@ -30,6 +30,19 @@ class ProductController extends Controller
         tags: ['Admin Products']
     )]
     #[OA\Parameter(name: 'per_page', in: 'query', schema: new OA\Schema(type: 'integer', default: 20))]
+    #[OA\Parameter(name: 'search', in: 'query', description: 'Matches name, SKU, and slug', schema: new OA\Schema(type: 'string'))]
+    #[OA\Parameter(name: 'category_id', in: 'query', schema: new OA\Schema(type: 'integer'))]
+    #[OA\Parameter(name: 'status', in: 'query', schema: new OA\Schema(type: 'string', enum: ['draft', 'published', 'archived']))]
+    #[OA\Parameter(name: 'is_featured', in: 'query', schema: new OA\Schema(type: 'boolean'))]
+    #[OA\Parameter(
+        name: 'sort',
+        in: 'query',
+        schema: new OA\Schema(
+            type: 'string',
+            enum: ['created_desc', 'price_asc', 'price_desc', 'stock_asc', 'name_asc'],
+            default: 'created_desc'
+        )
+    )]
     #[OA\Response(
         response: 200,
         description: 'Products fetched',
@@ -148,7 +161,22 @@ class ProductController extends Controller
                     new OA\Property(
                         property: 'variants',
                         type: 'array',
-                        items: new OA\Items(type: 'object'),
+                        description: 'Variants to create alongside the product. Since this is a create request, none have an `id` yet.',
+                        items: new OA\Items(
+                            type: 'object',
+                            required: ['name'],
+                            properties: [
+                                new OA\Property(property: 'name', type: 'string', example: 'Large / Red'),
+                                new OA\Property(property: 'sku', type: 'string', nullable: true),
+                                new OA\Property(property: 'price', type: 'number', format: 'float', nullable: true),
+                                new OA\Property(property: 'stock_qty', type: 'integer', example: 0),
+                                new OA\Property(property: 'attributes', type: 'object', nullable: true),
+                                new OA\Property(property: 'weight_oz', type: 'number', nullable: true),
+                                new OA\Property(property: 'length_in', type: 'number', nullable: true),
+                                new OA\Property(property: 'width_in', type: 'number', nullable: true),
+                                new OA\Property(property: 'height_in', type: 'number', nullable: true),
+                            ]
+                        ),
                         nullable: true
                     ),
                 ]
@@ -254,7 +282,23 @@ class ProductController extends Controller
                     new OA\Property(
                         property: 'variants',
                         type: 'array',
-                        items: new OA\Items(type: 'object'),
+                        description: 'Transactional upsert. Variants sent **with** an `id` are updated; variants sent **without** an `id` are created; variants **omitted** from the array are left untouched (not deleted); pass `_delete: true` on a variant with an `id` to remove it explicitly.',
+                        items: new OA\Items(
+                            type: 'object',
+                            properties: [
+                                new OA\Property(property: 'id', type: 'integer', nullable: true, description: 'Omit to create a new variant; include to update (or delete) an existing one'),
+                                new OA\Property(property: '_delete', type: 'boolean', nullable: true, description: 'Set true with an `id` to delete that variant'),
+                                new OA\Property(property: 'name', type: 'string', example: 'Large / Red'),
+                                new OA\Property(property: 'sku', type: 'string', nullable: true),
+                                new OA\Property(property: 'price', type: 'number', format: 'float', nullable: true),
+                                new OA\Property(property: 'stock_qty', type: 'integer', example: 0),
+                                new OA\Property(property: 'attributes', type: 'object', nullable: true),
+                                new OA\Property(property: 'weight_oz', type: 'number', nullable: true),
+                                new OA\Property(property: 'length_in', type: 'number', nullable: true),
+                                new OA\Property(property: 'width_in', type: 'number', nullable: true),
+                                new OA\Property(property: 'height_in', type: 'number', nullable: true),
+                            ]
+                        ),
                         nullable: true
                     ),
                 ]
@@ -361,6 +405,59 @@ class ProductController extends Controller
         return $this->success(null, 'Product deleted.');
     }
 
+    #[OA\Post(
+        path: '/api/v1/admin/products/bulk',
+        summary: 'Bulk Update Products',
+        description: 'Apply the same field values to multiple products atomically, in a single transaction, returning per-id results.',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Products']
+    )]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            required: ['ids', 'set'],
+            properties: [
+                new OA\Property(
+                    property: 'ids',
+                    type: 'array',
+                    items: new OA\Items(type: 'integer'),
+                    example: [1, 2, 3]
+                ),
+                new OA\Property(
+                    property: 'set',
+                    type: 'object',
+                    description: 'Only these fields may be bulk-set',
+                    properties: [
+                        new OA\Property(property: 'status', type: 'string', enum: ['draft', 'published', 'archived'], nullable: true),
+                        new OA\Property(property: 'is_featured', type: 'boolean', nullable: true),
+                        new OA\Property(property: 'in_stock', type: 'boolean', nullable: true),
+                        new OA\Property(property: 'category_id', type: 'integer', nullable: true),
+                    ]
+                ),
+            ]
+        )
+    )]
+    #[OA\Response(
+        response: 200,
+        description: 'Bulk update applied',
+        content: new OA\JsonContent(
+            type: 'object',
+            properties: [
+                new OA\Property(
+                    property: 'data',
+                    type: 'array',
+                    items: new OA\Items(
+                        properties: [
+                            new OA\Property(property: 'id', type: 'integer'),
+                            new OA\Property(property: 'status', type: 'string', example: 'updated'),
+                            new OA\Property(property: 'product', ref: '#/components/schemas/Product'),
+                        ]
+                    )
+                ),
+            ]
+        )
+    )]
+    #[OA\Response(response: 422, ref: '#/components/responses/ValidationErrorResponse')]
     public function bulkUpdate(BulkUpdateProductsRequest $request): JsonResponse
     {
         $validated = $request->validated();

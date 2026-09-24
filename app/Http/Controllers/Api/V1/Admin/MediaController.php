@@ -9,6 +9,7 @@ use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
+use OpenApi\Attributes as OA;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 class MediaController extends Controller
@@ -17,10 +18,55 @@ class MediaController extends Controller
     //  Products
     // ─────────────────────────────────────────────────────────────────────
 
-    /**
-     * POST /admin/products/{product}/media
-     * Upload one or more additional images to a product's gallery.
-     */
+    #[OA\Post(
+        path: '/api/v1/admin/products/{product}/images',
+        summary: 'Append Product Images',
+        description: 'Append one or more images to a product gallery without touching existing images. A product may have at most 8 images total. `/media` remains a deprecated alias for this path.',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Products']
+    )]
+    #[OA\Parameter(name: 'product', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\MediaType(
+            mediaType: 'multipart/form-data',
+            schema: new OA\Schema(
+                required: ['images'],
+                properties: [
+                    new OA\Property(
+                        property: 'images[]',
+                        description: 'One or more image files (jpg/png/webp). Max 5 MB each.',
+                        type: 'array',
+                        items: new OA\Items(type: 'string', format: 'binary')
+                    ),
+                ]
+            )
+        )
+    )]
+    #[OA\Response(
+        response: 201,
+        description: 'Images uploaded',
+        content: new OA\JsonContent(
+            type: 'object',
+            properties: [
+                new OA\Property(
+                    property: 'data',
+                    type: 'array',
+                    items: new OA\Items(
+                        properties: [
+                            new OA\Property(property: 'id', type: 'integer'),
+                            new OA\Property(property: 'file_name', type: 'string'),
+                            new OA\Property(property: 'mime_type', type: 'string'),
+                            new OA\Property(property: 'size', type: 'integer'),
+                            new OA\Property(property: 'order', type: 'integer'),
+                            new OA\Property(property: 'url', type: 'string', format: 'uri'),
+                        ]
+                    )
+                ),
+            ]
+        )
+    )]
+    #[OA\Response(response: 422, ref: '#/components/responses/ValidationErrorResponse')]
     public function uploadProductImages(UploadMediaRequest $request, Product $product): JsonResponse
     {
         $files = $request->file('images', []);
@@ -45,10 +91,31 @@ class MediaController extends Controller
         return $this->success($uploaded, 'Images uploaded successfully.', 201);
     }
 
-    /**
-     * POST /admin/products/{product}/media/reorder
-     * Reorder the product gallery. Body: { "order": [3, 1, 2] } (media IDs in desired order).
-     */
+    #[OA\Post(
+        path: '/api/v1/admin/products/{product}/images/order',
+        summary: 'Reorder Product Gallery',
+        description: 'Reorder the product gallery; the first ID becomes the primary/cover image. `/images/reorder` remains a deprecated alias for this path.',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Products']
+    )]
+    #[OA\Parameter(name: 'product', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            required: ['order'],
+            properties: [
+                new OA\Property(
+                    property: 'order',
+                    type: 'array',
+                    description: 'Media IDs belonging to this product, in the desired order. `image_ids` is accepted as an alias.',
+                    items: new OA\Items(type: 'integer'),
+                    example: [3, 1, 2]
+                ),
+            ]
+        )
+    )]
+    #[OA\Response(response: 200, description: 'Gallery reordered')]
+    #[OA\Response(response: 422, description: 'A media ID does not belong to this product')]
     public function reorderProductGallery(ReorderMediaRequest $request, Product $product): JsonResponse
     {
         $order = $request->validated()['order'];
@@ -97,6 +164,17 @@ class MediaController extends Controller
         return $this->success(null, 'Media deleted.');
     }
 
+    #[OA\Delete(
+        path: '/api/v1/admin/products/{product}/images/{media}',
+        summary: 'Delete a Single Product Image',
+        description: 'Delete one image from a product gallery, leaving the rest untouched.',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Products']
+    )]
+    #[OA\Parameter(name: 'product', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))]
+    #[OA\Parameter(name: 'media', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))]
+    #[OA\Response(response: 200, description: 'Image deleted')]
+    #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
     public function destroyProductImage(Product $product, Media $media): JsonResponse
     {
         abort_unless(

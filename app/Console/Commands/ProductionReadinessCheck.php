@@ -56,13 +56,17 @@ class ProductionReadinessCheck extends Command
 
     private function demoAccountCount(): int
     {
-        return User::query()->whereIn('email', [
-            'admin@store.com', 'user@store.com', 'owner@store.com', 'manager@store.com',
-            'support@store.com', 'customer@store.com', 'user_with_address@store.com',
-            'user_no_address@store.com', 'user_with_orders@store.com', 'user_no_orders@store.com',
-            'user_cancelled_orders@store.com', 'user_many_orders@store.com',
-            'user_wishlist@store.com', 'user_empty_wishlist@store.com',
-        ])->count();
+        return User::query()
+            ->where(function ($query) {
+                $query->whereIn('email', [
+                    'admin@store.com', 'user@store.com', 'owner@store.com', 'manager@store.com',
+                    'support@store.com', 'customer@store.com', 'user_with_address@store.com',
+                    'user_no_address@store.com', 'user_with_orders@store.com', 'user_no_orders@store.com',
+                    'user_cancelled_orders@store.com', 'user_many_orders@store.com',
+                    'user_wishlist@store.com', 'user_empty_wishlist@store.com',
+                ])->orWhere('email', 'like', '%@demo.test');
+            })
+            ->count();
     }
 
     private function hasTestRoutes(): bool
@@ -74,7 +78,11 @@ class ProductionReadinessCheck extends Command
     private function demoContentCount(): int
     {
         return Product::withTrashed()->where('name', 'like', 'Extra Demo Product%')->count()
-            + Category::withTrashed()->whereIn('slug', ['electronics', 'empty-category'])->count();
+            + Product::withTrashed()->where('sku', 'like', 'DEMO-%')->count()
+            + Category::withTrashed()->where(function ($query) {
+                $query->whereIn('slug', ['electronics', 'empty-category'])
+                    ->orWhere('slug', 'like', 'demo-%');
+            })->count();
     }
 
     private function warehouseOriginIsConfigured(): bool

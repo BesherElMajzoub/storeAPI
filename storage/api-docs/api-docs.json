@@ -2323,6 +2323,199 @@
                 ]
             }
         },
+        "/api/v1/admin/products/{product}/images": {
+            "post": {
+                "tags": [
+                    "Admin Products"
+                ],
+                "summary": "Append Product Images",
+                "description": "Append one or more images to a product gallery without touching existing images. A product may have at most 8 images total. `/media` remains a deprecated alias for this path.",
+                "operationId": "b9b8da14ea982758597d9b7e2e535e77",
+                "parameters": [
+                    {
+                        "name": "product",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "required": [
+                                    "images"
+                                ],
+                                "properties": {
+                                    "images[]": {
+                                        "description": "One or more image files (jpg/png/webp). Max 5 MB each.",
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "format": "binary"
+                                        }
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Images uploaded",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "integer"
+                                                    },
+                                                    "file_name": {
+                                                        "type": "string"
+                                                    },
+                                                    "mime_type": {
+                                                        "type": "string"
+                                                    },
+                                                    "size": {
+                                                        "type": "integer"
+                                                    },
+                                                    "order": {
+                                                        "type": "integer"
+                                                    },
+                                                    "url": {
+                                                        "type": "string",
+                                                        "format": "uri"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationErrorResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/products/{product}/images/order": {
+            "post": {
+                "tags": [
+                    "Admin Products"
+                ],
+                "summary": "Reorder Product Gallery",
+                "description": "Reorder the product gallery; the first ID becomes the primary/cover image. `/images/reorder` remains a deprecated alias for this path.",
+                "operationId": "b6ea5a7392af3300abdc66b3f93f7727",
+                "parameters": [
+                    {
+                        "name": "product",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "order"
+                                ],
+                                "properties": {
+                                    "order": {
+                                        "description": "Media IDs belonging to this product, in the desired order. `image_ids` is accepted as an alias.",
+                                        "type": "array",
+                                        "items": {
+                                            "type": "integer"
+                                        },
+                                        "example": [
+                                            3,
+                                            1,
+                                            2
+                                        ]
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Gallery reordered"
+                    },
+                    "422": {
+                        "description": "A media ID does not belong to this product"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/products/{product}/images/{media}": {
+            "delete": {
+                "tags": [
+                    "Admin Products"
+                ],
+                "summary": "Delete a Single Product Image",
+                "description": "Delete one image from a product gallery, leaving the rest untouched.",
+                "operationId": "5845fb4904a6b9c4ca67c0c08fce545d",
+                "parameters": [
+                    {
+                        "name": "product",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "media",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Image deleted"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFoundResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/admin/orders": {
             "get": {
                 "tags": [
@@ -2587,6 +2780,55 @@
                             "type": "integer",
                             "default": 20
                         }
+                    },
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "description": "Matches name, SKU, and slug",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "category_id",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "draft",
+                                "published",
+                                "archived"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "is_featured",
+                        "in": "query",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "default": "created_desc",
+                            "enum": [
+                                "created_desc",
+                                "price_asc",
+                                "price_desc",
+                                "stock_asc",
+                                "name_asc"
+                            ]
+                        }
                     }
                 ],
                 "responses": {
@@ -2725,8 +2967,51 @@
                                         "nullable": true
                                     },
                                     "variants": {
+                                        "description": "Variants to create alongside the product. Since this is a create request, none have an `id` yet.",
                                         "type": "array",
                                         "items": {
+                                            "required": [
+                                                "name"
+                                            ],
+                                            "properties": {
+                                                "name": {
+                                                    "type": "string",
+                                                    "example": "Large / Red"
+                                                },
+                                                "sku": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "price": {
+                                                    "type": "number",
+                                                    "format": "float",
+                                                    "nullable": true
+                                                },
+                                                "stock_qty": {
+                                                    "type": "integer",
+                                                    "example": 0
+                                                },
+                                                "attributes": {
+                                                    "type": "object",
+                                                    "nullable": true
+                                                },
+                                                "weight_oz": {
+                                                    "type": "number",
+                                                    "nullable": true
+                                                },
+                                                "length_in": {
+                                                    "type": "number",
+                                                    "nullable": true
+                                                },
+                                                "width_in": {
+                                                    "type": "number",
+                                                    "nullable": true
+                                                },
+                                                "height_in": {
+                                                    "type": "number",
+                                                    "nullable": true
+                                                }
+                                            },
                                             "type": "object"
                                         },
                                         "nullable": true
@@ -2924,8 +3209,58 @@
                                         "nullable": true
                                     },
                                     "variants": {
+                                        "description": "Transactional upsert. Variants sent **with** an `id` are updated; variants sent **without** an `id` are created; variants **omitted** from the array are left untouched (not deleted); pass `_delete: true` on a variant with an `id` to remove it explicitly.",
                                         "type": "array",
                                         "items": {
+                                            "properties": {
+                                                "id": {
+                                                    "description": "Omit to create a new variant; include to update (or delete) an existing one",
+                                                    "type": "integer",
+                                                    "nullable": true
+                                                },
+                                                "_delete": {
+                                                    "description": "Set true with an `id` to delete that variant",
+                                                    "type": "boolean",
+                                                    "nullable": true
+                                                },
+                                                "name": {
+                                                    "type": "string",
+                                                    "example": "Large / Red"
+                                                },
+                                                "sku": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "price": {
+                                                    "type": "number",
+                                                    "format": "float",
+                                                    "nullable": true
+                                                },
+                                                "stock_qty": {
+                                                    "type": "integer",
+                                                    "example": 0
+                                                },
+                                                "attributes": {
+                                                    "type": "object",
+                                                    "nullable": true
+                                                },
+                                                "weight_oz": {
+                                                    "type": "number",
+                                                    "nullable": true
+                                                },
+                                                "length_in": {
+                                                    "type": "number",
+                                                    "nullable": true
+                                                },
+                                                "width_in": {
+                                                    "type": "number",
+                                                    "nullable": true
+                                                },
+                                                "height_in": {
+                                                    "type": "number",
+                                                    "nullable": true
+                                                }
+                                            },
                                             "type": "object"
                                         },
                                         "nullable": true
@@ -2988,6 +3323,110 @@
                     },
                     "404": {
                         "$ref": "#/components/responses/NotFoundResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/products/bulk": {
+            "post": {
+                "tags": [
+                    "Admin Products"
+                ],
+                "summary": "Bulk Update Products",
+                "description": "Apply the same field values to multiple products atomically, in a single transaction, returning per-id results.",
+                "operationId": "68245d9f5889235cf096de886ca30ea6",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "ids",
+                                    "set"
+                                ],
+                                "properties": {
+                                    "ids": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "integer"
+                                        },
+                                        "example": [
+                                            1,
+                                            2,
+                                            3
+                                        ]
+                                    },
+                                    "set": {
+                                        "description": "Only these fields may be bulk-set",
+                                        "properties": {
+                                            "status": {
+                                                "type": "string",
+                                                "nullable": true,
+                                                "enum": [
+                                                    "draft",
+                                                    "published",
+                                                    "archived"
+                                                ]
+                                            },
+                                            "is_featured": {
+                                                "type": "boolean",
+                                                "nullable": true
+                                            },
+                                            "in_stock": {
+                                                "type": "boolean",
+                                                "nullable": true
+                                            },
+                                            "category_id": {
+                                                "type": "integer",
+                                                "nullable": true
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Bulk update applied",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "integer"
+                                                    },
+                                                    "status": {
+                                                        "type": "string",
+                                                        "example": "updated"
+                                                    },
+                                                    "product": {
+                                                        "$ref": "#/components/schemas/Product"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationErrorResponse"
                     }
                 },
                 "security": [
@@ -8168,12 +8607,12 @@
             "description": "Admin Inspired Leads"
         },
         {
-            "name": "Admin Orders",
-            "description": "Admin Orders"
-        },
-        {
             "name": "Admin Products",
             "description": "Admin Products"
+        },
+        {
+            "name": "Admin Orders",
+            "description": "Admin Orders"
         },
         {
             "name": "Admin Reviews",
