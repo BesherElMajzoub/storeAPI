@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers\Api\V1\Admin;
 
+use App\Contracts\EasyPostServiceInterface;
 use App\Http\Controllers\Controller;
+use App\Mail\OrderShippedMail;
 use App\Models\Order;
-use App\Services\EasyPostService;
 use App\Services\ShipmentTrackingService;
 use Carbon\Carbon;
 use Exception;
@@ -12,13 +13,14 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use OpenApi\Attributes as OA;
 
 class ShippingController extends Controller
 {
-    protected EasyPostService $easyPostService;
+    protected EasyPostServiceInterface $easyPostService;
 
-    public function __construct(EasyPostService $easyPostService, private readonly ShipmentTrackingService $tracking)
+    public function __construct(EasyPostServiceInterface $easyPostService, private readonly ShipmentTrackingService $tracking)
     {
         $this->easyPostService = $easyPostService;
     }
@@ -155,6 +157,15 @@ class ShippingController extends Controller
 
             if (isset($boughtShipment->tracker)) {
                 $updatedOrder = $this->tracking->sync($updatedOrder, $boughtShipment->tracker);
+            }
+
+            try {
+                Mail::to($updatedOrder->user->email)->queue(new OrderShippedMail($updatedOrder));
+            } catch (\Throwable $mailError) {
+                Log::error('Shipping label purchased but shipment email could not be queued.', [
+                    'order_id' => $updatedOrder->id,
+                    'error' => $mailError->getMessage(),
+                ]);
             }
 
             return $this->shipmentResponse($updatedOrder, 'Order shipped successfully.');

@@ -2,9 +2,9 @@
 
 namespace App\Console\Commands;
 
+use App\Contracts\EasyPostServiceInterface;
 use App\Jobs\SendAdminAlert;
 use App\Models\Order;
-use App\Services\EasyPostService;
 use App\Services\ShipmentTrackingService;
 use Exception;
 use Illuminate\Console\Command;
@@ -16,9 +16,9 @@ class TrackShipments extends Command
 
     protected $description = 'Poll EasyPost tracking API for shipped orders and update status.';
 
-    protected EasyPostService $easyPostService;
+    protected EasyPostServiceInterface $easyPostService;
 
-    public function __construct(EasyPostService $easyPostService, private readonly ShipmentTrackingService $tracking)
+    public function __construct(EasyPostServiceInterface $easyPostService, private readonly ShipmentTrackingService $tracking)
     {
         parent::__construct();
         $this->easyPostService = $easyPostService;

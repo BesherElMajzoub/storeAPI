@@ -2,15 +2,17 @@
 
 namespace App\Services;
 
+use App\Contracts\EasyPostServiceInterface;
 use App\Exceptions\ShippingProviderException;
 use App\Exceptions\ShippingValidationException;
 use App\Models\Product;
 use App\Models\ShippingRateQuote;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 
 class ShippingQuoteService
 {
-    public function __construct(private readonly EasyPostService $easyPost) {}
+    public function __construct(private readonly EasyPostServiceInterface $easyPost) {}
 
     public function quote(array $address, array $items): array
     {
@@ -59,13 +61,14 @@ class ShippingQuoteService
                 'service' => $quote->service,
                 'amount' => (float) $quote->amount,
                 'eta_days' => $quote->eta_days,
+                'expires_at' => $quote->expires_at->toIso8601String(),
             ];
         }
 
         return $result;
     }
 
-    public function storeLegacyQuotes(object $shipment, array $address, array $parcel): void
+    public function storeLegacyQuotes(object $shipment, array $address, array $parcel): CarbonInterface
     {
         $normalizedAddress = $this->normalizeAddress($address);
         $normalizedParcel = $this->normalizeParcel($parcel);
@@ -87,6 +90,8 @@ class ShippingQuoteService
                 'order_id' => null,
             ]);
         }
+
+        return $expiresAt;
     }
 
     public function validateForCheckout(string $rateId, array $address, array $items): ShippingRateQuote
@@ -216,11 +221,14 @@ class ShippingQuoteService
 
     private function normalizeItems(array $items): Collection
     {
-        $products = Product::with('variants')->whereIn('id', collect($items)->pluck('product_id')->unique())->get()->keyBy('id');
+        $products = Product::with(['category', 'variants'])
+            ->whereIn('id', collect($items)->pluck('product_id')->unique())
+            ->get()
+            ->keyBy('id');
 
         return collect($items)->map(function (array $line) use ($products) {
             $product = $products->get((int) $line['product_id']);
-            if (! $product || $product->status !== 'published') {
+            if (! $product || $product->status !== 'published' || ($product->category && ! $product->category->is_active)) {
                 throw new ShippingValidationException('A cart product is unavailable.', 'unavailable_product');
             }
 

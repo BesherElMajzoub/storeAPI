@@ -25,6 +25,7 @@ class ProductionReadinessCheck extends Command
             ['Sanctum token expiry', (int) config('sanctum.expiration') > 0, (string) config('sanctum.expiration').' minutes'],
             ['Stripe live secret', Str::startsWith((string) config('services.stripe.secret'), 'sk_live_'), $this->masked(config('services.stripe.secret'))],
             ['Stripe webhook secret', Str::startsWith((string) config('services.stripe.webhook_secret'), 'whsec_'), $this->masked(config('services.stripe.webhook_secret'))],
+            ['Real shipping driver', config('services.easypost.driver') === 'easypost', (string) config('services.easypost.driver')],
             ['EasyPost configured', filled(config('services.easypost.api_key')) && filled(config('services.easypost.webhook_secret')), filled(config('services.easypost.api_key')) ? 'configured' : 'missing'],
             ['Warehouse origin configured', $this->warehouseOriginIsConfigured(), config('services.store_origin.street1', 'missing')],
             ['Shipping packages configured', count(config('services.easypost.packages', [])) > 0, count(config('services.easypost.packages', [])).' package(s)'],
@@ -35,6 +36,7 @@ class ProductionReadinessCheck extends Command
             ['MySQL utf8mb4', config('database.default') !== 'mysql' || config('database.connections.mysql.charset') === 'utf8mb4', (string) config('database.connections.mysql.charset')],
             ['No known demo accounts', $this->demoAccountCount() === 0, $this->demoAccountCount().' found'],
             ['No known demo catalogue', $this->demoContentCount() === 0, $this->demoContentCount().' found'],
+            ['Published products have shipping data', $this->missingShippingDataCount() === 0, $this->missingShippingDataCount().' missing'],
             ['No test/debug routes', ! $this->hasTestRoutes(), $this->hasTestRoutes() ? 'found' : 'none'],
         ];
 
@@ -93,6 +95,18 @@ class ProductionReadinessCheck extends Command
             ->every(fn (string $field) => filled($origin[$field] ?? null))
             && ($origin['street1'] ?? null) !== '123 Main Street'
             && strtoupper((string) ($origin['country'] ?? '')) === 'US';
+    }
+
+    private function missingShippingDataCount(): int
+    {
+        return Product::query()
+            ->where('status', 'published')
+            ->where(function ($query): void {
+                foreach (['weight_oz', 'length_in', 'width_in', 'height_in'] as $field) {
+                    $query->orWhereNull($field)->orWhere($field, '<=', 0);
+                }
+            })
+            ->count();
     }
 
     private function masked(?string $value): string

@@ -82,6 +82,29 @@ class AdminProductContractTest extends TestCase
         $this->assertSame(['Alpha Ring', 'Zulu Ring'], collect($response->json('data.data'))->pluck('name')->all());
     }
 
+    public function test_admin_product_paginator_keeps_the_documented_nested_envelope_and_page_parameter(): void
+    {
+        Product::factory()->count(3)->create();
+
+        $response = $this->getJson('/api/v1/admin/products?per_page=1&page=2')
+            ->assertOk()
+            ->assertJsonStructure([
+                'success',
+                'message',
+                'data' => [
+                    'data' => [['id']],
+                    'links',
+                    'meta' => ['current_page', 'from', 'last_page', 'per_page', 'to', 'total'],
+                ],
+                'errors',
+            ])
+            ->assertJsonPath('data.meta.current_page', 2)
+            ->assertJsonPath('data.meta.per_page', 1)
+            ->assertJsonPath('data.meta.total', 3);
+
+        $this->assertCount(1, $response->json('data.data'));
+    }
+
     public function test_variant_update_is_a_transactional_upsert_with_explicit_delete(): void
     {
         $product = Product::factory()->create(['stock_qty' => 50]);
@@ -101,6 +124,30 @@ class AdminProductContractTest extends TestCase
         $this->assertDatabaseMissing('product_variants', ['id' => $deleted->id]);
         $this->assertDatabaseHas('product_variants', ['id' => $kept->id, 'name' => 'Keep']);
         $this->assertDatabaseHas('product_variants', ['product_id' => $product->id, 'sku' => 'VAR-NEW']);
+    }
+
+    public function test_variant_update_preserves_omitted_optional_fields(): void
+    {
+        $product = Product::factory()->create(['stock_qty' => 50]);
+        $variant = ProductVariant::create([
+            'product_id' => $product->id,
+            'name' => 'Original',
+            'sku' => 'VAR-PRESERVE',
+            'price' => 25,
+            'stock_qty' => 7,
+            'weight_oz' => 4,
+        ]);
+
+        $this->patchJson("/api/v1/admin/products/{$product->id}", [
+            'variants' => [['id' => $variant->id, 'name' => 'Renamed']],
+        ])->assertOk();
+
+        $variant->refresh();
+        $this->assertSame('Renamed', $variant->name);
+        $this->assertSame('VAR-PRESERVE', $variant->sku);
+        $this->assertSame('25.00', $variant->price);
+        $this->assertSame(7, $variant->stock_qty);
+        $this->assertSame('4.00', $variant->weight_oz);
     }
 
     public function test_variant_from_another_product_cannot_be_modified(): void
@@ -131,5 +178,74 @@ class AdminProductContractTest extends TestCase
             'ids' => $products->pluck('id')->all(),
             'set' => ['price' => 0],
         ])->assertUnprocessable();
+    }
+
+    public function test_bulk_publish_rejects_any_product_without_complete_shipping_data(): void
+    {
+        $ready = Product::factory()->create(['status' => 'draft']);
+        $missing = Product::factory()->create(['status' => 'draft', 'weight_oz' => null]);
+
+        $this->postJson('/api/v1/admin/products/bulk', [
+            'ids' => [$ready->id, $missing->id],
+            'set' => ['status' => 'published'],
+        ])->assertUnprocessable()->assertJsonValidationErrors('set.status');
+
+        $this->assertDatabaseHas('products', ['id' => $ready->id, 'status' => 'draft']);
+        $this->assertDatabaseHas('products', ['id' => $missing->id, 'status' => 'draft']);
+    }
+
+    public function test_stock_delta_adjustment_updates_product_and_variant_atomically(): void
+    {
+        $product = Product::factory()->create(['stock_qty' => 10, 'in_stock' => true]);
+        $variant = ProductVariant::create([
+            'product_id' => $product->id,
+            'name' => 'Bazaar Variant',
+            'sku' => 'BAZAAR-VARIANT',
+            'stock_qty' => 4,
+        ]);
+
+        $this->postJson("/api/v1/admin/products/{$product->id}/stock/adjust", [
+            'delta' => -3,
+            'variant_id' => $variant->id,
+        ])->assertOk()
+            ->assertJsonPath('data.previous_product_stock', 10)
+            ->assertJsonPath('data.product_stock', 7)
+            ->assertJsonPath('data.previous_variant_stock', 4)
+            ->assertJsonPath('data.variant_stock', 1);
+
+        $this->assertSame(7, $product->fresh()->stock_qty);
+        $this->assertSame(1, $variant->fresh()->stock_qty);
+
+        $this->postJson("/api/v1/admin/products/{$product->id}/stock/adjust", [
+            'delta' => -2,
+            'variant_id' => $variant->id,
+        ])->assertConflict();
+
+        $this->assertSame(7, $product->fresh()->stock_qty);
+        $this->assertSame(1, $variant->fresh()->stock_qty);
+    }
+
+    public function test_stock_delta_rejects_zero_and_a_variant_from_another_product(): void
+    {
+        $product = Product::factory()->create(['stock_qty' => 5]);
+        $other = Product::factory()->create(['stock_qty' => 5]);
+        $variant = ProductVariant::create([
+            'product_id' => $other->id,
+            'name' => 'Other Variant',
+            'stock_qty' => 5,
+        ]);
+
+        $this->postJson("/api/v1/admin/products/{$product->id}/stock/adjust", ['delta' => 0])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('delta');
+
+        $this->postJson("/api/v1/admin/products/{$product->id}/stock/adjust", [
+            'delta' => 1,
+            'variant_id' => $variant->id,
+        ])->assertUnprocessable()
+            ->assertJsonPath('errors.variant_id.0', 'The selected variant does not belong to this product.');
+
+        $this->assertSame(5, $product->fresh()->stock_qty);
+        $this->assertSame(5, $variant->fresh()->stock_qty);
     }
 }

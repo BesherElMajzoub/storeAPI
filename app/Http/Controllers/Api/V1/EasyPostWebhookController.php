@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Contracts\EasyPostServiceInterface;
 use App\Http\Controllers\Controller;
 use App\Jobs\SendAdminAlert;
 use App\Models\Order;
-use App\Services\EasyPostService;
 use App\Services\ShipmentTrackingService;
 use Exception;
 use Illuminate\Http\JsonResponse;
@@ -15,9 +15,9 @@ use OpenApi\Attributes as OA;
 
 class EasyPostWebhookController extends Controller
 {
-    protected EasyPostService $easyPostService;
+    protected EasyPostServiceInterface $easyPostService;
 
-    public function __construct(EasyPostService $easyPostService, private readonly ShipmentTrackingService $tracking)
+    public function __construct(EasyPostServiceInterface $easyPostService, private readonly ShipmentTrackingService $tracking)
     {
         $this->easyPostService = $easyPostService;
     }

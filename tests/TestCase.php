@@ -2,8 +2,8 @@
 
 namespace Tests;
 
+use App\Contracts\EasyPostServiceInterface;
 use App\Models\Product;
-use App\Services\EasyPostService;
 use App\Services\ShippingQuoteService;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 
@@ -33,7 +33,7 @@ abstract class TestCase extends BaseTestCase
         ];
         $shipment = (object) ['id' => $shipmentId, 'rates' => [$rate]];
 
-        $easyPost = $this->mock(EasyPostService::class);
+        $easyPost = $this->mock(EasyPostServiceInterface::class);
         $easyPost->shouldReceive('getShippingRates')->once()->andReturn($shipment);
         $easyPost->shouldReceive('retrieveRate')->zeroOrMoreTimes()->andReturn($rate);
 

@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Contracts\EasyPostServiceInterface;
+use App\Mail\OrderShippedMail;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\User;
-use App\Services\EasyPostService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Mockery;
 use Tests\TestCase;
@@ -52,7 +54,7 @@ class EasyPostShippingTest extends TestCase
             'phone' => '3108085243',
         ];
 
-        $this->mock(EasyPostService::class, function ($mock) use ($mockVerifiedAddress) {
+        $this->mock(EasyPostServiceInterface::class, function ($mock) use ($mockVerifiedAddress) {
             $mock->shouldReceive('verifyAddress')->once()->andReturn($mockVerifiedAddress);
         });
 
@@ -89,7 +91,7 @@ class EasyPostShippingTest extends TestCase
             ],
         ];
 
-        $this->mock(EasyPostService::class, function ($mock) use ($mockShipment) {
+        $this->mock(EasyPostServiceInterface::class, function ($mock) use ($mockShipment) {
             $mock->shouldReceive('getShippingRates')->once()->andReturn($mockShipment);
         });
 
@@ -113,6 +115,8 @@ class EasyPostShippingTest extends TestCase
 
     public function test_admin_can_purchase_label(): void
     {
+        Mail::fake();
+
         $order = Order::create([
             'order_number' => 'ORD-TEST12345',
             'user_id' => $this->user->id,
@@ -133,7 +137,7 @@ class EasyPostShippingTest extends TestCase
             ],
         ];
 
-        $this->mock(EasyPostService::class, function ($mock) use ($mockBoughtShipment) {
+        $this->mock(EasyPostServiceInterface::class, function ($mock) use ($mockBoughtShipment) {
             $mock->shouldReceive('purchaseLabel')
                 ->once()
                 ->with('shp_test123', 'rate_test123')
@@ -157,6 +161,13 @@ class EasyPostShippingTest extends TestCase
             'tracking_number' => 'EZ1000000001',
             'label_url' => 'https://easypost.com/label.png',
         ]);
+        Mail::assertQueued(OrderShippedMail::class, fn (OrderShippedMail $mail) => $mail->order->is($order));
+
+        $this->actingAs($this->admin, 'sanctum')
+            ->postJson("/api/v1/admin/orders/{$order->id}/label")
+            ->assertOk()
+            ->assertJsonPath('message', 'Shipping label already exists.');
+        Mail::assertQueued(OrderShippedMail::class, 1);
     }
 
     public function test_easypost_webhook_updates_order(): void
@@ -183,7 +194,7 @@ class EasyPostShippingTest extends TestCase
             ],
         ];
 
-        $this->mock(EasyPostService::class, function ($mock) use ($mockEvent) {
+        $this->mock(EasyPostServiceInterface::class, function ($mock) use ($mockEvent) {
             $mock->shouldReceive('validateWebhook')->once()->andReturn($mockEvent);
         });
 
@@ -248,7 +259,7 @@ class EasyPostShippingTest extends TestCase
             ],
         ];
 
-        $this->mock(EasyPostService::class, function ($mock) use ($mockShipment) {
+        $this->mock(EasyPostServiceInterface::class, function ($mock) use ($mockShipment) {
             $mock->shouldReceive('retrieveShipment')
                 ->once()
                 ->with('shp_test123')

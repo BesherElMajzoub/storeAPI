@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Contracts\EasyPostServiceInterface;
 use App\Exceptions\CouponValidationException;
 use App\Exceptions\InsufficientStockException;
 use App\Exceptions\ShippingProviderException;
@@ -11,17 +12,21 @@ use App\Http\Requests\Api\V1\StoreCancellationRequestRequest;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Resources\OrderResource;
 use App\Jobs\SendAdminAlert;
+use App\Models\Coupon;
 use App\Models\CouponUsage;
 use App\Models\Order;
 use App\Models\OrderCancellationRequest;
+use App\Models\ShippingRateQuote;
 use App\Services\CouponService;
-use App\Services\EasyPostService;
+use App\Services\FreeShippingService;
 use App\Services\OrderInventoryService;
 use App\Services\ShipmentTrackingService;
 use App\Services\ShippingQuoteService;
 use App\Services\StripeCheckoutService;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -89,6 +94,153 @@ class OrderController extends Controller
             ->findOrFail($id);
 
         return new OrderResource($order);
+    }
+
+    #[OA\Post(
+        path: '/api/v1/orders/{id}/checkout-session',
+        summary: 'Resume payment',
+        description: 'Return the still-open Stripe Checkout Session for an unpaid order, or create a replacement after Stripe confirms that the previous session expired.',
+        security: [['bearerAuth' => []]],
+        tags: ['Orders']
+    )]
+    #[OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))]
+    #[OA\Response(
+        response: 200,
+        description: 'Checkout session is ready.',
+        content: new OA\JsonContent(
+            type: 'object',
+            properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'message', type: 'string', example: 'Existing checkout session retrieved.'),
+                new OA\Property(
+                    property: 'data',
+                    type: 'object',
+                    properties: [
+                        new OA\Property(property: 'checkout_url', type: 'string', example: 'https://checkout.stripe.com/c/pay/cs_test_a1b2c3d4'),
+                        new OA\Property(
+                            property: 'payment',
+                            type: 'object',
+                            properties: [
+                                new OA\Property(property: 'session_id', type: 'string', example: 'cs_test_a1b2c3d4'),
+                                new OA\Property(property: 'reused', type: 'boolean', example: true),
+                            ]
+                        ),
+                    ]
+                ),
+                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null),
+            ]
+        )
+    )]
+    #[OA\Response(response: 401, ref: '#/components/responses/UnauthorizedResponse')]
+    #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
+    #[OA\Response(response: 409, description: 'The order cannot currently be paid or another resume request is in progress.')]
+    #[OA\Response(response: 502, description: 'Payment provider error.')]
+    public function resumeCheckout(Request $request, $id, StripeCheckoutService $stripe): JsonResponse
+    {
+        // Resolve through the relationship so another customer's order is never disclosed.
+        $order = $request->user()->orders()->findOrFail($id);
+
+        try {
+            return Cache::lock("order:{$order->id}:checkout-session", 60)->block(5, function () use ($order, $stripe): JsonResponse {
+                $order->refresh();
+
+                if ($order->status !== 'pending_payment' || $order->payment_status !== 'unpaid') {
+                    return $this->checkoutConflictResponse();
+                }
+
+                if ($order->stripe_session_id) {
+                    $existingSession = $stripe->retrieveCheckoutSession($order->stripe_session_id);
+
+                    if ($existingSession->status === 'open' && $existingSession->url) {
+                        return $this->checkoutSessionResponse($existingSession, reused: true);
+                    }
+
+                    if ($existingSession->status === 'complete') {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Payment has already completed and is awaiting confirmation.',
+                            'data' => null,
+                            'errors' => null,
+                        ], 409);
+                    }
+
+                    if ($existingSession->status !== 'expired') {
+                        throw new \RuntimeException('Stripe returned an unsupported checkout session status.');
+                    }
+                }
+
+                $order->loadMissing('items');
+                $session = $stripe->createCheckoutSession($order);
+
+                $updated = Order::query()
+                    ->whereKey($order->id)
+                    ->where('status', 'pending_payment')
+                    ->where('payment_status', 'unpaid')
+                    ->where('stripe_session_id', $order->stripe_session_id)
+                    ->update(['stripe_session_id' => $session->id]);
+
+                if ($updated === 0) {
+                    try {
+                        $stripe->expireCheckoutSession($session->id);
+                    } catch (\Throwable $e) {
+                        Log::critical('Unable to expire a checkout session created during an order state race.', [
+                            'order_id' => $order->id,
+                            'stripe_session_id' => $session->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+
+                    return $this->checkoutConflictResponse();
+                }
+
+                return $this->checkoutSessionResponse($session, reused: false);
+            });
+        } catch (LockTimeoutException) {
+            return response()->json([
+                'success' => false,
+                'message' => 'A checkout session request is already in progress. Please try again.',
+                'data' => null,
+                'errors' => null,
+            ], 409);
+        } catch (\Throwable $e) {
+            Log::error('Stripe checkout session resume failed.', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Payment provider error. Please try again.',
+                'data' => null,
+                'errors' => null,
+            ], 502);
+        }
+    }
+
+    private function checkoutSessionResponse(object $session, bool $reused): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'message' => $reused ? 'Existing checkout session retrieved.' : 'Checkout session created.',
+            'data' => [
+                'checkout_url' => $session->url,
+                'payment' => [
+                    'session_id' => $session->id,
+                    'reused' => $reused,
+                ],
+            ],
+            'errors' => null,
+        ]);
+    }
+
+    private function checkoutConflictResponse(): JsonResponse
+    {
+        return response()->json([
+            'success' => false,
+            'message' => 'Only unpaid orders awaiting payment can start or resume checkout.',
+            'data' => null,
+            'errors' => null,
+        ], 409);
     }
 
     #[OA\Post(
@@ -195,7 +347,7 @@ class OrderController extends Controller
             ]
         )
     )]
-    public function store(StoreOrderRequest $request, StripeCheckoutService $stripe, CouponService $couponService, OrderInventoryService $inventory, ShippingQuoteService $quoteService): JsonResponse
+    public function store(StoreOrderRequest $request, StripeCheckoutService $stripe, CouponService $couponService, OrderInventoryService $inventory, ShippingQuoteService $quoteService, FreeShippingService $freeShipping): JsonResponse
     {
         if (! $request->user()->email_verified_at) {
             return response()->json([
@@ -232,22 +384,41 @@ class OrderController extends Controller
 
         // 1️⃣ Create order in DB (pending_payment, unpaid)
         try {
-            $order = DB::transaction(function () use ($request, $items, $couponService, $inventory, $shippingQuote, $quoteService) {
+            $order = DB::transaction(function () use ($request, $items, $couponService, $inventory, $shippingQuote, $quoteService, $freeShipping) {
                 $lockedQuote = $quoteService->lockAvailableQuote($shippingQuote->id);
+
+                // subtotal
                 $quote = $inventory->quoteAndReserve($items);
                 $subtotal = $quote['subtotal'];
                 $orderItemsData = $quote['items'];
+
+                // discounts
                 $coupon = null;
                 $discount = 0.0;
-
                 if ($request->filled('coupon_code')) {
                     // lockForUpdate is executed within validateCoupon if in transaction
                     $coupon = $couponService->validateCoupon($request->coupon_code, $request->user(), $subtotal);
                     $discount = $couponService->calculateDiscount($coupon, $subtotal);
                 }
 
-                $shippingCost = (float) $lockedQuote->amount;
-                $total = max(0.0, $subtotal + $shippingCost - $discount);
+                // free-shipping eligibility (automatic threshold OR a free_shipping coupon)
+                $carrierShippingCost = (float) $lockedQuote->amount;
+                $freeShippingReason = null;
+                if ($freeShipping->subtotalQualifies($subtotal)) {
+                    $freeShippingReason = 'threshold';
+                } elseif ($coupon && $coupon->isFreeShipping()) {
+                    $freeShippingReason = 'coupon';
+                }
+
+                // shipping (the real carrier cost is preserved separately for accounting)
+                $shippingCost = $freeShippingReason ? 0.0 : $carrierShippingCost;
+
+                // tax — not yet calculated (pending product decision); kept as an explicit
+                // term so the formula matches subtotal - discount + shipping + tax.
+                $tax = 0.0;
+
+                // final total
+                $total = max(0.0, $subtotal - $discount + $shippingCost + $tax);
 
                 $order = Order::create([
                     'order_number' => 'ORD-'.strtoupper(Str::random(10)),
@@ -255,7 +426,10 @@ class OrderController extends Controller
                     'status' => 'pending_payment',
                     'payment_status' => 'unpaid',
                     'subtotal' => $subtotal,
+                    'tax' => $tax,
                     'shipping_cost' => $shippingCost,
+                    'carrier_shipping_cost' => $carrierShippingCost,
+                    'free_shipping_reason' => $freeShippingReason,
                     'easypost_shipment_id' => $lockedQuote->shipment_id,
                     'shipping_rate_id' => $lockedQuote->rate_id,
                     'shipping_carrier' => $lockedQuote->carrier,
@@ -328,9 +502,7 @@ class OrderController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
-            // Release the reservation before hiding the failed order.
-            $order->update(['status' => 'cancelled', 'payment_status' => 'failed']);
-            $order->delete();
+            $this->rollbackFailedCheckout($order);
 
             return response()->json([
                 'success' => false,
@@ -352,6 +524,35 @@ class OrderController extends Controller
             ],
             'errors' => null,
         ], 201);
+    }
+
+    private function rollbackFailedCheckout(Order $order): void
+    {
+        DB::transaction(function () use ($order): void {
+            $lockedOrder = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
+
+            $usage = CouponUsage::query()
+                ->where('order_id', $lockedOrder->id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($usage) {
+                $coupon = Coupon::query()->whereKey($usage->coupon_id)->lockForUpdate()->first();
+                if ($coupon && $coupon->used_count > 0) {
+                    $coupon->decrement('used_count');
+                }
+                $usage->delete();
+            }
+
+            ShippingRateQuote::query()
+                ->where('order_id', $lockedOrder->id)
+                ->update(['consumed_at' => null, 'order_id' => null]);
+
+            // Updating the status invokes OrderObserver, which idempotently
+            // releases the reserved inventory before the order is hidden.
+            $lockedOrder->update(['status' => 'cancelled', 'payment_status' => 'failed']);
+            $lockedOrder->delete();
+        }, 3);
     }
 
     #[OA\Post(
@@ -548,7 +749,7 @@ class OrderController extends Controller
     )]
     #[OA\Response(response: 422, description: 'Tracking info not available yet.')]
     #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
-    public function getTracking(Request $request, int $id, EasyPostService $easyPostService, ShipmentTrackingService $trackingService): JsonResponse
+    public function getTracking(Request $request, int $id, EasyPostServiceInterface $easyPostService, ShipmentTrackingService $trackingService): JsonResponse
     {
         $order = $request->user()->orders()->findOrFail($id);
 

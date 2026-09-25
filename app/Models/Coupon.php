@@ -9,7 +9,7 @@ class Coupon extends Model
     protected $fillable = [
         'code', 'type', 'value', 'minimum_order_amount', 'maximum_discount_amount',
         'usage_limit', 'used_count', 'usage_limit_per_user', 'starts_at', 'expires_at',
-        'is_active'
+        'is_active',
     ];
 
     protected $casts = [
@@ -37,11 +37,17 @@ class Coupon extends Model
         return $this->isAvailable();
     }
 
+    public function isFreeShipping(): bool
+    {
+        return $this->type === 'free_shipping';
+    }
+
     public function getRemainingUsesAttribute(): ?int
     {
         if ($this->usage_limit === null) {
             return null;
         }
+
         return max(0, $this->usage_limit - $this->used_count);
     }
 
@@ -52,14 +58,14 @@ class Coupon extends Model
 
     public function getIsStartedAttribute(): bool
     {
-        return !$this->starts_at || $this->starts_at->isPast();
+        return ! $this->starts_at || $this->starts_at->isPast();
     }
 
     public function getIsAvailableAttribute(): bool
     {
-        return $this->is_active 
-            && $this->is_started 
-            && !$this->is_expired 
+        return $this->is_active
+            && $this->is_started
+            && ! $this->is_expired
             && ($this->usage_limit === null || $this->used_count < $this->usage_limit);
     }
 

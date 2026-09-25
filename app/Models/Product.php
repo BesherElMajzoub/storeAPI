@@ -117,7 +117,9 @@ class Product extends Model implements HasMedia
 
     public function scopePublished(Builder $query)
     {
-        return $query->where('status', 'published');
+        return $query
+            ->where('status', 'published')
+            ->whereHas('category', fn (Builder $category) => $category->where('is_active', true));
     }
 
     public function scopeFilter(Builder $query, array $filters)
@@ -139,6 +141,8 @@ class Product extends Model implements HasMedia
             }
             $q->whereHas('category', fn ($c) => $c->where('slug', $slug));
         });
+
+        $query->when($filters['slugs'] ?? null, fn ($q, array $slugs) => $q->whereIn('slug', $slugs));
 
         $query->when($filters['price_min'] ?? null, function ($q, $v) use ($finalPriceExpr) {
             $q->whereRaw("{$finalPriceExpr} >= ?", [(float) $v]);

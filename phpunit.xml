@@ -35,5 +35,7 @@
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
         <env name="LOCATION_PROVIDER" value="google"/>
+        <env name="TELEGRAM_BOT_TOKEN" value="" force="true"/>
+        <env name="TELEGRAM_ADMIN_CHAT_ID" value="" force="true"/>
     </php>
 </phpunit>

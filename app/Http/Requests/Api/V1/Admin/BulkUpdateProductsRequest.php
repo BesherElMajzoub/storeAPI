@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Api\V1\Admin;
 
+use App\Models\Product;
 use Illuminate\Validation\Rule;
 
 class BulkUpdateProductsRequest extends BaseAdminRequest
@@ -24,6 +25,32 @@ class BulkUpdateProductsRequest extends BaseAdminRequest
         $validator->after(function ($validator): void {
             if (is_array($this->input('set')) && count($this->input('set')) === 0) {
                 $validator->errors()->add('set', 'At least one supported field is required.');
+            }
+
+            if ($this->input('set.status') !== 'published' || $validator->errors()->isNotEmpty()) {
+                return;
+            }
+
+            $ids = array_values(array_filter((array) $this->input('ids'), 'is_numeric'));
+            if ($ids === []) {
+                return;
+            }
+
+            $unconfiguredIds = Product::query()
+                ->whereKey($ids)
+                ->where(function ($query): void {
+                    foreach (['weight_oz', 'length_in', 'width_in', 'height_in'] as $field) {
+                        $query->orWhereNull($field)->orWhere($field, '<=', 0);
+                    }
+                })
+                ->pluck('id')
+                ->all();
+
+            if ($unconfiguredIds !== []) {
+                $validator->errors()->add(
+                    'set.status',
+                    'Products '.implode(', ', $unconfiguredIds).' require complete shipping weight and dimensions before publishing.'
+                );
             }
         });
     }

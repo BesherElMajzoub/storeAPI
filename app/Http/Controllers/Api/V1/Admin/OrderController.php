@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\Admin\BulkUpdateOrderStatusRequest;
 use App\Http\Requests\Api\V1\Admin\UpdateOrderStatusRequest;
 use App\Http\Resources\AdminOrderResource;
 use App\Models\Order;
@@ -94,6 +95,80 @@ class OrderController extends Controller
         $order = Order::with(['items', 'user', 'payment'])->findOrFail($id);
 
         return $this->success(new AdminOrderResource($order), 'Order fetched.');
+    }
+
+    #[OA\Post(
+        path: '/api/v1/admin/orders/bulk-status',
+        summary: 'Atomically update the status of multiple orders',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Orders']
+    )]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            required: ['ids', 'status'],
+            properties: [
+                new OA\Property(property: 'ids', type: 'array', maxItems: 100, items: new OA\Items(type: 'integer')),
+                new OA\Property(property: 'status', type: 'string', enum: ['pending', 'pending_payment', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded']),
+            ]
+        )
+    )]
+    #[OA\Response(response: 200, description: 'All order statuses updated')]
+    #[OA\Response(response: 409, description: 'At least one transition is invalid; no orders changed')]
+    public function bulkUpdateStatus(BulkUpdateOrderStatusRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+
+        $outcome = DB::transaction(function () use ($validated): array {
+            $orders = Order::query()
+                ->whereKey($validated['ids'])
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+            $errors = [];
+
+            foreach (collect($validated['ids'])->diff($orders->pluck('id')) as $missingId) {
+                $errors[(string) $missingId] = ['Order was not found.'];
+            }
+
+            foreach ($orders as $order) {
+                if (! $this->canTransition($order->status, $validated['status'], $this->statusTransitions())) {
+                    $errors[(string) $order->id] = [
+                        "Cannot transition order from {$order->status} to {$validated['status']}.",
+                    ];
+                }
+            }
+
+            if ($errors !== []) {
+                return ['errors' => $errors, 'orders' => collect()];
+            }
+
+            foreach ($orders as $order) {
+                $order->update(['status' => $validated['status']]);
+            }
+
+            return [
+                'errors' => [],
+                'orders' => Order::query()
+                    ->whereKey($validated['ids'])
+                    ->with(['items.product.media', 'items.variant', 'user', 'payment'])
+                    ->get(),
+            ];
+        }, 3);
+
+        if ($outcome['errors'] !== []) {
+            return $this->error('Status transition not allowed; no orders were changed.', 409, [
+                'orders' => $outcome['errors'],
+            ]);
+        }
+
+        $results = $outcome['orders']->map(fn (Order $order) => [
+            'id' => $order->id,
+            'status' => 'updated',
+            'order' => new AdminOrderResource($order),
+        ]);
+
+        return $this->success($results, 'Order statuses updated atomically.');
     }
 
     #[OA\Post(

@@ -13,6 +13,7 @@ class AdminOrderResource extends OrderResource
             'stripe_payment_intent_id' => $this->stripe_payment_intent_id,
             'easypost_shipment_id' => $this->easypost_shipment_id,
             'shipping_rate_id' => $this->shipping_rate_id,
+            'carrier_shipping_cost' => $this->carrier_shipping_cost === null ? null : (float) $this->carrier_shipping_cost,
             'label_url' => $this->label_url,
             'shipment' => $this->shipmentPayload(true),
             'user' => $this->whenLoaded('user'),

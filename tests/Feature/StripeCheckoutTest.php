@@ -101,6 +101,220 @@ class StripeCheckoutTest extends TestCase
 
     // ── 3. Webhook: completed marks order paid ────────────────────────────────
 
+    public function test_owner_can_resume_an_open_checkout_session_without_creating_another_one(): void
+    {
+        $order = Order::factory()->create([
+            'user_id' => $this->user->id,
+            'status' => 'pending_payment',
+            'payment_status' => 'unpaid',
+            'stripe_session_id' => 'cs_open',
+        ]);
+        $openSession = StripeSession::constructFrom([
+            'id' => 'cs_open',
+            'status' => 'open',
+            'url' => 'https://checkout.stripe.com/pay/cs_open',
+        ]);
+
+        $this->mock(StripeCheckoutService::class, function ($mock) use ($openSession) {
+            $mock->shouldReceive('retrieveCheckoutSession')->once()->with('cs_open')->andReturn($openSession);
+            $mock->shouldNotReceive('createCheckoutSession');
+            $mock->shouldNotReceive('expireCheckoutSession');
+        });
+
+        $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/orders/{$order->id}/checkout-session")
+            ->assertOk()
+            ->assertJsonPath('data.checkout_url', 'https://checkout.stripe.com/pay/cs_open')
+            ->assertJsonPath('data.payment.session_id', 'cs_open')
+            ->assertJsonPath('data.payment.reused', true);
+
+        $this->assertSame('cs_open', $order->fresh()->stripe_session_id);
+    }
+
+    public function test_owner_gets_a_replacement_after_stripe_confirms_the_session_expired(): void
+    {
+        $order = Order::factory()->create([
+            'user_id' => $this->user->id,
+            'status' => 'pending_payment',
+            'payment_status' => 'unpaid',
+            'stripe_session_id' => 'cs_expired',
+        ]);
+        $expiredSession = StripeSession::constructFrom([
+            'id' => 'cs_expired',
+            'status' => 'expired',
+        ]);
+        $replacementSession = StripeSession::constructFrom([
+            'id' => 'cs_replacement',
+            'status' => 'open',
+            'url' => 'https://checkout.stripe.com/pay/cs_replacement',
+        ]);
+
+        $this->mock(StripeCheckoutService::class, function ($mock) use ($expiredSession, $replacementSession, $order) {
+            $mock->shouldReceive('retrieveCheckoutSession')->once()->with('cs_expired')->andReturn($expiredSession);
+            $mock->shouldReceive('createCheckoutSession')->once()->with(Mockery::on(
+                fn (Order $candidate) => $candidate->is($order) && $candidate->relationLoaded('items')
+            ))->andReturn($replacementSession);
+            $mock->shouldNotReceive('expireCheckoutSession');
+        });
+
+        $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/orders/{$order->id}/checkout-session")
+            ->assertOk()
+            ->assertJsonPath('data.payment.session_id', 'cs_replacement')
+            ->assertJsonPath('data.payment.reused', false);
+
+        $this->assertSame('cs_replacement', $order->fresh()->stripe_session_id);
+    }
+
+    public function test_owner_can_create_a_session_when_a_pending_order_has_no_session_id(): void
+    {
+        $order = Order::factory()->create([
+            'user_id' => $this->user->id,
+            'status' => 'pending_payment',
+            'payment_status' => 'unpaid',
+            'stripe_session_id' => null,
+        ]);
+        $session = StripeSession::constructFrom([
+            'id' => 'cs_first',
+            'status' => 'open',
+            'url' => 'https://checkout.stripe.com/pay/cs_first',
+        ]);
+
+        $this->mock(StripeCheckoutService::class, function ($mock) use ($session) {
+            $mock->shouldNotReceive('retrieveCheckoutSession');
+            $mock->shouldReceive('createCheckoutSession')->once()->andReturn($session);
+            $mock->shouldNotReceive('expireCheckoutSession');
+        });
+
+        $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/orders/{$order->id}/checkout-session")
+            ->assertOk()
+            ->assertJsonPath('data.payment.session_id', 'cs_first')
+            ->assertJsonPath('data.payment.reused', false);
+
+        $this->assertSame('cs_first', $order->fresh()->stripe_session_id);
+    }
+
+    public function test_completed_session_is_not_replaced_while_webhook_confirmation_is_pending(): void
+    {
+        $order = Order::factory()->create([
+            'user_id' => $this->user->id,
+            'status' => 'pending_payment',
+            'payment_status' => 'unpaid',
+            'stripe_session_id' => 'cs_complete',
+        ]);
+        $completeSession = StripeSession::constructFrom([
+            'id' => 'cs_complete',
+            'status' => 'complete',
+            'url' => null,
+        ]);
+
+        $this->mock(StripeCheckoutService::class, function ($mock) use ($completeSession) {
+            $mock->shouldReceive('retrieveCheckoutSession')->once()->andReturn($completeSession);
+            $mock->shouldNotReceive('createCheckoutSession');
+        });
+
+        $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/orders/{$order->id}/checkout-session")
+            ->assertConflict()
+            ->assertJsonPath('message', 'Payment has already completed and is awaiting confirmation.');
+
+        $this->assertSame('cs_complete', $order->fresh()->stripe_session_id);
+    }
+
+    public function test_session_created_during_an_order_state_race_is_immediately_expired(): void
+    {
+        $order = Order::factory()->create([
+            'user_id' => $this->user->id,
+            'status' => 'pending_payment',
+            'payment_status' => 'unpaid',
+            'stripe_session_id' => null,
+        ]);
+        $session = StripeSession::constructFrom([
+            'id' => 'cs_raced',
+            'status' => 'open',
+            'url' => 'https://checkout.stripe.com/pay/cs_raced',
+        ]);
+
+        $this->mock(StripeCheckoutService::class, function ($mock) use ($session, $order) {
+            $mock->shouldReceive('createCheckoutSession')->once()->andReturnUsing(function () use ($session, $order) {
+                $order->update(['status' => 'cancelled', 'payment_status' => 'failed']);
+
+                return $session;
+            });
+            $mock->shouldReceive('expireCheckoutSession')->once()->with('cs_raced')->andReturn($session);
+        });
+
+        $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/orders/{$order->id}/checkout-session")
+            ->assertConflict();
+
+        $this->assertNull($order->fresh()->stripe_session_id);
+        $this->assertSame('cancelled', $order->fresh()->status);
+    }
+
+    public function test_resume_checkout_does_not_disclose_another_users_order(): void
+    {
+        $order = Order::factory()->for(User::factory())->create([
+            'status' => 'pending_payment',
+            'payment_status' => 'unpaid',
+            'stripe_session_id' => 'cs_private',
+        ]);
+
+        $this->mock(StripeCheckoutService::class, function ($mock) {
+            $mock->shouldNotReceive('retrieveCheckoutSession');
+            $mock->shouldNotReceive('createCheckoutSession');
+        });
+
+        $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/orders/{$order->id}/checkout-session")
+            ->assertNotFound();
+    }
+
+    public function test_paid_or_non_pending_order_cannot_resume_checkout(): void
+    {
+        $order = Order::factory()->create([
+            'user_id' => $this->user->id,
+            'status' => 'processing',
+            'payment_status' => 'paid',
+            'stripe_session_id' => 'cs_paid',
+        ]);
+
+        $this->mock(StripeCheckoutService::class, function ($mock) {
+            $mock->shouldNotReceive('retrieveCheckoutSession');
+            $mock->shouldNotReceive('createCheckoutSession');
+        });
+
+        $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/orders/{$order->id}/checkout-session")
+            ->assertConflict()
+            ->assertJsonPath('success', false);
+    }
+
+    public function test_resume_provider_failure_returns_502_without_changing_the_session_id(): void
+    {
+        $order = Order::factory()->create([
+            'user_id' => $this->user->id,
+            'status' => 'pending_payment',
+            'payment_status' => 'unpaid',
+            'stripe_session_id' => 'cs_existing',
+        ]);
+
+        $this->mock(StripeCheckoutService::class, function ($mock) {
+            $mock->shouldReceive('retrieveCheckoutSession')->once()->with('cs_existing')
+                ->andThrow(new \RuntimeException('Stripe unavailable'));
+            $mock->shouldNotReceive('createCheckoutSession');
+        });
+
+        $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/orders/{$order->id}/checkout-session")
+            ->assertStatus(502)
+            ->assertJsonPath('success', false);
+
+        $this->assertSame('cs_existing', $order->fresh()->stripe_session_id);
+        $this->assertSame('pending_payment', $order->fresh()->status);
+    }
+
     public function test_webhook_completed_marks_order_paid(): void
     {
         $order = Order::factory()->create([

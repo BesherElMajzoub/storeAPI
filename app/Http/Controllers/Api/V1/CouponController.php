@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Exceptions\CouponValidationException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\ValidateCouponRequest;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Services\CouponService;
-use App\Exceptions\CouponValidationException;
 use Illuminate\Http\JsonResponse;
 use OpenApi\Attributes as OA;
 
@@ -41,10 +41,10 @@ class CouponController extends Controller
                         properties: [
                             new OA\Property(property: 'product_id', type: 'integer', example: 1),
                             new OA\Property(property: 'variant_id', type: 'integer', nullable: true, example: null),
-                            new OA\Property(property: 'quantity', type: 'integer', example: 1)
+                            new OA\Property(property: 'quantity', type: 'integer', example: 1),
                         ]
                     )
-                )
+                ),
             ]
         )
     )]
@@ -62,10 +62,10 @@ class CouponController extends Controller
                         new OA\Property(property: 'code', type: 'string', example: 'SAVE50'),
                         new OA\Property(property: 'subtotal', type: 'number', format: 'float', example: 200.00),
                         new OA\Property(property: 'discount', type: 'number', format: 'float', example: 50.00),
-                        new OA\Property(property: 'total', type: 'number', format: 'float', example: 150.00)
+                        new OA\Property(property: 'total', type: 'number', format: 'float', example: 150.00),
                     ]
                 ),
-                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null)
+                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null),
             ]
         )
     )]
@@ -87,9 +87,9 @@ class CouponController extends Controller
                             type: 'array',
                             items: new OA\Items(type: 'string'),
                             example: ['Coupon has expired.']
-                        )
+                        ),
                     ]
-                )
+                ),
             ]
         )
     )]
@@ -103,7 +103,7 @@ class CouponController extends Controller
             $product = Product::findOrFail($item['product_id']);
             $price = (float) $product->final_price;
 
-            if (!empty($item['variant_id'])) {
+            if (! empty($item['variant_id'])) {
                 $variant = ProductVariant::find($item['variant_id']);
                 if ($variant && $variant->price !== null) {
                     $price = (float) $variant->price;
@@ -121,10 +121,11 @@ class CouponController extends Controller
             return response()->json([
                 'success' => true,
                 'data' => [
-                    'code'     => $coupon->code,
+                    'code' => $coupon->code,
                     'subtotal' => round($subtotal, 2),
                     'discount' => round($discount, 2),
-                    'total'    => round($total, 2),
+                    'total' => round($total, 2),
+                    'free_shipping' => $coupon->isFreeShipping(),
                 ],
                 'errors' => null,
             ]);
@@ -132,9 +133,9 @@ class CouponController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
-                'data'    => null,
-                'errors'  => [
-                    'code' => [$e->getMessage()]
+                'data' => null,
+                'errors' => [
+                    'code' => [$e->getMessage()],
                 ],
             ], 422);
         }

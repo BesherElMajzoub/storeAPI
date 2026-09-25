@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Contracts\EasyPostServiceInterface;
 use App\Exceptions\ShippingProviderException;
 use App\Exceptions\ShippingValidationException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\GetShippingRatesRequest;
 use App\Http\Requests\Api\V1\VerifyAddressRequest;
 use App\Http\Resources\ShippingRateResource;
-use App\Services\EasyPostService;
 use App\Services\ShippingQuoteService;
 use Exception;
 use Illuminate\Http\JsonResponse;
@@ -16,9 +16,9 @@ use OpenApi\Attributes as OA;
 
 class ShippingController extends Controller
 {
-    protected EasyPostService $easyPostService;
+    protected EasyPostServiceInterface $easyPostService;
 
-    public function __construct(EasyPostService $easyPostService, private readonly ShippingQuoteService $quotes)
+    public function __construct(EasyPostServiceInterface $easyPostService, private readonly ShippingQuoteService $quotes)
     {
         $this->easyPostService = $easyPostService;
     }
@@ -229,14 +229,17 @@ class ShippingController extends Controller
                 $address,
                 $request->validated('parcel')
             );
-            $this->quotes->storeLegacyQuotes($shipment, $address, $request->validated('parcel'));
+            $expiresAt = $this->quotes->storeLegacyQuotes($shipment, $address, $request->validated('parcel'));
 
             return response()->json([
                 'success' => true,
                 'message' => 'Shipping rates retrieved.',
                 'data' => [
                     'shipment_id' => $shipment->id,
-                    'rates' => ShippingRateResource::collection($shipment->rates),
+                    'rates' => collect($shipment->rates)
+                        ->map(fn ($rate) => (new ShippingRateResource($rate, $expiresAt))->resolve($request))
+                        ->values()
+                        ->all(),
                 ],
                 'errors' => null,
             ])->header('Deprecation', 'true');

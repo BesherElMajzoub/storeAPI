@@ -56,6 +56,38 @@ class SecureImageUploadTest extends TestCase
         $this->assertSame('webp', pathinfo($conversionPath, PATHINFO_EXTENSION));
     }
 
+    public function test_product_image_upload_returns_only_the_documented_uploaded_image_array(): void
+    {
+        $product = Product::factory()->create();
+        $file = UploadedFile::fake()->image('contract.jpg', 20, 20);
+
+        $response = $this->post(
+            "/api/v1/admin/products/{$product->id}/images",
+            ['images' => [$file]],
+            ['Accept' => 'application/json']
+        )->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonStructure([
+                'success',
+                'message',
+                'data' => [[
+                    'id',
+                    'file_name',
+                    'mime_type',
+                    'size',
+                    'order',
+                    'url',
+                ]],
+                'errors',
+            ]);
+
+        $this->assertSame(
+            ['id', 'file_name', 'mime_type', 'size', 'order', 'url'],
+            array_keys($response->json('data.0'))
+        );
+    }
+
     public function test_product_gallery_is_limited_to_eight_images(): void
     {
         $product = Product::factory()->create();
@@ -77,9 +109,23 @@ class SecureImageUploadTest extends TestCase
 
         $this->postJson("/api/v1/admin/products/{$product->id}/images/order", [
             'image_ids' => [$second->id, $first->id],
-        ])->assertOk();
+        ])->assertOk()->assertJsonPath('data', null);
 
         $this->assertSame(1, $second->fresh()->order_column);
         $this->assertSame(2, $first->fresh()->order_column);
+    }
+
+    public function test_product_image_delete_returns_empty_data_and_removes_only_the_target_image(): void
+    {
+        $product = Product::factory()->create();
+        $deleted = $product->addMedia(UploadedFile::fake()->image('delete.jpg', 10, 10))->toMediaCollection('product_images');
+        $kept = $product->addMedia(UploadedFile::fake()->image('keep.jpg', 10, 10))->toMediaCollection('product_images');
+
+        $this->deleteJson("/api/v1/admin/products/{$product->id}/images/{$deleted->id}")
+            ->assertOk()
+            ->assertJsonPath('data', null);
+
+        $this->assertDatabaseMissing('media', ['id' => $deleted->id]);
+        $this->assertDatabaseHas('media', ['id' => $kept->id]);
     }
 }

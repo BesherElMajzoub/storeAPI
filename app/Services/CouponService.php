@@ -2,11 +2,11 @@
 
 namespace App\Services;
 
+use App\Exceptions\CouponValidationException;
 use App\Models\Coupon;
 use App\Models\CouponUsage;
 use App\Models\Order;
 use App\Models\User;
-use App\Exceptions\CouponValidationException;
 use Illuminate\Support\Facades\DB;
 
 class CouponService
@@ -19,7 +19,7 @@ class CouponService
     public function validateCoupon(string $code, ?User $user, float $subtotal): Coupon
     {
         $query = Coupon::where('code', $code);
-        
+
         // Dynamically lock for update if inside a database transaction
         if (DB::transactionLevel() > 0) {
             $query->lockForUpdate();
@@ -27,11 +27,11 @@ class CouponService
 
         $coupon = $query->first();
 
-        if (!$coupon) {
+        if (! $coupon) {
             throw new CouponValidationException('Invalid coupon code.');
         }
 
-        if (!$coupon->is_active) {
+        if (! $coupon->is_active) {
             throw new CouponValidationException('Invalid coupon code.');
         }
 
@@ -53,7 +53,7 @@ class CouponService
         }
 
         if ($coupon->usage_limit_per_user !== null) {
-            if (!$user) {
+            if (! $user) {
                 throw new CouponValidationException('Authentication required to use this coupon.');
             }
 
@@ -74,6 +74,10 @@ class CouponService
      */
     public function calculateDiscount(Coupon $coupon, float $subtotal): float
     {
+        if ($coupon->isFreeShipping()) {
+            return 0.0;
+        }
+
         $discount = 0.0;
 
         if ($coupon->type === 'percentage') {
@@ -100,11 +104,11 @@ class CouponService
         $order->coupon_id = $coupon->id;
         $order->coupon_code = $coupon->code;
         $order->discount = $discount;
-        
+
         $subtotal = (float) $order->subtotal;
         $tax = (float) $order->tax;
         $shipping = (float) $order->shipping_cost;
-        
+
         $order->total = max(0.0, $subtotal + $tax + $shipping - $discount);
     }
 }

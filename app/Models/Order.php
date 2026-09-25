@@ -12,7 +12,7 @@ class Order extends Model
 
     protected $fillable = [
         'order_number', 'user_id', 'coupon_id', 'status', 'payment_status',
-        'subtotal', 'tax', 'shipping_cost', 'discount', 'refunded_amount', 'total',
+        'subtotal', 'tax', 'shipping_cost', 'carrier_shipping_cost', 'free_shipping_reason', 'discount', 'refunded_amount', 'total',
         'coupon_code', 'shipping_address', 'billing_address', 'notes',
         'stripe_session_id', 'stripe_payment_intent_id',
         'paid_at', 'cancelled_at', 'refunded_at', 'stock_reserved_at', 'stock_released_at',
@@ -27,6 +27,7 @@ class Order extends Model
         'subtotal' => 'decimal:2',
         'tax' => 'decimal:2',
         'shipping_cost' => 'decimal:2',
+        'carrier_shipping_cost' => 'decimal:2',
         'discount' => 'decimal:2',
         'refunded_amount' => 'decimal:2',
         'total' => 'decimal:2',

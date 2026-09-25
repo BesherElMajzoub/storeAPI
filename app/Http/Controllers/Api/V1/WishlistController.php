@@ -10,34 +10,36 @@ use App\Models\Product;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use OpenApi\Attributes as OA;
 
 class WishlistController extends Controller
 {
     use ApiResponseTrait;
+
     #[OA\Get(
-        path: "/api/v1/wishlist",
-        summary: "Get Wishlist",
+        path: '/api/v1/wishlist',
+        summary: 'Get Wishlist',
         description: "Return all products in the authenticated user's wishlist",
-        security: [["bearerAuth" => []]],
-        tags: ["Wishlist"]
+        security: [['bearerAuth' => []]],
+        tags: ['Wishlist']
     )]
     #[OA\Response(
         response: 200,
-        description: "Wishlist fetched successfully",
+        description: 'Wishlist fetched successfully',
         content: new OA\JsonContent(
-            type: "object",
+            type: 'object',
             properties: [
-                new OA\Property(property: "success", type: "boolean", example: true),
+                new OA\Property(property: 'success', type: 'boolean', example: true),
                 new OA\Property(
-                    property: "data",
-                    type: "array",
-                    items: new OA\Items(ref: "#/components/schemas/Product")
-                )
+                    property: 'data',
+                    type: 'array',
+                    items: new OA\Items(ref: '#/components/schemas/Product')
+                ),
             ]
         )
     )]
-    #[OA\Response(response: 401, ref: "#/components/responses/UnauthorizedResponse")]
+    #[OA\Response(response: 401, ref: '#/components/responses/UnauthorizedResponse')]
     public function index(Request $request): JsonResponse
     {
         $items = $request->user()
@@ -54,47 +56,47 @@ class WishlistController extends Controller
     }
 
     #[OA\Post(
-        path: "/api/v1/wishlist",
-        summary: "Add Product to Wishlist",
+        path: '/api/v1/wishlist',
+        summary: 'Add Product to Wishlist',
         description: "Add a product to the user's wishlist",
-        security: [["bearerAuth" => []]],
-        tags: ["Wishlist"]
+        security: [['bearerAuth' => []]],
+        tags: ['Wishlist']
     )]
     #[OA\RequestBody(
         required: true,
         content: new OA\JsonContent(
-            required: ["product_id"],
+            required: ['product_id'],
             properties: [
-                new OA\Property(property: "product_id", type: "integer", example: 1)
+                new OA\Property(property: 'product_id', type: 'integer', example: 1),
             ]
         )
     )]
     #[OA\Response(
         response: 201,
-        description: "Product added to wishlist",
+        description: 'Product added to wishlist',
         content: new OA\JsonContent(
             properties: [
-                new OA\Property(property: "success", type: "boolean", example: true),
-                new OA\Property(property: "message", type: "string", example: "Product added to wishlist.")
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'message', type: 'string', example: 'Product added to wishlist.'),
             ]
         )
     )]
-    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
-    #[OA\Response(response: 422, ref: "#/components/responses/ValidationErrorResponse")]
+    #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
+    #[OA\Response(response: 422, ref: '#/components/responses/ValidationErrorResponse')]
     public function store(Request $request): JsonResponse
     {
         $request->validate([
-            'product_id' => 'required|exists:products,id'
+            'product_id' => 'required|exists:products,id',
         ]);
 
         $user = $request->user();
         $productId = $request->product_id;
 
         $product = Product::published()->find($productId);
-        if (!$product) {
+        if (! $product) {
             return response()->json([
                 'success' => false,
-                'message' => 'Product not found or not available.'
+                'message' => 'Product not found or not available.',
             ], 404);
         }
 
@@ -103,12 +105,12 @@ class WishlistController extends Controller
         if ($exists) {
             return response()->json([
                 'success' => true,
-                'message' => 'Product already in wishlist.'
+                'message' => 'Product already in wishlist.',
             ]);
         }
 
         $user->wishlistItems()->create([
-            'product_id' => $productId
+            'product_id' => $productId,
         ]);
 
         // Dispatch event for analytics tracking
@@ -116,39 +118,106 @@ class WishlistController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Product added to wishlist.'
+            'message' => 'Product added to wishlist.',
         ], 201);
     }
 
-    #[OA\Delete(
-        path: "/api/v1/wishlist/{productId}",
-        summary: "Remove Wishlist Product",
-        description: "Explicitly remove a product from the user's wishlist",
-        security: [["bearerAuth" => []]],
-        tags: ["Wishlist"]
+    #[OA\Post(
+        path: '/api/v1/wishlist/merge',
+        summary: 'Merge guest wishlist',
+        description: 'Add up to 100 published product IDs from a guest wishlist to the authenticated wishlist without duplicating existing items.',
+        security: [['bearerAuth' => []]],
+        tags: ['Wishlist']
     )]
-    #[OA\Parameter(name: "productId", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
-    #[OA\Response(
-        response: 200,
-        description: "Product removed from wishlist",
+    #[OA\RequestBody(
+        required: true,
         content: new OA\JsonContent(
+            required: ['product_ids'],
             properties: [
-                new OA\Property(property: "success", type: "boolean", example: true),
-                new OA\Property(property: "message", type: "string", example: "Product removed from wishlist.")
+                new OA\Property(property: 'product_ids', type: 'array', maxItems: 100, items: new OA\Items(type: 'integer')),
             ]
         )
     )]
-    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
+    #[OA\Response(response: 200, description: 'Wishlist merged')]
+    public function merge(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'product_ids' => ['required', 'array', 'max:100'],
+            'product_ids.*' => ['integer', 'distinct', 'exists:products,id'],
+        ]);
+        $requestedIds = collect($validated['product_ids'])->map(fn ($id) => (int) $id)->values();
+        $products = Product::query()
+            ->published()
+            ->whereIn('id', $requestedIds)
+            ->get()
+            ->keyBy('id');
+        $existingIds = $request->user()->wishlistItems()
+            ->whereIn('product_id', $requestedIds)
+            ->pluck('product_id')
+            ->map(fn ($id) => (int) $id);
+        $addedIds = collect();
+
+        DB::transaction(function () use ($request, $products, $existingIds, $addedIds): void {
+            foreach ($products as $product) {
+                if ($existingIds->contains($product->id)) {
+                    continue;
+                }
+
+                $item = $request->user()->wishlistItems()->firstOrCreate(['product_id' => $product->id]);
+                if ($item->wasRecentlyCreated) {
+                    $addedIds->push($product->id);
+                }
+            }
+        });
+
+        foreach ($addedIds as $productId) {
+            WishlistItemAdded::dispatch($request->user(), $products->get($productId));
+        }
+
+        $rejectedIds = $requestedIds->diff($products->keys())->values();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Wishlist merged.',
+            'data' => [
+                'added_count' => $addedIds->count(),
+                'existing_count' => $existingIds->intersect($products->keys())->count(),
+                'rejected_ids' => $rejectedIds,
+                'wishlist_count' => $request->user()->wishlistItems()->count(),
+            ],
+            'errors' => null,
+        ]);
+    }
+
+    #[OA\Delete(
+        path: '/api/v1/wishlist/{productId}',
+        summary: 'Remove Wishlist Product',
+        description: "Explicitly remove a product from the user's wishlist",
+        security: [['bearerAuth' => []]],
+        tags: ['Wishlist']
+    )]
+    #[OA\Parameter(name: 'productId', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))]
+    #[OA\Response(
+        response: 200,
+        description: 'Product removed from wishlist',
+        content: new OA\JsonContent(
+            properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'message', type: 'string', example: 'Product removed from wishlist.'),
+            ]
+        )
+    )]
+    #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
     public function destroy(Request $request, $productId): JsonResponse
     {
         $user = $request->user();
 
         $deleted = $user->wishlistItems()->where('product_id', $productId)->delete();
 
-        if (!$deleted) {
+        if (! $deleted) {
             return response()->json([
                 'success' => false,
-                'message' => 'Product not found in wishlist.'
+                'message' => 'Product not found in wishlist.',
             ], 404);
         }
 
@@ -160,27 +229,27 @@ class WishlistController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Product removed from wishlist.'
+            'message' => 'Product removed from wishlist.',
         ]);
     }
 
     #[OA\Get(
-        path: "/api/v1/wishlist/check/{productId}",
-        summary: "Check if product is in wishlist",
-        description: "Returns a boolean indicating if the product exists in wishlist",
-        security: [["bearerAuth" => []]],
-        tags: ["Wishlist"]
+        path: '/api/v1/wishlist/check/{productId}',
+        summary: 'Check if product is in wishlist',
+        description: 'Returns a boolean indicating if the product exists in wishlist',
+        security: [['bearerAuth' => []]],
+        tags: ['Wishlist']
     )]
-    #[OA\Parameter(name: "productId", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
+    #[OA\Parameter(name: 'productId', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))]
     #[OA\Response(
         response: 200,
-        description: "Check status fetched",
+        description: 'Check status fetched',
         content: new OA\JsonContent(
             properties: [
-                new OA\Property(property: "success", type: "boolean", example: true),
-                new OA\Property(property: "data", type: "object", properties: [
-                    new OA\Property(property: "in_wishlist", type: "boolean", example: true)
-                ])
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'data', type: 'object', properties: [
+                    new OA\Property(property: 'in_wishlist', type: 'boolean', example: true),
+                ]),
             ]
         )
     )]
@@ -190,26 +259,26 @@ class WishlistController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => ['in_wishlist' => $exists]
+            'data' => ['in_wishlist' => $exists],
         ]);
     }
 
     #[OA\Get(
-        path: "/api/v1/wishlist/count",
-        summary: "Get Wishlist Count",
-        description: "Returns the total count of items in the wishlist",
-        security: [["bearerAuth" => []]],
-        tags: ["Wishlist"]
+        path: '/api/v1/wishlist/count',
+        summary: 'Get Wishlist Count',
+        description: 'Returns the total count of items in the wishlist',
+        security: [['bearerAuth' => []]],
+        tags: ['Wishlist']
     )]
     #[OA\Response(
         response: 200,
-        description: "Count fetched",
+        description: 'Count fetched',
         content: new OA\JsonContent(
             properties: [
-                new OA\Property(property: "success", type: "boolean", example: true),
-                new OA\Property(property: "data", type: "object", properties: [
-                    new OA\Property(property: "count", type: "integer", example: 5)
-                ])
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'data', type: 'object', properties: [
+                    new OA\Property(property: 'count', type: 'integer', example: 5),
+                ]),
             ]
         )
     )]
@@ -219,7 +288,7 @@ class WishlistController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => ['count' => $count]
+            'data' => ['count' => $count],
         ]);
     }
 }

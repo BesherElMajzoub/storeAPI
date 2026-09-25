@@ -8,10 +8,43 @@ use App\Http\Resources\ProductCardResource;
 use App\Http\Resources\ProductDetailResource;
 use App\Http\Resources\ReviewResource;
 use App\Models\Product;
+use Illuminate\Http\JsonResponse;
 use OpenApi\Attributes as OA;
 
 class ProductController extends Controller
 {
+    #[OA\Get(
+        path: '/api/v1/products/sitemap',
+        summary: 'Product sitemap feed',
+        description: 'Return published product slugs and update timestamps for dynamic sitemap generation.',
+        tags: ['Products']
+    )]
+    #[OA\Response(response: 200, description: 'Sitemap feed fetched')]
+    public function sitemap(): JsonResponse
+    {
+        $products = Product::query()
+            ->published()
+            ->select(['id', 'slug', 'updated_at'])
+            ->orderBy('id')
+            ->limit(50000)
+            ->get()
+            ->map(fn (Product $product) => [
+                'slug' => $product->slug,
+                'updated_at' => $product->updated_at?->toISOString(),
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Product sitemap feed fetched.',
+            'data' => $products,
+            'meta' => [
+                'count' => $products->count(),
+                'limit' => 50000,
+            ],
+            'errors' => null,
+        ]);
+    }
+
     #[OA\Get(
         path: '/api/v1/products',
         summary: 'List Products',
@@ -24,6 +57,7 @@ class ProductController extends Controller
     #[OA\Parameter(name: 'price_max', in: 'query', schema: new OA\Schema(type: 'number'))]
     #[OA\Parameter(name: 'rating', in: 'query', schema: new OA\Schema(type: 'number'))]
     #[OA\Parameter(name: 'in_stock', in: 'query', schema: new OA\Schema(type: 'boolean'))]
+    #[OA\Parameter(name: 'slugs', in: 'query', description: 'Comma-separated product slugs, maximum 100', schema: new OA\Schema(type: 'string'))]
     #[OA\Parameter(name: 'sort', in: 'query', schema: new OA\Schema(type: 'string'))]
     #[OA\Parameter(name: 'per_page', in: 'query', schema: new OA\Schema(type: 'integer'))]
     #[OA\Response(
@@ -51,6 +85,7 @@ class ProductController extends Controller
             'price_max',
             'rating',
             'in_stock',
+            'slugs',
         ])->all();
         $perPage = (int) ($validated['per_page'] ?? 20);
 

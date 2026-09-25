@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Contracts\EasyPostServiceInterface;
 use EasyPost\EasyPostClient;
 use EasyPost\Event;
 use EasyPost\Exception\Api\ApiException;
@@ -10,7 +11,7 @@ use EasyPost\Tracker;
 use Exception;
 use Illuminate\Support\Facades\Log;
 
-class EasyPostService
+class EasyPostService implements EasyPostServiceInterface
 {
     protected ?EasyPostClient $client = null;
 

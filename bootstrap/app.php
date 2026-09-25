@@ -14,6 +14,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
 use Illuminate\Http\Middleware\HandleCors;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Routing\Middleware\ThrottleRequestsWithRedis;
@@ -28,6 +29,13 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Lets the web SPA authenticate via first-party, httpOnly session cookies
+        // (CSRF + session validated automatically for requests from a domain
+        // listed in SANCTUM_STATEFUL_DOMAINS) while leaving Bearer-token
+        // authentication for every other client (mobile apps, Postman, etc.)
+        // completely untouched — both mechanisms work side by side.
+        $middleware->statefulApi();
+
         $middleware->alias([
             'audit.admin' => AuditAdminActions::class,
         ]);
@@ -60,5 +68,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->shouldRenderJsonWhen(
+            fn (Request $request): bool => $request->is('api/*') || $request->expectsJson()
+        );
     })->create();

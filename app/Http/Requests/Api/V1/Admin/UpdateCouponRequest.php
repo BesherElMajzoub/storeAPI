@@ -19,6 +19,13 @@ class UpdateCouponRequest extends FormRequest
     /**
      * Get the validation rules that apply to the request.
      */
+    protected function prepareForValidation(): void
+    {
+        if ($this->input('type') === 'free_shipping' && ! $this->filled('value')) {
+            $this->merge(['value' => 0]);
+        }
+    }
+
     public function rules(): array
     {
         $coupon = $this->route('coupon');
@@ -26,14 +33,17 @@ class UpdateCouponRequest extends FormRequest
 
         return [
             'code' => ['required', 'string', 'max:50', 'regex:/^[A-Za-z0-9_-]+$/', 'unique:coupons,code,'.$couponId],
-            'type' => ['required', 'in:percentage,fixed'],
+            'type' => ['required', 'in:percentage,fixed,free_shipping'],
             'value' => [
                 'required',
                 'numeric',
-                'min:0.01',
+                'min:0',
                 function ($attribute, $value, $fail) {
                     if ($this->input('type') === 'percentage' && $value > 100) {
                         $fail('The value cannot exceed 100% for a percentage coupon.');
+                    }
+                    if (in_array($this->input('type'), ['percentage', 'fixed'], true) && $value < 0.01) {
+                        $fail('The value must be greater than 0 for a '.$this->input('type').' coupon.');
                     }
                 },
             ],

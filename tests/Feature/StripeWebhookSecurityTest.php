@@ -2,16 +2,26 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\SendAdminAlert;
 use App\Mail\OrderPaidMail;
 use App\Models\Order;
+use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class StripeWebhookSecurityTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Queue::fake([SendAdminAlert::class]);
+    }
 
     public function test_a_real_signed_checkout_webhook_marks_the_matching_amount_and_currency_paid(): void
     {
@@ -76,10 +86,19 @@ class StripeWebhookSecurityTest extends TestCase
 
     public function test_signed_expired_session_cancels_only_the_matching_order(): void
     {
+        $product = Product::factory()->create(['stock_qty' => 0, 'in_stock' => false]);
         $order = Order::factory()->for(User::factory())->create([
             'status' => 'pending_payment',
             'payment_status' => 'unpaid',
             'stripe_session_id' => 'cs_expired',
+            'stock_reserved_at' => now(),
+        ]);
+        $order->items()->create([
+            'product_id' => $product->id,
+            'product_name' => $product->name,
+            'price' => $product->price,
+            'quantity' => 1,
+            'total' => $product->price,
         ]);
 
         $this->postSigned([
@@ -94,6 +113,32 @@ class StripeWebhookSecurityTest extends TestCase
             'id' => $order->id,
             'status' => 'cancelled',
             'payment_status' => 'failed',
+        ]);
+        $this->assertSame(1, $product->fresh()->stock_qty);
+        $this->assertNotNull($order->fresh()->stock_released_at);
+    }
+
+    public function test_an_expired_webhook_for_a_replaced_session_does_not_cancel_the_order(): void
+    {
+        $order = Order::factory()->for(User::factory())->create([
+            'status' => 'pending_payment',
+            'payment_status' => 'unpaid',
+            'stripe_session_id' => 'cs_replacement',
+        ]);
+
+        $this->postSigned([
+            'id' => 'evt_stale_expired', 'object' => 'event', 'type' => 'checkout.session.expired',
+            'data' => ['object' => [
+                'object' => 'checkout.session', 'id' => 'cs_previous',
+                'metadata' => ['order_id' => (string) $order->id],
+            ]],
+        ])->assertOk();
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'status' => 'pending_payment',
+            'payment_status' => 'unpaid',
+            'stripe_session_id' => 'cs_replacement',
         ]);
     }
 

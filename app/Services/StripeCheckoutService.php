@@ -77,6 +77,22 @@ class StripeCheckoutService
     }
 
     /**
+     * Retrieve an existing Stripe Checkout Session.
+     */
+    public function retrieveCheckoutSession(string $sessionId): StripeSession
+    {
+        return StripeSession::retrieve($sessionId);
+    }
+
+    /**
+     * Expire a Checkout Session that must no longer accept payment.
+     */
+    public function expireCheckoutSession(string $sessionId): StripeSession
+    {
+        return StripeSession::retrieve($sessionId)->expire();
+    }
+
+    /**
      * Refund a paid order via its PaymentIntent.
      */
     public function refundOrder(Order $order): Refund

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\StripeWebhookController;
 use App\Http\Controllers\Api\V1\AddressController;
 use App\Http\Controllers\Api\V1\Admin\AdminAnalyticsController;
+use App\Http\Controllers\Api\V1\Admin\AuditLogController;
 use App\Http\Controllers\Api\V1\Admin\CancellationRequestController;
 use App\Http\Controllers\Api\V1\Admin\CategoryController as AdminCategoryController;
 use App\Http\Controllers\Api\V1\Admin\ContactMessageController as AdminContactMessageController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\Api\V1\Admin\MediaController;
 use App\Http\Controllers\Api\V1\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Api\V1\Admin\ProductController as AdminProductController;
 use App\Http\Controllers\Api\V1\Admin\ReviewController as AdminReviewController;
+use App\Http\Controllers\Api\V1\Admin\SettingController as AdminSettingController;
 use App\Http\Controllers\Api\V1\Admin\ShippingController as AdminShippingController;
 use App\Http\Controllers\Api\V1\Admin\SkuController;
 use App\Http\Controllers\Api\V1\Admin\TelescopeApiController;
@@ -26,6 +28,7 @@ use App\Http\Controllers\Api\V1\CategoryController;
 use App\Http\Controllers\Api\V1\ContactMessageController;
 use App\Http\Controllers\Api\V1\CouponController;
 use App\Http\Controllers\Api\V1\EasyPostWebhookController;
+use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\InspiredLeadController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\ProductController;
@@ -36,6 +39,8 @@ use App\Http\Controllers\Api\V1\WishlistController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->middleware('throttle:api')->group(function () {
+
+    Route::get('health', [HealthController::class, 'show']);
 
     // --- STRIPE WEBHOOK (no auth — verified by Stripe signature) ---
     Route::post('webhooks/stripe', [StripeWebhookController::class, 'handle']);
@@ -76,6 +81,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
     Route::get('categories/{slug}', [CategoryController::class, 'show']);
 
     Route::get('products', [ProductController::class, 'index']);
+    Route::get('products/sitemap', [ProductController::class, 'sitemap']);
     Route::get('products/{slug}', [ProductController::class, 'show']);
     Route::get('products/{id}/reviews', [ProductController::class, 'reviews']);
 
@@ -88,6 +94,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         // Orders
         Route::post('orders', [OrderController::class, 'store']);
         Route::get('orders', [OrderController::class, 'index']);
+        Route::post('orders/{id}/checkout-session', [OrderController::class, 'resumeCheckout']);
         Route::get('orders/{id}', [OrderController::class, 'show']);
         Route::get('orders/{id}/tracking', [OrderController::class, 'getTracking']);
         Route::post('orders/{id}/cancel', [OrderController::class, 'cancel']);
@@ -111,6 +118,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         // ----- Wishlist -----
         Route::get('wishlist', [WishlistController::class, 'index']);
         Route::post('wishlist', [WishlistController::class, 'store']);
+        Route::post('wishlist/merge', [WishlistController::class, 'merge']);
         Route::get('wishlist/count', [WishlistController::class, 'count']);
         Route::get('wishlist/check/{productId}', [WishlistController::class, 'check']);
         Route::delete('wishlist/{productId}', [WishlistController::class, 'destroy']);
@@ -120,6 +128,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
     Route::prefix('admin')->middleware(['auth:sanctum', 'can:admin-access', 'audit.admin'])->group(function () {
         Route::get('dashboard', [DashboardController::class, 'index']);
         Route::get('analytics/dashboard', [AdminAnalyticsController::class, 'dashboard']);
+        Route::get('audit-logs', [AuditLogController::class, 'index']);
 
         // Geo-location
         Route::get('geo/me', [GeoController::class, 'me']);
@@ -127,6 +136,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         // Products
         Route::post('products/bulk', [AdminProductController::class, 'bulkUpdate']);
         Route::post('products/import', [AdminProductController::class, 'import']);
+        Route::post('products/{product}/stock/adjust', [AdminProductController::class, 'adjustStock']);
         Route::apiResource('products', AdminProductController::class);
         Route::post('products/{product}/images', [MediaController::class, 'uploadProductImages']);
         Route::post('products/{product}/images/reorder', [MediaController::class, 'reorderProductGallery']);
@@ -153,6 +163,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
 
         // Orders
         Route::get('orders', [AdminOrderController::class, 'index']);
+        Route::post('orders/bulk-status', [AdminOrderController::class, 'bulkUpdateStatus']);
         Route::get('orders/{id}', [AdminOrderController::class, 'show']);
         Route::post('orders/{id}/status', [AdminOrderController::class, 'updateStatus']);
         Route::post('orders/{order}/refund', [AdminOrderController::class, 'refund']);
@@ -161,6 +172,10 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         Route::post('orders/{order}/ship', [AdminShippingController::class, 'createShipment']);
         Route::post('orders/{order}/label', [AdminShippingController::class, 'createShipment']);
         Route::get('orders/{order}/tracking', [AdminShippingController::class, 'getTracking']);
+
+        // Settings
+        Route::get('settings/shipping', [AdminSettingController::class, 'showShipping']);
+        Route::put('settings/shipping', [AdminSettingController::class, 'updateShipping']);
 
         // Cancellation Requests
         Route::get('cancellation-requests', [CancellationRequestController::class, 'index']);

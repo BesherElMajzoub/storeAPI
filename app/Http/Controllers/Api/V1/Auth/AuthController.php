@@ -26,6 +26,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Laravel\Sanctum\PersonalAccessToken;
 use OpenApi\Attributes as OA;
 
 class AuthController extends Controller
@@ -86,6 +87,11 @@ class AuthController extends Controller
         $defaultRole = Role::query()->where('name', 'User')->first();
         if ($defaultRole) {
             $user->roles()->syncWithoutDetaching([$defaultRole->id]);
+        }
+
+        Auth::login($user);
+        if ($request->hasSession()) {
+            $request->session()->regenerate();
         }
 
         $tokenName = $data['device_name'] ?? 'auth_token';
@@ -161,6 +167,13 @@ class AuthController extends Controller
         }
 
         Auth::login($user);
+
+        // Only meaningful for stateful (browser SPA) requests — Sanctum's
+        // EnsureFrontendRequestsAreStateful middleware starts a session for
+        // those only, so a Bearer-token client never has one to regenerate.
+        if ($request->hasSession()) {
+            $request->session()->regenerate();
+        }
 
         $tokenName = $data['device_name'] ?? 'auth_token';
         $token = $user->createToken($tokenName)->plainTextToken;
@@ -330,10 +343,23 @@ class AuthController extends Controller
         $user = $request->user();
         $all = filter_var($request->boolean('all'), FILTER_VALIDATE_BOOLEAN);
 
+        // When the request was authenticated via the stateful session cookie
+        // rather than a Bearer token, currentAccessToken() returns Sanctum's
+        // TransientToken placeholder, which has no row to delete.
+        $currentToken = $user->currentAccessToken();
+
         if ($all) {
             $user->tokens()->delete();
-        } else {
-            $user->currentAccessToken()?->delete();
+        } elseif ($currentToken instanceof PersonalAccessToken) {
+            $currentToken->delete();
+        }
+
+        // Tear down the stateful session (if this request had one) so the
+        // httpOnly cookie can no longer be used to authenticate.
+        if ($request->hasSession()) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
         }
 
         return $this->success(null, 'Logged out successfully.');
@@ -658,6 +684,11 @@ class AuthController extends Controller
                 'last_login_at' => now(),
                 'last_login_ip' => $request->ip(),
             ])->save();
+
+            Auth::login($user);
+            if ($request->hasSession()) {
+                $request->session()->regenerate();
+            }
 
             // 5. Issue Sanctum token
             $tokenName = $request->input('device_name', 'google_auth');

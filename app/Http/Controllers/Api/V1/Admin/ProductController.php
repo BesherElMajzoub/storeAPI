@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api\V1\Admin;
 
+use App\Exceptions\InsufficientStockException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\Admin\AdjustProductStockRequest;
 use App\Http\Requests\Api\V1\Admin\BulkUpdateProductsRequest;
 use App\Http\Requests\Api\V1\Admin\ImportProductsRequest;
 use App\Http\Requests\Api\V1\Admin\ListProductsRequest;
@@ -10,6 +12,7 @@ use App\Http\Requests\Api\V1\Admin\StoreProductRequest;
 use App\Http\Requests\Api\V1\Admin\UpdateProductRequest;
 use App\Http\Resources\ProductDetailResource;
 use App\Models\Product;
+use App\Services\OrderInventoryService;
 use App\Services\ProductImportService;
 use App\Services\ProductService;
 use App\Traits\LogsActivity;
@@ -357,21 +360,31 @@ class ProductController extends Controller
                         continue;
                     }
 
-                    $attributes = [
-                        'name' => $variant['name'],
-                        'sku' => $variant['sku'] ?? null,
-                        'price' => $variant['price'] ?? null,
-                        'stock_qty' => $variant['stock_qty'] ?? 0,
-                        'attributes' => $variant['attributes'] ?? null,
-                        'weight_oz' => $variant['weight_oz'] ?? null,
-                        'length_in' => $variant['length_in'] ?? null,
-                        'width_in' => $variant['width_in'] ?? null,
-                        'height_in' => $variant['height_in'] ?? null,
-                    ];
-
                     if (isset($variant['id'])) {
+                        $attributes = ['name' => $variant['name']];
+                        foreach (['sku', 'price', 'attributes', 'weight_oz', 'length_in', 'width_in', 'height_in'] as $field) {
+                            if (array_key_exists($field, $variant)) {
+                                $attributes[$field] = $variant[$field];
+                            }
+                        }
+                        if (array_key_exists('stock_qty', $variant)) {
+                            $attributes['stock_qty'] = $variant['stock_qty'] ?? 0;
+                        }
+
                         $product->variants()->whereKey($variant['id'])->firstOrFail()->update($attributes);
                     } else {
+                        $attributes = [
+                            'name' => $variant['name'],
+                            'sku' => $variant['sku'] ?? null,
+                            'price' => $variant['price'] ?? null,
+                            'stock_qty' => $variant['stock_qty'] ?? 0,
+                            'attributes' => $variant['attributes'] ?? null,
+                            'weight_oz' => $variant['weight_oz'] ?? null,
+                            'length_in' => $variant['length_in'] ?? null,
+                            'width_in' => $variant['width_in'] ?? null,
+                            'height_in' => $variant['height_in'] ?? null,
+                        ];
+
                         $product->variants()->create($attributes);
                     }
                 }
@@ -488,6 +501,48 @@ class ProductController extends Controller
     }
 
     #[OA\Post(
+        path: '/api/v1/admin/products/{product}/stock/adjust',
+        summary: 'Atomically adjust product or variant stock by a delta',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Products']
+    )]
+    #[OA\Parameter(name: 'product', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            required: ['delta'],
+            properties: [
+                new OA\Property(property: 'delta', type: 'integer', example: -2),
+                new OA\Property(property: 'variant_id', type: 'integer', nullable: true, example: 15),
+            ]
+        )
+    )]
+    #[OA\Response(response: 200, description: 'Stock adjusted')]
+    #[OA\Response(response: 409, description: 'Adjustment would make stock negative')]
+    public function adjustStock(AdjustProductStockRequest $request, Product $product, OrderInventoryService $inventory): JsonResponse
+    {
+        try {
+            $result = $inventory->adjustStock(
+                $product,
+                (int) $request->validated('delta'),
+                $request->validated('variant_id') !== null ? (int) $request->validated('variant_id') : null
+            );
+        } catch (InsufficientStockException $e) {
+            return $this->error($e->getMessage(), 409, [$e->field => [$e->getMessage()]]);
+        } catch (\InvalidArgumentException $e) {
+            return $this->error($e->getMessage(), 422, ['variant_id' => [$e->getMessage()]]);
+        }
+
+        $this->logActivity(
+            'adjusted_product_stock',
+            "Adjusted stock for product #{$product->id}",
+            $result
+        );
+
+        return $this->success($result, 'Stock adjusted atomically.');
+    }
+
+    #[OA\Post(
         path: '/api/v1/admin/products/import',
         summary: 'Preview or atomically import products and variants from CSV',
         security: [['bearerAuth' => []]],
@@ -543,6 +598,16 @@ class ProductController extends Controller
             'message' => $message,
             'data' => $data,
             'errors' => null,
+        ], $status);
+    }
+
+    private function error(string $message, int $status, mixed $errors = null): JsonResponse
+    {
+        return response()->json([
+            'success' => false,
+            'message' => $message,
+            'data' => null,
+            'errors' => $errors,
         ], $status);
     }
 }

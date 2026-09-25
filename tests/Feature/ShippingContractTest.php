@@ -2,13 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Contracts\EasyPostServiceInterface;
+use App\Models\Category;
+use App\Models\Coupon;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\ShippingRateQuote;
 use App\Models\User;
-use App\Services\EasyPostService;
 use App\Services\StripeCheckoutService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Stripe\Checkout\Session as StripeSession;
 use Tests\TestCase;
@@ -27,10 +30,10 @@ class ShippingContractTest extends TestCase
             'rate' => '8.45', 'currency' => 'USD', 'delivery_days' => 3,
         ];
         $shipment = (object) ['id' => 'shp_package', 'rates' => [$rate]];
-        $this->mock(EasyPostService::class, function ($mock) use ($shipment) {
+        $this->mock(EasyPostServiceInterface::class, function ($mock) use ($shipment) {
             $mock->shouldReceive('getShippingRates')->once()->withArgs(function ($address, $parcel) {
                 return $address['street1'] === '123 Main St'
-                    && $parcel === ['length' => 10.0, 'width' => 8.0, 'height' => 4.0, 'weight' => 16.0];
+                    && $parcel === ['length' => 9.84, 'width' => 9.45, 'height' => 3.15, 'weight' => 16.0];
             })->andReturn($shipment);
         });
 
@@ -39,7 +42,8 @@ class ShippingContractTest extends TestCase
             'items' => [['product_id' => $product->id, 'quantity' => 2]],
         ])->assertOk()
             ->assertJsonPath('data.0.rate_id', 'rate_package')
-            ->assertJsonPath('data.0.amount', 8.45);
+            ->assertJsonPath('data.0.amount', 8.45)
+            ->assertJsonPath('data.0.expires_at', fn ($value) => Carbon::parse($value)->isFuture());
 
         $this->assertDatabaseHas('shipping_rate_quotes', [
             'rate_id' => 'rate_package', 'shipment_id' => 'shp_package', 'amount' => 8.45,
@@ -63,10 +67,25 @@ class ShippingContractTest extends TestCase
         ])->assertUnprocessable()->assertJsonPath('errors.code', 'unsupported_destination');
     }
 
+    public function test_product_in_an_inactive_category_cannot_be_quoted(): void
+    {
+        $category = Category::create([
+            'name' => 'Inactive shipping category',
+            'slug' => 'inactive-shipping-category',
+            'is_active' => false,
+        ]);
+        $product = Product::factory()->create(['category_id' => $category->id]);
+
+        $this->postJson('/api/v1/shipping/rates', [
+            'address' => $this->address(),
+            'items' => [['product_id' => $product->id, 'quantity' => 1]],
+        ])->assertUnprocessable()->assertJsonPath('errors.code', 'unavailable_product');
+    }
+
     public function test_provider_outage_returns_503_instead_of_an_empty_rate_list(): void
     {
         $product = Product::factory()->create();
-        $this->mock(EasyPostService::class, fn ($mock) => $mock->shouldReceive('getShippingRates')->once()->andThrow(new \Exception('timeout')));
+        $this->mock(EasyPostServiceInterface::class, fn ($mock) => $mock->shouldReceive('getShippingRates')->once()->andThrow(new \Exception('timeout')));
 
         $this->postJson('/api/v1/shipping/rates', [
             'address' => $this->address(),
@@ -130,7 +149,7 @@ class ShippingContractTest extends TestCase
             'rate' => '6.00', 'currency' => 'USD', 'delivery_days' => 5, 'delivery_date' => null,
         ];
         $shipment = (object) ['id' => 'shp_legacy', 'rates' => [$rate]];
-        $this->mock(EasyPostService::class, fn ($mock) => $mock->shouldReceive('getShippingRates')->once()->andReturn($shipment));
+        $this->mock(EasyPostServiceInterface::class, fn ($mock) => $mock->shouldReceive('getShippingRates')->once()->andReturn($shipment));
 
         $this->postJson('/api/v1/shipping/rates', [
             'address' => [
@@ -141,7 +160,43 @@ class ShippingContractTest extends TestCase
         ])->assertOk()
             ->assertHeader('Deprecation', 'true')
             ->assertJsonPath('data.shipment_id', 'shp_legacy')
-            ->assertJsonPath('data.rates.0.id', 'rate_legacy');
+            ->assertJsonPath('data.rates.0.id', 'rate_legacy')
+            ->assertJsonPath('data.rates.0.expires_at', fn ($value) => Carbon::parse($value)->isFuture());
+    }
+
+    public function test_stripe_session_failure_releases_checkout_side_effects(): void
+    {
+        $user = User::factory()->create();
+        $product = Product::factory()->create(['price' => 20, 'stock_qty' => 5]);
+        $coupon = Coupon::create([
+            'code' => 'FAILSAFE',
+            'type' => 'fixed',
+            'value' => 5,
+            'is_active' => true,
+        ]);
+        $shipping = $this->createShippingQuote($product, $this->address(), amount: 8.45);
+        $this->mock(StripeCheckoutService::class, fn ($mock) => $mock
+            ->shouldReceive('createCheckoutSession')
+            ->once()
+            ->andThrow(new \RuntimeException('simulated Stripe outage')));
+
+        $this->actingAs($user, 'sanctum')->postJson('/api/v1/orders', [
+            'coupon_code' => $coupon->code,
+            'items' => $shipping['items'],
+            'shipping_address' => $shipping['address'],
+            'shipping_rate_id' => $shipping['rateId'],
+        ])->assertStatus(502);
+
+        $failedOrder = Order::withTrashed()->latest('id')->firstOrFail();
+        $this->assertNotNull($failedOrder->deleted_at);
+        $this->assertSame(5, $product->fresh()->stock_qty);
+        $this->assertSame(0, $coupon->fresh()->used_count);
+        $this->assertDatabaseMissing('coupon_usages', ['order_id' => $failedOrder->id]);
+        $this->assertDatabaseHas('shipping_rate_quotes', [
+            'rate_id' => $shipping['rateId'],
+            'order_id' => null,
+            'consumed_at' => null,
+        ]);
     }
 
     public function test_label_endpoint_is_idempotent_and_requires_a_paid_processing_order(): void

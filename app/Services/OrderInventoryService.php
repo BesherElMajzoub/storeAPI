@@ -11,6 +11,60 @@ use Illuminate\Support\Facades\DB;
 class OrderInventoryService
 {
     /**
+     * Atomically apply a stock delta while using the same product-first lock
+     * order as checkout reservations.
+     *
+     * @return array<string, int|null>
+     */
+    public function adjustStock(Product $product, int $delta, ?int $variantId = null): array
+    {
+        return DB::transaction(function () use ($product, $delta, $variantId): array {
+            $lockedProduct = Product::query()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+            $variant = null;
+
+            if ($variantId !== null) {
+                $variant = ProductVariant::query()
+                    ->whereKey($variantId)
+                    ->where('product_id', $lockedProduct->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $variant) {
+                    throw new \InvalidArgumentException('The selected variant does not belong to this product.');
+                }
+            }
+
+            $previousProductStock = (int) $lockedProduct->stock_qty;
+            $newProductStock = $previousProductStock + $delta;
+            $previousVariantStock = $variant ? (int) $variant->stock_qty : null;
+            $newVariantStock = $previousVariantStock !== null ? $previousVariantStock + $delta : null;
+
+            if ($newProductStock < 0 || ($newVariantStock !== null && $newVariantStock < 0)) {
+                throw new InsufficientStockException('delta', 'The stock adjustment would make inventory negative.');
+            }
+
+            $lockedProduct->forceFill([
+                'stock_qty' => $newProductStock,
+                'in_stock' => $newProductStock > 0,
+            ])->saveQuietly();
+
+            if ($variant) {
+                $variant->forceFill(['stock_qty' => $newVariantStock])->saveQuietly();
+            }
+
+            return [
+                'product_id' => $lockedProduct->id,
+                'variant_id' => $variant?->id,
+                'delta' => $delta,
+                'previous_product_stock' => $previousProductStock,
+                'product_stock' => $newProductStock,
+                'previous_variant_stock' => $previousVariantStock,
+                'variant_stock' => $newVariantStock,
+            ];
+        }, 3);
+    }
+
+    /**
      * Lock, validate, quote and reserve all requested items.
      * Must be called from an existing database transaction.
      *
@@ -29,9 +83,18 @@ class OrderInventoryService
 
         foreach ($items as $item) {
             $quantity = (int) $item['quantity'];
-            $product = Product::query()->whereKey($item['product_id'])->lockForUpdate()->firstOrFail();
+            $product = Product::query()
+                ->with('category')
+                ->whereKey($item['product_id'])
+                ->lockForUpdate()
+                ->firstOrFail();
 
-            if ($product->status !== 'published' || ! $product->in_stock || $product->stock_qty < $quantity) {
+            if (
+                $product->status !== 'published'
+                || ($product->category && ! $product->category->is_active)
+                || ! $product->in_stock
+                || $product->stock_qty < $quantity
+            ) {
                 throw new InsufficientStockException('items', "Insufficient stock for product {$product->id}.");
             }
 

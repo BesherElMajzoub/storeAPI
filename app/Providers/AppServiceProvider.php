@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Contracts\EasyPostServiceInterface;
 use App\Contracts\LocationServiceInterface;
 use App\Events\WishlistItemAdded;
 use App\Events\WishlistItemRemoved;
@@ -13,6 +14,8 @@ use App\Observers\OrderObserver;
 use App\Observers\ReviewObserver;
 use App\Policies\AddressPolicy;
 use App\Policies\ReviewPolicy;
+use App\Services\EasyPostService;
+use App\Services\FakeEasyPostService;
 use App\Services\GeoapifyService;
 use App\Services\GooglePlacesService;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -30,6 +33,26 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->singleton(EasyPostService::class);
+        $this->app->singleton(FakeEasyPostService::class);
+        $this->app->singleton(EasyPostServiceInterface::class, function ($app) {
+            $driver = config('services.easypost.driver', 'easypost');
+
+            if ($driver === 'fake') {
+                if ($app->environment('production')) {
+                    throw new \RuntimeException('The fake shipping driver cannot run in production.');
+                }
+
+                return $app->make(FakeEasyPostService::class);
+            }
+
+            if ($driver !== 'easypost') {
+                throw new \RuntimeException("Unsupported shipping driver [{$driver}].");
+            }
+
+            return $app->make(EasyPostService::class);
+        });
+
         $this->app->singleton(LocationServiceInterface::class, function ($app) {
             $provider = config('services.location_provider', 'geoapify');
             if ($provider === 'google') {

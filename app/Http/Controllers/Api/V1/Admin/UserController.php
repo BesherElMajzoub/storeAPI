@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\AddressResource;
+use App\Http\Resources\AdminUserResource;
+use App\Http\Resources\AdminWishlistItemResource;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,40 +18,55 @@ class UserController extends Controller
      * List all users with basic info.
      */
     #[OA\Get(
-        path: "/api/v1/admin/users",
-        summary: "Admin List Users",
-        description: "List all users with their orders and reviews counts",
-        security: [["bearerAuth" => []]],
-        tags: ["Admin Users"]
+        path: '/api/v1/admin/users',
+        summary: 'Admin List Users',
+        description: 'List all users with their orders and reviews counts',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Users']
     )]
-    #[OA\Parameter(name: "per_page", in: "query", schema: new OA\Schema(type: "integer", default: 20))]
+    #[OA\Parameter(name: 'per_page', in: 'query', schema: new OA\Schema(type: 'integer', default: 20))]
+    #[OA\Parameter(name: 'search', in: 'query', schema: new OA\Schema(type: 'string'))]
     #[OA\Response(
         response: 200,
-        description: "Users fetched",
+        description: 'Users fetched',
         content: new OA\JsonContent(
-            type: "object",
+            type: 'object',
             properties: [
                 new OA\Property(
-                    property: "data",
-                    type: "object",
+                    property: 'data',
+                    type: 'object',
                     properties: [
                         new OA\Property(
-                            property: "data",
-                            type: "array",
-                            items: new OA\Items(ref: "#/components/schemas/User")
-                        )
+                            property: 'data',
+                            type: 'array',
+                            items: new OA\Items(ref: '#/components/schemas/User')
+                        ),
                     ]
-                )
+                ),
             ]
         )
     )]
     public function index(Request $request): JsonResponse
     {
-        $perPage = min(max((int) $request->get('per_page', 20), 1), 100);
+        $validated = $request->validate([
+            'search' => ['sometimes', 'string', 'max:255'],
+            'per_page' => ['sometimes', 'integer', 'between:1,100'],
+        ]);
+        $perPage = (int) ($validated['per_page'] ?? 20);
 
-        $users = User::withCount(['orders', 'reviews'])
+        $users = User::query()
+            ->withCount(['orders', 'reviews'])
+            ->when($validated['search'] ?? null, function ($query, string $search): void {
+                $query->where(function ($searchQuery) use ($search): void {
+                    $searchQuery->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%");
+                });
+            })
             ->latest()
             ->paginate($perPage);
+
+        $users->through(fn (User $user) => (new AdminUserResource($user))->resolve($request));
 
         return $this->success($users, 'Users fetched.');
     }
@@ -58,30 +76,30 @@ class UserController extends Controller
      * Get full user details including summary info.
      */
     #[OA\Get(
-        path: "/api/v1/admin/users/{id}",
-        summary: "Admin Show User",
-        description: "Get full user details",
-        security: [["bearerAuth" => []]],
-        tags: ["Admin Users"]
+        path: '/api/v1/admin/users/{id}',
+        summary: 'Admin Show User',
+        description: 'Get full user details',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Users']
     )]
-    #[OA\Parameter(name: "id", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
+    #[OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))]
     #[OA\Response(
         response: 200,
-        description: "User fetched",
+        description: 'User fetched',
         content: new OA\JsonContent(
-            type: "object",
+            type: 'object',
             properties: [
-                new OA\Property(property: "data", ref: "#/components/schemas/User")
+                new OA\Property(property: 'data', ref: '#/components/schemas/User'),
             ]
         )
     )]
-    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
-    public function show(int $id): JsonResponse
+    #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
+    public function show(Request $request, int $id): JsonResponse
     {
         $user = User::withCount(['orders', 'reviews'])
             ->findOrFail($id);
 
-        return $this->success($user, 'User fetched.');
+        return $this->success((new AdminUserResource($user))->resolve($request), 'User fetched.');
     }
 
     /**
@@ -90,52 +108,41 @@ class UserController extends Controller
      * Returns: product image, name, price, date added.
      */
     #[OA\Get(
-        path: "/api/v1/admin/users/{id}/wishlist",
-        summary: "Admin User Wishlist",
+        path: '/api/v1/admin/users/{id}/wishlist',
+        summary: 'Admin User Wishlist',
         description: "View a specific user's wishlist",
-        security: [["bearerAuth" => []]],
-        tags: ["Admin Users"]
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Users']
     )]
-    #[OA\Parameter(name: "id", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
+    #[OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))]
     #[OA\Response(
         response: 200,
-        description: "User wishlist fetched",
+        description: 'User wishlist fetched',
         content: new OA\JsonContent(
-            type: "object",
+            type: 'object',
             properties: [
-                new OA\Property(property: "data", type: "object")
+                new OA\Property(property: 'data', type: 'object'),
             ]
         )
     )]
-    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
-    public function wishlist(int $id): JsonResponse
+    #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
+    public function wishlist(Request $request, int $id): JsonResponse
     {
         $user = User::findOrFail($id);
 
         $wishlist = $user->wishlistItems()
             ->with(['product.images'])
+            ->whereHas('product')
             ->get()
-            ->map(function ($item) {
-                $product = $item->product;
-                if (!$product) return null;
-                
-                return [
-                    'id'        => $product->id,
-                    'name'      => $product->name,
-                    'slug'      => $product->slug,
-                    'price'     => (float) $product->price,
-                    'final_price' => (float) $product->final_price,
-                    'image'     => $product->images->first()?->url,
-                    'added_at'  => $item->created_at?->toISOString(),
-                ];
-            })->filter()->values();
+            ->map(fn ($item) => (new AdminWishlistItemResource($item))->resolve($request))
+            ->values();
 
         return $this->success([
             'user' => [
-                'id'   => $user->id,
+                'id' => $user->id,
                 'name' => $user->name,
             ],
-            'wishlist'       => $wishlist,
+            'wishlist' => $wishlist,
             'wishlist_count' => $wishlist->count(),
         ], "User #{$id} wishlist fetched.");
     }
@@ -145,25 +152,25 @@ class UserController extends Controller
      * View all addresses of a specific user.
      */
     #[OA\Get(
-        path: "/api/v1/admin/users/{id}/addresses",
-        summary: "Admin User Addresses",
-        description: "View all addresses of a specific user for admin",
-        security: [["bearerAuth" => []]],
-        tags: ["Admin Users"]
+        path: '/api/v1/admin/users/{id}/addresses',
+        summary: 'Admin User Addresses',
+        description: 'View all addresses of a specific user for admin',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Users']
     )]
-    #[OA\Parameter(name: "id", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
+    #[OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))]
     #[OA\Response(
         response: 200,
-        description: "User addresses fetched",
+        description: 'User addresses fetched',
         content: new OA\JsonContent(
-            type: "object",
+            type: 'object',
             properties: [
-                new OA\Property(property: "data", type: "object")
+                new OA\Property(property: 'data', type: 'object'),
             ]
         )
     )]
-    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
-    public function addresses(int $id): JsonResponse
+    #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
+    public function addresses(Request $request, int $id): JsonResponse
     {
         $user = User::findOrFail($id);
 
@@ -172,8 +179,8 @@ class UserController extends Controller
             ->get();
 
         return $this->success([
-            'user'      => ['id' => $user->id, 'name' => $user->name],
-            'addresses' => $addresses,
+            'user' => ['id' => $user->id, 'name' => $user->name],
+            'addresses' => AddressResource::collection($addresses)->resolve($request),
         ], "User #{$id} addresses fetched.");
     }
 
@@ -182,8 +189,8 @@ class UserController extends Controller
         return response()->json([
             'success' => true,
             'message' => $message,
-            'data'    => $data,
-            'errors'  => null,
+            'data' => $data,
+            'errors' => null,
         ], $status);
     }
 }

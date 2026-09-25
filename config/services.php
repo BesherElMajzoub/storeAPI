@@ -73,14 +73,24 @@ return [
     ],
 
     'easypost' => [
+        'driver' => env('EASYPOST_DRIVER', 'easypost'),
         'api_key' => env('EASYPOST_API_KEY'),
         'webhook_secret' => env('EASYPOST_WEBHOOK_SECRET'),
         'quote_ttl_minutes' => (int) env('EASYPOST_QUOTE_TTL_MINUTES', 15),
         'supported_countries' => ['US'],
+        // Dimensions converted from the warehouse's actual packaging supplier quote (cm -> in).
+        // max_weight is engineering judgment (typical folded-garment load per package size),
+        // not a supplier spec -- revisit once real fulfillment data is available.
         'packages' => [
-            ['name' => 'small', 'length' => 10.0, 'width' => 8.0, 'height' => 4.0, 'max_weight' => 64.0],
-            ['name' => 'medium', 'length' => 14.0, 'width' => 10.0, 'height' => 6.0, 'max_weight' => 160.0],
-            ['name' => 'large', 'length' => 18.0, 'width' => 14.0, 'height' => 10.0, 'max_weight' => 320.0],
+            ['name' => 'bag_small', 'length' => 13.78, 'width' => 9.84, 'height' => 1.97, 'max_weight' => 24.0],
+            ['name' => 'box_small', 'length' => 9.84, 'width' => 9.45, 'height' => 3.15, 'max_weight' => 32.0],
+            ['name' => 'bag_large', 'length' => 19.69, 'width' => 13.78, 'height' => 1.97, 'max_weight' => 48.0],
+            ['name' => 'box_medium', 'length' => 14.17, 'width' => 13.39, 'height' => 3.54, 'max_weight' => 64.0],
+            ['name' => 'box_large', 'length' => 19.69, 'width' => 13.78, 'height' => 4.72, 'max_weight' => 112.0],
+        ],
+        'fake_rates' => [
+            ['carrier' => 'MockCarrier', 'service' => 'Ground', 'rate' => 7.95, 'currency' => 'USD', 'delivery_days' => 5],
+            ['carrier' => 'MockCarrier', 'service' => 'Express', 'rate' => 14.95, 'currency' => 'USD', 'delivery_days' => 2],
         ],
     ],
 

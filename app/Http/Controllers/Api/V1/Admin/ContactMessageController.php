@@ -7,6 +7,7 @@ use App\Http\Requests\Api\V1\Admin\UpdateContactMessageStatusRequest;
 use App\Models\ContactMessage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use OpenApi\Attributes as OA;
 
 class ContactMessageController extends Controller
@@ -19,6 +20,8 @@ class ContactMessageController extends Controller
         tags: ['Admin Contact Messages']
     )]
     #[OA\Parameter(name: 'limit', in: 'query', schema: new OA\Schema(type: 'integer', default: 15))]
+    #[OA\Parameter(name: 'status', in: 'query', schema: new OA\Schema(type: 'string', enum: ['new', 'read', 'replied', 'archived']))]
+    #[OA\Parameter(name: 'search', in: 'query', description: 'Search name, email, phone, subject, or message', schema: new OA\Schema(type: 'string'))]
     #[OA\Response(
         response: 200,
         description: 'Messages fetched',
@@ -32,8 +35,25 @@ class ContactMessageController extends Controller
     )]
     public function index(Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'status' => ['sometimes', Rule::in(['new', 'read', 'replied', 'archived'])],
+            'search' => ['sometimes', 'string', 'max:255'],
+        ]);
         $limit = min(max((int) $request->query('limit', 15), 1), 100);
-        $messages = ContactMessage::latest()->paginate($limit);
+        $messages = ContactMessage::query()
+            ->when($validated['status'] ?? null, fn ($query, string $status) => $query->where('status', $status))
+            ->when($validated['search'] ?? null, function ($query, string $search): void {
+                $query->where(function ($searchQuery) use ($search): void {
+                    $searchQuery->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%")
+                        ->orWhere('subject', 'like', "%{$search}%")
+                        ->orWhere('message', 'like', "%{$search}%");
+                });
+            })
+            ->latest()
+            ->paginate($limit)
+            ->withQueryString();
 
         return response()->json([
             'success' => true,

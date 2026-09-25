@@ -14,31 +14,32 @@ class CouponResource extends JsonResource
     {
         // Define status label
         $statusLabel = 'active';
-        if (!$this->is_active) {
+        if (! $this->is_active) {
             $statusLabel = 'inactive';
         } elseif ($this->is_expired) {
             $statusLabel = 'expired';
-        } elseif (!$this->is_started) {
+        } elseif (! $this->is_started) {
             $statusLabel = 'scheduled';
         }
 
         return [
-            'id'                      => $this->id,
-            'code'                    => $this->code,
-            'type'                    => $this->type,
-            'value'                   => $this->value,
-            'minimum_order_amount'    => $this->minimum_order_amount,
+            'id' => $this->id,
+            'code' => $this->code,
+            'type' => $this->type,
+            'value' => $this->value,
+            'free_shipping' => $this->isFreeShipping(),
+            'minimum_order_amount' => $this->minimum_order_amount,
             'maximum_discount_amount' => $this->maximum_discount_amount,
-            'usage_limit'             => $this->usage_limit,
-            'used_count'              => $this->used_count,
-            'remaining_uses'          => $this->remaining_uses,
-            'usage_limit_per_user'    => $this->usage_limit_per_user,
-            'starts_at'               => $this->starts_at?->toIso8601String(),
-            'expires_at'              => $this->expires_at?->toIso8601String(),
-            'is_active'               => $this->is_active,
-            'status'                  => $statusLabel,
-            'created_at'              => $this->created_at?->toIso8601String(),
-            'updated_at'              => $this->updated_at?->toIso8601String(),
+            'usage_limit' => $this->usage_limit,
+            'used_count' => $this->used_count,
+            'remaining_uses' => $this->remaining_uses,
+            'usage_limit_per_user' => $this->usage_limit_per_user,
+            'starts_at' => $this->starts_at?->toIso8601String(),
+            'expires_at' => $this->expires_at?->toIso8601String(),
+            'is_active' => $this->is_active,
+            'status' => $statusLabel,
+            'created_at' => $this->created_at?->toIso8601String(),
+            'updated_at' => $this->updated_at?->toIso8601String(),
         ];
     }
 }
