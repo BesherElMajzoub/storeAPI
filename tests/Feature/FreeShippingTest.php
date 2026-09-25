@@ -61,11 +61,12 @@ class FreeShippingTest extends TestCase
 
     public function test_admin_can_read_default_shipping_settings(): void
     {
+        // Business default (no settings row yet): free shipping on orders >= $100.
         $this->actingAs($this->admin, 'sanctum')
             ->getJson('/api/v1/admin/settings/shipping')
             ->assertOk()
-            ->assertJsonPath('data.free_shipping_enabled', false)
-            ->assertJsonPath('data.free_shipping_threshold', null);
+            ->assertJsonPath('data.free_shipping_enabled', true)
+            ->assertJsonPath('data.free_shipping_threshold', 100);
     }
 
     public function test_admin_can_enable_automatic_free_shipping_with_a_threshold(): void
@@ -157,6 +158,9 @@ class FreeShippingTest extends TestCase
 
     public function test_free_shipping_coupon_waives_shipping_without_discounting_subtotal(): void
     {
+        // Isolate from the seeded $100 automatic threshold to test the coupon path alone.
+        app(FreeShippingService::class)->update(false, null);
+
         Coupon::create([
             'code' => 'FREESHIP',
             'type' => 'free_shipping',

@@ -2,7 +2,7 @@
 
 **Date:** September 26, 2026 (updated — batch 2: free shipping, guest-checkout confirmation, httpOnly-cookie SPA auth)
 **Companion to:** `docs/backend-remediation-plan.md`
-**Status at time of writing:** all code-actionable items from the remediation plan are implemented in the working tree and pass the full test suite (**183/183, 1032 assertions**, verified). Nothing below can be closed by writing more code alone — each item needs production access or a business decision the code itself can't make (e.g. picking an actual dollar threshold).
+**Status at time of writing:** all code-actionable items from the remediation plan are implemented in the working tree and pass the full test suite (**183/183, 1032 assertions**, verified). Nothing below can be closed by writing more code alone — each item needs production access or a business decision the code itself can't make. One exception already has a default: free shipping ships enabled at **$100** and only needs a decision if that number is wrong.
 
 ---
 
@@ -32,7 +32,7 @@ Two of these are now implemented (Q3, Q22) and one is now confirmed as a final a
 | Tax calculation | Flat rate / destination-based / provider (e.g. Stripe Tax) / explicitly none for this launch | `orders.tax` still hardcoded to 0 — no code changed pending this decision. |
 | Public `geo/me` | Open `GET /api/v1/geo/me` to unauthenticated traffic, or tell the frontend to use a different signal | Route still admin-only; not changed. |
 | Variant `null` semantics (ADM-EP3 / Q28) | The code now treats an **omitted** field as "leave unchanged" and an **explicit `null`** as "clear the value." This needs a formal sign-off that this is the intended contract (it matches what the frontend said they'd rather have) so it can be documented and relied on. | Implemented, needs confirmation + a reply to frontend closing Q28. |
-| **Free shipping (Q3) — implemented, needs a number** | Both mechanisms (automatic threshold + `free_shipping` coupon) are built. What's still a business call: the actual dollar threshold, and whether to launch with automatic free shipping turned on at all. | `GET/PUT /api/v1/admin/settings/shipping`; defaults to disabled with no threshold until an admin sets one. |
+| **Free shipping (Q3) — implemented, ships with a default** | Both mechanisms (automatic threshold + `free_shipping` coupon) are built and **enabled by default at a $100 threshold**. The only remaining business call is whether $100 is the right number, or whether to disable it at launch. | `GET/PUT /api/v1/admin/settings/shipping`; the $100/enabled default lives in `FreeShippingService` and applies automatically until an admin changes it. |
 | **Guest checkout (Q21) — confirmed, not open** | Per the explicit requirement: checkout requires login, no guest path. | `POST /orders` still requires `auth:sanctum`; now has an explicit regression test rather than relying on routing as an implicit side effect. |
 | **httpOnly cookies (Q22) — implemented** | Web SPA can now authenticate via a first-party httpOnly session cookie (`Sanctum::statefulApi()`); Bearer-token clients are completely unaffected. | `bootstrap/app.php`, `AuthController`. Needs `SANCTUM_STATEFUL_DOMAINS`/`SESSION_SECURE_COOKIE` set for the production domain before the frontend can rely on it (see `.env.example`). |
 
@@ -95,7 +95,7 @@ The **dimensions are your real supplier data** (exact cm→in conversion). The *
 ## 5. Suggested Order of Operations
 
 1. Sanity-check the assumed package weight capacities in §4 against real fulfillment (or accept them as-is).
-2. Pick the free-shipping threshold (or decide not to enable it at launch) and set it via `PUT /admin/settings/shipping`.
+2. Confirm the $100 free-shipping default (or change/disable it) via `PUT /admin/settings/shipping`.
 3. Set `SANCTUM_STATEFUL_DOMAINS` (and `SESSION_SECURE_COOKIE=true`) for the production domain so the frontend can adopt cookie-based auth.
 4. Commit and deploy the code in §3 (includes the package config update, free shipping, and cookie auth).
 5. Get real per-product shipping dimensions from the catalog owner → run the BLK-1 backfill.
