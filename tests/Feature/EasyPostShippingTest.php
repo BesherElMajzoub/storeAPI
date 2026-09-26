@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Contracts\EasyPostServiceInterface;
+use App\Jobs\SendAdminAlert;
 use App\Mail\OrderShippedMail;
 use App\Models\Order;
 use App\Models\Product;
@@ -211,6 +212,94 @@ class EasyPostShippingTest extends TestCase
             'id' => $order->id,
             'status' => 'delivered',
         ]);
+    }
+
+    public function test_easypost_webhook_does_not_resurrect_a_cancelled_order(): void
+    {
+        Queue::fake();
+
+        $order = Order::create([
+            'order_number' => 'ORD-CANCEL0001',
+            'user_id' => $this->user->id,
+            'status' => 'cancelled',
+            'payment_status' => 'refunded',
+            'subtotal' => 100.00,
+            'total' => 105.50,
+            'tracking_number' => 'EZ1000000001',
+            'easypost_shipment_id' => 'shp_test123',
+            'shipping_address' => ['name' => 'John', 'street' => '1 Main St', 'city' => 'NYC', 'country' => 'US'],
+        ]);
+
+        $mockEvent = (object) [
+            'description' => 'tracker.updated',
+            'result' => (object) [
+                'tracking_code' => 'EZ1000000001',
+                'status' => 'delivered',
+            ],
+        ];
+
+        $this->mock(EasyPostServiceInterface::class, function ($mock) use ($mockEvent) {
+            $mock->shouldReceive('validateWebhook')->once()->andReturn($mockEvent);
+        });
+
+        config(['services.easypost.webhook_secret' => 'whsec_test']);
+
+        $response = $this->postJson('/api/v1/webhooks/easypost', [
+            'description' => 'tracker.updated',
+        ]);
+
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'status' => 'cancelled',
+        ]);
+
+        Queue::assertNotPushed(SendAdminAlert::class);
+    }
+
+    public function test_easypost_webhook_does_not_realert_an_already_delivered_order(): void
+    {
+        Queue::fake();
+
+        $order = Order::create([
+            'order_number' => 'ORD-DUPDELIV01',
+            'user_id' => $this->user->id,
+            'status' => 'delivered',
+            'payment_status' => 'paid',
+            'subtotal' => 100.00,
+            'total' => 105.50,
+            'tracking_number' => 'EZ1000000001',
+            'easypost_shipment_id' => 'shp_test123',
+            'shipping_address' => ['name' => 'John', 'street' => '1 Main St', 'city' => 'NYC', 'country' => 'US'],
+        ]);
+
+        $mockEvent = (object) [
+            'description' => 'tracker.updated',
+            'result' => (object) [
+                'tracking_code' => 'EZ1000000001',
+                'status' => 'delivered',
+            ],
+        ];
+
+        $this->mock(EasyPostServiceInterface::class, function ($mock) use ($mockEvent) {
+            $mock->shouldReceive('validateWebhook')->once()->andReturn($mockEvent);
+        });
+
+        config(['services.easypost.webhook_secret' => 'whsec_test']);
+
+        $response = $this->postJson('/api/v1/webhooks/easypost', [
+            'description' => 'tracker.updated',
+        ]);
+
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'status' => 'delivered',
+        ]);
+
+        Queue::assertNotPushed(SendAdminAlert::class);
     }
 
     public function test_easypost_webhook_fails_closed_when_secret_is_missing(): void

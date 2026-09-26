@@ -45,7 +45,7 @@ class ShipmentTrackingService
             'tracking_events' => $events,
         ]);
 
-        if ($status === 'delivered') {
+        if ($status === 'delivered' && in_array($order->status, ['pending', 'processing', 'shipped'], true)) {
             $order->status = 'delivered';
         } elseif (in_array($status, ['in_transit', 'out_for_delivery', 'available_for_pickup'], true)
             && in_array($order->status, ['pending', 'processing'], true)) {

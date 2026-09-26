@@ -68,21 +68,17 @@ class EasyPostWebhookController extends Controller
 
                     if ($order) {
                         Log::info("Updating tracking for Order #{$order->order_number} to status: {$trackerStatus}");
-                        $this->tracking->sync($order, $result);
+                        $previousStatus = $order->status;
+                        $syncedOrder = $this->tracking->sync($order, $result);
 
-                        if ($trackerStatus === 'delivered' && $order->status !== 'delivered') {
-                            $order->status = 'delivered';
-                            $order->save();
-
+                        if ($trackerStatus === 'delivered' && $syncedOrder->status === 'delivered' && $previousStatus !== 'delivered') {
                             SendAdminAlert::dispatch("🎉 Order #{$order->order_number} has been DELIVERED successfully! Tracking: {$order->tracking_number}");
                         } elseif (in_array($trackerStatus, ['failure', 'return_to_sender'])) {
                             SendAdminAlert::dispatch("⚠️ EasyPost Alert: Order #{$order->order_number} shipping status marked as: {$trackerStatus}. Tracking: {$order->tracking_number}");
                         } else {
                             // Any other status (in_transit, out_for_delivery, pre_transit)
                             // Transition pending/processing to shipped
-                            if (in_array($order->status, ['pending', 'processing'])) {
-                                $order->status = 'shipped';
-                                $order->save();
+                            if ($syncedOrder->status === 'shipped' && in_array($previousStatus, ['pending', 'processing'], true)) {
                                 SendAdminAlert::dispatch("🚚 Order #{$order->order_number} is now {$trackerStatus}. Tracking: {$order->tracking_number}");
                             }
                         }

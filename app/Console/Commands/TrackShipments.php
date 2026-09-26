@@ -57,12 +57,10 @@ class TrackShipments extends Command
 
                 $trackerStatus = $tracker->status;
                 $this->line("  EasyPost Status: {$trackerStatus}");
-                $this->tracking->sync($order, $tracker);
+                $previousStatus = $order->status;
+                $syncedOrder = $this->tracking->sync($order, $tracker);
 
-                if ($trackerStatus === 'delivered' && $order->status !== 'delivered') {
-                    $order->status = 'delivered';
-                    $order->save();
-
+                if ($trackerStatus === 'delivered' && $syncedOrder->status === 'delivered' && $previousStatus !== 'delivered') {
                     $this->info("  Order #{$order->order_number} updated to DELIVERED!");
                     SendAdminAlert::dispatch("🎉 Order #{$order->order_number} has been DELIVERED! Polled via scheduler. Tracking: {$order->tracking_number}");
                 } elseif (in_array($trackerStatus, ['failure', 'return_to_sender'])) {
