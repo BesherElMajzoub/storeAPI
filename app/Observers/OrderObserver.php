@@ -25,6 +25,10 @@ class OrderObserver
         }
 
         if (in_array($order->status, $this->releaseStates, true)) {
+            if ($order->shipped_at !== null) {
+                return;
+            }
+
             app(OrderInventoryService::class)->release($order);
 
             return;

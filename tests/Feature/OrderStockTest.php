@@ -126,4 +126,27 @@ class OrderStockTest extends TestCase
         $this->assertEquals(5, $this->variant->fresh()->stock_qty);
         $this->assertTrue($this->product->fresh()->in_stock);
     }
+
+    public function test_refunding_a_shipped_order_does_not_restock_inventory(): void
+    {
+        $order = Order::factory()->create([
+            'user_id' => $this->user->id,
+            'status' => 'shipped',
+            'shipped_at' => now(),
+            'stock_reserved_at' => now(),
+        ]);
+        $order->items()->create([
+            'product_id' => $this->product->id,
+            'product_name' => $this->product->name,
+            'price' => 100,
+            'quantity' => 1,
+            'total' => 100,
+        ]);
+        $this->product->update(['stock_qty' => 9, 'in_stock' => true]);
+
+        $order->update(['status' => 'refunded']);
+
+        $this->assertSame(9, $this->product->fresh()->stock_qty);
+        $this->assertNull($order->fresh()->stock_released_at);
+    }
 }
