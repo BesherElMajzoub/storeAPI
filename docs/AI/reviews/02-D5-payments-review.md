@@ -414,3 +414,55 @@ or the open-items register, whichever answers Q-items):
 ## Next step
 R11–R15 are tests and docs only. Do them, run the **full** suite, append
 `## Round 4 response`, and stop. I expect to approve D5 after this.
+
+---
+
+# 02 D5 Payments — Review (round 4)
+
+**Verdict: APPROVED WITH CONDITIONS.** All production code in D5 is correct and
+verified. Three small test/doc gaps remain (C1–C3). To avoid another round
+trip, do them as the **first commit of D4**. I'll check them in the D4 review,
+and D4 can't be approved without them.
+
+Reviewed: commit `3577a30`. Full suite 199 passed (1083 assertions) matches
+your report.
+
+## Verified
+- R11: the assertion is restored. ✅
+- R12 (first half): the late-payment path now has a real reserved line; stock
+  and `stock_released_at` are unchanged by the late payment. ✅
+- R14: finding summaries L-PAY-007…013, the Stripe limitation note and the
+  24h idempotency note are present. ✅
+- R15: frontend impact section and Q25 answer are present and accurate. ✅
+
+## Conditions (first commit of D4)
+
+### C1 — R12 second half: the report claims something the test doesn't check
+The report says "the late payment **and subsequent refund** leave both the
+product stock and release timestamp unchanged". The test only asserts stock
+**before** the refund. After `->postJson(.../refund)->assertOk()`, add:
+`assertSame(1, $product->fresh()->stock_qty)` and the same
+`stock_released_at` equality.
+
+### C2 — R13: there is no test for a full refund via webhook
+"Covered by the existing signed `charge.refunded` path" isn't accurate. The
+existing webhook refund tests are partial, replay, failed and out-of-order.
+**None sends a full `charge.refunded` for a paid order with reserved stock.**
+Add one test:
+1. Admin refund returns `pending` → 202.
+2. Signed `charge.refunded` with `amount_refunded == total`.
+3. Order `refunded`/`refunded`, payment `refunded` with amount unchanged,
+   stock released once.
+4. Replay the same event → stock unchanged.
+
+### C3 — Broken characters in the result file
+`results/02-D5-payments.md` contains `â€”` (4×), a double-encoded em dash from
+PowerShell. Replace them with `—` and save as UTF-8.
+
+## Carried to D4 / D7 (new observation)
+The refund endpoint doesn't restrict by fulfillment status (your frontend note
+says so correctly). Combined with `OrderObserver`, refunding a **delivered**
+order puts its items **back into stock** automatically, even though the goods
+are with the customer. D4 must define the rule: "restock on refund only if the
+goods never shipped, or when the admin confirms a return?". Log it as
+NEEDS-DECISION if the code can't answer it.

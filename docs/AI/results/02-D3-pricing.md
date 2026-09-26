@@ -34,4 +34,20 @@ ExpireAbandonedCheckoutsTest + PricingBatchTest: 8 passed (52 assertions)
 Pint: passed
 ```
 
+## Full batch gate evidence
+
+```text
+Run 1: Tests: 209 passed (1147 assertions), Duration: 55.48s
+Run 2: Tests: 209 passed (1147 assertions), Duration: 55.26s
+Run 3: Tests: 209 passed (1147 assertions), Duration: 47.38s
+Pint: {"tool":"pint","result":"passed"}
+PHPStan level 5: [OK] No errors (memory-limit=512M)
+Composer validate: ./composer.json is valid
+Composer audit: No security vulnerability advisories found.
+```
+
+## Frontend impact
+
+Paid checkout contracts remain unchanged. A zero-total order returns `checkout_url: null`, `payment_required: false`, and a null session id so the storefront skips the Stripe redirect. Minimum-charge rejection is HTTP 422 with error code `minimum_charge`.
+
 This domain is `READY-FOR-REVIEW` pending the B1 full-suite gate.

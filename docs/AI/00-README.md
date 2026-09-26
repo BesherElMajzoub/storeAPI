@@ -49,6 +49,55 @@ Naming: `results/<phase-number>-<name>.md`, e.g. `results/02-D5-payments.md`.
      `## Round N response` section to the same result file, set status back to
      `READY-FOR-REVIEW`, stop again.
 
+## Batch mode (active from D4 onwards — replaces "stop after each domain")
+
+Work is grouped into batches. Inside a batch, finish one domain and continue
+straight to the next **without stopping**. Stop only at the end of the batch.
+
+| Batch | Contents | Result files |
+|---|---|---|
+| B1 | D4 Inventory + D3 Pricing | `02-D4-inventory.md`, `02-D3-pricing.md` |
+| B2 | D1 Auth + D6 Shipping + D7 Order lifecycle | `02-D1-…`, `02-D6-…`, `02-D7-…` |
+| B3 | D2 Catalog + D8 Misc + Phase 05 Security | `02-D2-…`, `02-D8-…`, `05-security.md` |
+| B4 | Phase 03 Clean code + Phase 04 E2E journeys | `03-…`, `04-…` |
+| B5 | Phase 06 Final verification | `06-…` |
+
+Rules:
+1. **One result file per domain/phase**, as before. Each domain gets its own
+   status in `PROGRESS.md` and is reviewed and approved on its own.
+2. **Decisions don't block.** Check `PROGRESS.md` → "Open decisions" first:
+   many rules are already decided there, so implement them. For a new
+   NEEDS-DECISION, record it with your recommended option, skip only that
+   item, and keep going.
+3. **Pipelining:** after handing over a batch, **start the next batch
+   immediately**. You don't need to wait for the review. Fixes the reviewer
+   asks for on the previous batch go in as the **first commits** of whatever
+   you are doing then, like the C1–C3 commit. A domain is only approved once
+   its fixes are verified.
+4. The pre-submit checklist below applies to **every domain** in the batch.
+5. The handover message lists each domain with its status, open decisions and
+   commits, plus one full-suite run for the batch.
+
+## Pre-submit checklist (do this before every `READY-FOR-REVIEW`)
+
+Most D5 review rounds were spent on these. Check each one; the reviewer will
+bounce the round if any is missing.
+
+- [ ] **Full** suite run (not a filtered run), output pasted.
+- [ ] Pint + PHPStan output pasted.
+- [ ] Every finding in the `templates/finding.md` format: severity, scenario,
+      test name, commit sha, evidence.
+- [ ] Every claim in the report is backed by an assertion that exists. If you
+      write "X is unchanged", a test asserts X.
+- [ ] Every test the review asked for exists **as specified** (all steps).
+      "Covered by existing tests" is allowed only if you name the test and the
+      exact assertions.
+- [ ] `git diff <round start>..HEAD -- tests | grep '^-.*assert'` is empty,
+      or each removed assertion is justified in the report.
+- [ ] Files saved as UTF-8 (no `â€`, no UTF-16). Don't use PowerShell `>`.
+- [ ] Frontend-visible changes (status codes, fields, enum values) are listed
+      under `## Frontend impact`.
+
 ## Hard rules
 
 1. **Branch:** work on `ai/quality-pass`, never commit to `main`.

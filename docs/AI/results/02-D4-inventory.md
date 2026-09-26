@@ -56,4 +56,20 @@ ExpireAbandonedCheckoutsTest + PricingBatchTest: 8 passed (52 assertions)
 Pint: passed
 ```
 
+## Full batch gate evidence
+
+```text
+Run 1: Tests: 209 passed (1147 assertions), Duration: 55.48s
+Run 2: Tests: 209 passed (1147 assertions), Duration: 55.26s
+Run 3: Tests: 209 passed (1147 assertions), Duration: 47.38s
+Pint: {"tool":"pint","result":"passed"}
+PHPStan level 5: [OK] No errors (memory-limit=512M)
+Composer validate: ./composer.json is valid
+Composer audit: No security vulnerability advisories found.
+```
+
+## Frontend impact
+
+No frontend-visible change for inventory. The scheduled expiry is an ops concern; production needs Laravel scheduler cron. D3's free-order response adds `checkout_url: null` and `payment_required: false` (documented in the pricing report).
+
 This domain is `READY-FOR-REVIEW`; the owner decisions in `reviews/B1-instructions.md` are implemented and no D4 decisions remain open.
