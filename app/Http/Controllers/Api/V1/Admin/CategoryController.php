@@ -225,10 +225,19 @@ class CategoryController extends Controller
         $updates = $data['categories'];
         $rows = [];
         $now = now();
+        $existingCategories = Category::query()
+            ->whereIn('id', collect($updates)->pluck('id'))
+            ->get(['id', 'name', 'slug'])
+            ->keyBy('id');
 
         foreach ($updates as $item) {
             $rows[] = [
                 'id' => $item['id'],
+                // MySQL strict mode requires all non-nullable columns on the
+                // insert side of upsert, even though only ordering fields are
+                // being changed.
+                'name' => $existingCategories[(int) $item['id']]->name,
+                'slug' => $existingCategories[(int) $item['id']]->slug,
                 'parent_id' => $item['parent_id'] ?? null,
                 'sort_order' => $item['sort_order'],
                 'updated_at' => $now,
