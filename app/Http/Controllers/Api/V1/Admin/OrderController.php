@@ -187,7 +187,11 @@ class OrderController extends Controller
             }
 
             foreach ($orders as $order) {
-                $order->update(['status' => $validated['status']]);
+                $attributes = ['status' => $validated['status']];
+                if ($validated['status'] === 'shipped' && $order->shipped_at === null) {
+                    $attributes['shipped_at'] = now();
+                }
+                $order->update($attributes);
             }
 
             return [
@@ -281,6 +285,9 @@ class OrderController extends Controller
         }
 
         $order = DB::transaction(function () use ($order, $data) {
+            if (($data['status'] ?? null) === 'shipped' && $order->shipped_at === null) {
+                $data['shipped_at'] = now();
+            }
             $order->update($data);
 
             return $order->refresh()->load(['items', 'user', 'payment']);

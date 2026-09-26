@@ -25,7 +25,8 @@ class OrderObserver
         }
 
         if (in_array($order->status, $this->releaseStates, true)) {
-            if ($order->shipped_at !== null) {
+            $previousStatus = $order->getRawOriginal('status');
+            if ($order->shipped_at !== null || in_array($previousStatus, ['shipped', 'delivered'], true)) {
                 return;
             }
 

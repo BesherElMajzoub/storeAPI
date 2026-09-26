@@ -3,12 +3,15 @@
 namespace Tests\Feature;
 
 use App\Models\Order;
+use App\Models\Payment;
+use App\Models\Product;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\StripeCheckoutService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Stripe\Checkout\Session as StripeSession;
+use Stripe\Refund;
 use Tests\TestCase;
 
 class AdminOrderBulkStatusTest extends TestCase
@@ -127,6 +130,66 @@ class AdminOrderBulkStatusTest extends TestCase
         ])->assertConflict();
 
         $this->assertSame('pending_payment', $pendingPayment->fresh()->status);
+    }
+
+    public function test_single_status_endpoint_marks_shipped_at_and_refund_does_not_restock(): void
+    {
+        $product = Product::factory()->create(['stock_qty' => 10, 'in_stock' => true]);
+        $order = Order::factory()->create([
+            'status' => 'processing', 'payment_status' => 'paid',
+            'stripe_payment_intent_id' => 'pi_manual_ship', 'stock_reserved_at' => now(), 'total' => 100,
+        ]);
+        $order->items()->create([
+            'product_id' => $product->id, 'product_name' => $product->name,
+            'price' => 100, 'quantity' => 1, 'total' => 100,
+        ]);
+        $product->update(['stock_qty' => 9]);
+        Payment::create(['order_id' => $order->id, 'payment_provider' => 'stripe', 'status' => 'completed', 'amount' => 100]);
+
+        $this->postJson("/api/v1/admin/orders/{$order->id}/status", ['status' => 'shipped'])
+            ->assertOk();
+        $this->assertNotNull($order->fresh()->shipped_at);
+
+        $this->mock(StripeCheckoutService::class, function ($mock): void {
+            $mock->shouldReceive('refundOrder')->once()->andReturn(Refund::constructFrom(['id' => 're_manual_ship', 'status' => 'succeeded']));
+        });
+        $this->postJson("/api/v1/admin/orders/{$order->id}/refund")->assertOk();
+        $this->assertSame(9, (int) $product->fresh()->stock_qty);
+    }
+
+    public function test_bulk_status_endpoint_marks_shipped_at_and_refunds_do_not_restock(): void
+    {
+        $product = Product::factory()->create(['stock_qty' => 10, 'in_stock' => true]);
+        $orders = collect([1, 2])->map(function (int $index) use ($product): Order {
+            $order = Order::factory()->create([
+                'status' => 'processing', 'payment_status' => 'paid',
+                'stripe_payment_intent_id' => "pi_bulk_ship_{$index}", 'stock_reserved_at' => now(), 'total' => 50,
+            ]);
+            $order->items()->create([
+                'product_id' => $product->id, 'product_name' => $product->name,
+                'price' => 50, 'quantity' => 1, 'total' => 50,
+            ]);
+            Payment::create(['order_id' => $order->id, 'payment_provider' => 'stripe', 'status' => 'completed', 'amount' => 50]);
+
+            return $order;
+        });
+        $product->update(['stock_qty' => 8]);
+
+        $this->postJson('/api/v1/admin/orders/bulk-status', [
+            'ids' => $orders->pluck('id')->all(), 'status' => 'shipped',
+        ])->assertOk();
+        $this->assertTrue($orders->every(fn (Order $order): bool => $order->fresh()->shipped_at !== null));
+
+        $this->mock(StripeCheckoutService::class, function ($mock): void {
+            $mock->shouldReceive('refundOrder')->twice()->andReturn(
+                Refund::constructFrom(['id' => 're_bulk_one', 'status' => 'succeeded']),
+                Refund::constructFrom(['id' => 're_bulk_two', 'status' => 'succeeded'])
+            );
+        });
+        foreach ($orders as $order) {
+            $this->postJson("/api/v1/admin/orders/{$order->id}/refund")->assertOk();
+        }
+        $this->assertSame(8, (int) $product->fresh()->stock_qty);
     }
 
     protected function tearDown(): void
