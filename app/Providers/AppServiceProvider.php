@@ -111,6 +111,11 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(120)->by('api|'.$key);
         });
 
+        // Providers retry signed webhooks in bursts; rate-limit them separately from clients.
+        RateLimiter::for('provider-webhook', function (Request $request) {
+            return Limit::perMinute(1_000)->by('provider-webhook|'.$request->ip());
+        });
+
         RateLimiter::for('order-tracking', function (Request $request) {
             $fingerprint = hash('sha256', Str::lower(
                 trim((string) $request->input('order_number')).'|'.trim((string) $request->input('email'))

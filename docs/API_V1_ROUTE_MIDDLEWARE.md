@@ -11,12 +11,13 @@ This inventory groups routes that have identical middleware. `GET|HEAD` is shown
 | Label | Resolved middleware | Purpose |
 |---|---|---|
 | API | `api`, `throttle:api` | API state, bindings, and default API rate limit |
+| Provider webhook | `api`, `throttle:provider-webhook` | Signed Stripe/EasyPost delivery; 1,000 requests/minute per provider IP to absorb retry bursts without sharing the client limiter |
 | Customer auth | `auth:sanctum` | Requires an authenticated Sanctum user |
 | Admin authorization | `can:admin-access` | Requires the admin authorization gate |
 | Admin audit | `audit.admin` / `App\Http\Middleware\AuditAdminActions` | Records admin mutations/access as configured by the middleware |
 | Named throttle | `throttle:<name>` | Adds the endpoint-specific limiter on top of `throttle:api` |
 
-All `/api/v1/*` routes include the API group and `throttle:api`. API exceptions and validation failures are rendered as JSON even when the client omits `Accept: application/json`.
+All `/api/v1/*` routes include the API group and `throttle:api`, except signed provider webhooks, which replace the client limiter with `throttle:provider-webhook`. API exceptions and validation failures are rendered as JSON even when the client omits `Accept: application/json`.
 
 ## Public routes: API middleware only
 
@@ -39,7 +40,7 @@ All `/api/v1/*` routes include the API group and `throttle:api`. API exceptions 
 | `POST` | `/api/v1/webhooks/easypost` |
 | `POST` | `/api/v1/webhooks/stripe` |
 
-The webhook routes intentionally have no user authentication. Each controller fails closed unless the provider signature is valid and its webhook secret is configured.
+The webhook routes intentionally have no user authentication and use the dedicated provider webhook limiter rather than the general API limiter. Each controller fails closed unless the provider signature is valid and its webhook secret is configured.
 
 ## Public routes with additional throttles
 

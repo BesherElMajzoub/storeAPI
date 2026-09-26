@@ -43,9 +43,9 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
     Route::get('health', [HealthController::class, 'show']);
 
     // --- STRIPE WEBHOOK (no auth — verified by Stripe signature) ---
-    Route::post('webhooks/stripe', [StripeWebhookController::class, 'handle']);
+    Route::post('webhooks/stripe', [StripeWebhookController::class, 'handle'])->withoutMiddleware('throttle:api')->middleware('throttle:provider-webhook');
     // --- EASYPOST WEBHOOK (no auth — verified by EasyPost signature) ---
-    Route::post('webhooks/easypost', [EasyPostWebhookController::class, 'handle']);
+    Route::post('webhooks/easypost', [EasyPostWebhookController::class, 'handle'])->withoutMiddleware('throttle:api')->middleware('throttle:provider-webhook');
     // --- AUTH ---
     Route::prefix('auth')->group(function () {
         Route::post('register', [AuthController::class, 'register']);

@@ -1,0 +1,188 @@
+# 02 D5 Payments — Review (round 1)
+
+**Verdict: CHANGES-REQUESTED**. I found one new P0, one new P1, and the
+L-PAY-003 fix brings in a new problem.
+
+Reviewed: `results/02-D5-payments.md`, commits `185f0d4`…`f1562ff`, and the
+current code in `StripeWebhookController`, `StripeCheckoutService`,
+`Admin/OrderController` (refund + status transitions),
+`V1/OrderController` (checkout/cancel), `OrderObserver` and
+`OrderInventoryService::release`.
+
+## Independently verified — OK
+
+- Suite: **187 passed (1047 assertions)**. Pint passed. PHPStan `[OK]`, and
+  the baseline shrank by 24 lines. Matches the report.
+- L-PAY-001: the refund amount now only goes up, under a row lock. Correct.
+- L-PAY-002: the `payments` row is written inside the same locked transaction
+  as the paid transition. Correct.
+- L-PAY-004: amount, currency and session are rechecked under the lock, and the
+  transition is conditional (`pending_payment`/`unpaid` → `processing`/`paid`).
+  Side effects only fire for the transaction that wins. Correct and well tested.
+- `OrderInventoryService::release` is idempotent (`stock_released_at` guard
+  under lock), so running it twice is safe.
+- `default => true` for unhandled events avoids pointless Stripe retries. Good.
+
+## Required changes
+
+### R1 — NEW P0 (`L-PAY-007`): a cancelled order can still be paid
+**Where:** `Admin/OrderController::statusTransitions()` allows
+`pending_payment → cancelled` (single and bulk). Nothing in `app/` expires the
+Stripe Checkout Session when that happens: `expireCheckoutSession` is only used
+in the resume race at `V1/OrderController.php:184`.
+
+**Scenario:**
+1. The customer opens Checkout.
+2. The admin cancels the order, or bulk-cancels it. Stock is released.
+3. The session is still open (Stripe default is 24h), and the customer pays.
+4. `checkout.session.completed` hits a conditional update that finds 0 rows,
+   so the handler returns `false` and responds **422**.
+5. Stripe retries for 3 days. **The customer is charged, the order stays
+   cancelled, the stock has been sold again, and nobody is told.**
+
+**Required:**
+1. Every path that cancels a `pending_payment` order must first expire its
+   Stripe session. If Stripe says the session is already `complete`, the
+   cancel must fail with 409 and must not cancel. Paths: admin single status
+   update, bulk update, and any other path you find.
+2. Defence in depth in the webhook: a verified, amount-matching
+   `checkout.session.completed` for an order that can no longer accept payment
+   must not return 422. It must:
+   - return 200 (stop the retries)
+   - log `critical`
+   - dispatch an admin alert
+   - record the payment in `payments` with a status such as
+     `requires_refund`
+
+   Whether to also **auto-refund** is a business rule. Log it as
+   `NEEDS-DECISION` (my recommendation: auto-refund plus alert).
+3. Add tests for both parts. The webhook test must use a real signed payload,
+   like the existing ones.
+
+### R2 — NEW P1 (`L-PAY-008`): the expired-session handler has the same race as L-PAY-004
+**Where:** `StripeWebhookController::handleSessionExpired`. It compares the
+session id without a lock and then runs an unconditional `update()`.
+
+**Scenario:**
+1. `checkout.session.expired` arrives for `cs_old` and passes the session check.
+2. The customer resumes, and `stripe_session_id` becomes `cs_new`.
+3. The handler cancels the order and releases the stock.
+4. The customer pays `cs_new`, and R1 happens.
+
+**Required:** apply the L-PAY-004 pattern:
+- lock the row
+- recheck the session id under the lock
+- use a conditional update `where status = pending_payment and
+  payment_status = unpaid`
+
+Add a test mirroring
+`test_completed_webhook_is_rejected_when_its_session_is_replaced_during_processing`.
+
+### R3 — L-PAY-003 is reopened: a pending refund is reported as a failure
+The fix stops the order from being marked refunded too early, which is right.
+But it adds two new problems:
+- **The admin is told "Stripe refund failed" (502) while Stripe has actually
+  created the refund.** The money is on its way back, but the UI says it
+  failed. If the admin clicks again, Stripe errors or, for partial states,
+  refunds again.
+- **There is no idempotency key and no lock.** A double-click sends two
+  `Refund::create` calls at the same time.
+
+**Required:**
+1. Pass an idempotency key to `Refund::create`, e.g. `refund-order-{id}`,
+   via the request options. Add a unit or feature assertion that it is sent.
+2. A `pending` refund is not a failure. Changing the response (for example
+   202 "refund pending") touches the admin contract, so log it as
+   `NEEDS-DECISION` and propose the response. Until it's decided, the message
+   must at least not say "failed" for a pending refund.
+3. Make the webhook side consistent, **with a source**. Check Stripe's API docs
+   for whether `charge.amount_refunded` (in `charge.refunded`) includes
+   **pending** refunds, and whether a refund can later fail
+   (`refund.failed` / `charge.refund.updated`). Put the doc links in the result
+   file. If a counted refund can fail later, `handleChargeRefunded` currently
+   marks the order refunded and releases stock for money that never went back.
+   Handle the failure event, or document why it can't happen with card-only
+   Checkout. This ties into L-PAY-005.
+
+### R4 — P2 (`L-PAY-009`): the payments ledger ignores refunds
+L-PAY-002 added the `payments` row, but refunds (admin and webhook) never
+update it. It stays `completed` for the full amount after a full refund.
+Update the payment record's status and amount on partial and full refunds, or
+document why the ledger is intentionally write-once.
+
+### R5 — P2, check only: zero or tiny totals
+What happens in `createCheckoutSession` when the order total is **0** (100%
+coupon or free product) or **below Stripe's minimum charge** (≈ $0.50 USD)?
+Stripe rejects those sessions. Write a test for each. If the order ends up
+stuck or broken → finding. Coordinate the rule with D3.
+
+## Notes carried to later domains (not blocking D5)
+- **D7:** the admin can move a **paid** `processing` order to `cancelled`, and
+  `CancellationRequestController.php:81` also sets `cancelled`. Neither issues
+  a Stripe refund, so the money is kept unless someone refunds manually. D7
+  must define and test "cancel after payment ⇒ refund?" (NEEDS-DECISION if
+  unclear).
+- **D3:** `createCheckoutSession` creates a new Stripe `Coupon` object for
+  every discounted checkout, and again on every resume. Harmless for
+  correctness, but they pile up in the Stripe dashboard. Worth a note.
+
+## Owner decisions
+Recorded in `PROGRESS.md` once the owner answers:
+- L-PAY-005 (async payments)
+- L-PAY-006 (webhook throttle)
+- the new ones from R1 and R3
+
+## Next step
+Fix R1–R4 and answer R5. Append `## Round 2 response` to
+`results/02-D5-payments.md`, set the status to `READY-FOR-REVIEW`, and stop.
+Commit this review file with your first commit.
+
+---
+
+## Addendum — owner decisions (2026-09-26)
+
+These are now business rules. Implement them in the round 2 fixes. They are
+also recorded in `PROGRESS.md`.
+
+- **L-PAY-005 → A: card-only Checkout.** Set `payment_method_types: ['card']`
+  in `createCheckoutSession`. Apple Pay and Google Pay are still offered by
+  Checkout as card wallets. Add a test asserting the parameter is sent.
+  Async-payment events stay out of scope.
+- **L-PAY-006 → A: dedicated provider limiter.** Give `webhooks/stripe` and
+  `webhooks/easypost` their own named limiter with a much higher limit than
+  `api` (propose the number with a reason), instead of the generic one. Update
+  `docs/API_V1_ROUTE_MIDDLEWARE.md`. This change is owner-approved, so the
+  frozen-contract rule doesn't block it.
+- **L-PAY-007 (R1 part 2) → B: no automatic refund.** A verified payment for an
+  order that can no longer accept it must:
+  - return 200 to Stripe
+  - log `critical`
+  - send an admin alert
+  - record the payment as `requires_refund` (store the PaymentIntent on the
+    order/payment so a refund is possible)
+
+  **The admin refunds manually.** Make sure the admin refund endpoint accepts
+  this case. Today it requires `isPaid()`, which a cancelled/unpaid order won't
+  satisfy. Test the full path: payment on cancelled order → alert → admin
+  refund → refunded.
+
+- **BR-01 — a paid or shipped order is never cancelled or refunded without
+  admin approval.**
+  - The customer can cancel directly **only** while the order is unpaid.
+    After payment, the only option is a cancellation request.
+  - **Admin approval cancels the order** and releases stock. It does **not**
+    refund automatically. The payment stays `paid` until the admin presses
+    **Refund** as a separate step.
+  - Because the refund is a separate step, a paid order can be left cancelled
+    without its refund. Make sure admins can find these orders: status
+    `cancelled` with payment still `paid`, via the existing admin order
+    filters. Add a test for that filter, and send an admin alert on approval
+    that says "refund pending". If a proper list needs a new endpoint or
+    response field, log it as NEEDS-DECISION rather than building it.
+  - Refunds done in the Stripe dashboard arrive via `charge.refunded` and
+    count as admin actions. Existing handling applies (subject to R3).
+  - Verify and test BR-01 fully in **D7**. For D5, make sure nothing in the
+    payment code refunds automatically.
+
+**Still open (executor proposes, owner decides):** the admin refund response
+for a `pending` Stripe refund (R3 item 2).

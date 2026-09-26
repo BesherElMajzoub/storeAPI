@@ -99,6 +99,59 @@ class StripeCheckoutTest extends TestCase
         ]);
     }
 
+    public function test_checkout_session_is_card_only(): void
+    {
+        $order = Order::factory()->create(['total' => 50]);
+        $order->items()->create([
+            'product_id' => $this->product->id,
+            'product_name' => $this->product->name,
+            'price' => 50,
+            'quantity' => 1,
+            'total' => 50,
+        ]);
+
+        $stripe = new class extends StripeCheckoutService {
+            /** @var array<string, mixed> */
+            public array $params = [];
+
+            protected function createStripeCheckoutSession(array $sessionParams): StripeSession
+            {
+                $this->params = $sessionParams;
+
+                return StripeSession::constructFrom(['id' => 'cs_card_only']);
+            }
+        };
+
+        $stripe->createCheckoutSession($order->load('items'));
+
+        $this->assertSame(['card'], $stripe->params['payment_method_types']);
+    }
+
+    public function test_refund_request_uses_a_stable_order_idempotency_key(): void
+    {
+        $order = Order::factory()->create(['stripe_payment_intent_id' => 'pi_idempotent']);
+        $stripe = new class extends StripeCheckoutService {
+            /** @var array<string, mixed> */
+            public array $params = [];
+
+            /** @var array<string, string> */
+            public array $options = [];
+
+            protected function createStripeRefund(array $params, array $options): Refund
+            {
+                $this->params = $params;
+                $this->options = $options;
+
+                return Refund::constructFrom(['id' => 're_idempotent', 'status' => 'succeeded']);
+            }
+        };
+
+        $stripe->refundOrder($order);
+
+        $this->assertSame('pi_idempotent', $stripe->params['payment_intent']);
+        $this->assertSame("refund-order-{$order->id}", $stripe->options['idempotency_key']);
+    }
+
     // ── 3. Webhook: completed marks order paid ────────────────────────────────
 
     public function test_owner_can_resume_an_open_checkout_session_without_creating_another_one(): void

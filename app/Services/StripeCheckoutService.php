@@ -51,6 +51,8 @@ class StripeCheckoutService
 
         $sessionParams = [
             'mode' => 'payment',
+            // Keep payment confirmation synchronous: card wallets are still supported by Checkout.
+            'payment_method_types' => ['card'],
             'line_items' => $lineItems,
             'metadata' => [
                 'order_id' => (string) $order->id,
@@ -73,7 +75,7 @@ class StripeCheckoutService
             ];
         }
 
-        return StripeSession::create($sessionParams);
+        return $this->createStripeCheckoutSession($sessionParams);
     }
 
     /**
@@ -97,8 +99,22 @@ class StripeCheckoutService
      */
     public function refundOrder(Order $order): Refund
     {
-        return Refund::create([
+        return $this->createStripeRefund([
             'payment_intent' => $order->stripe_payment_intent_id,
+        ], [
+            'idempotency_key' => "refund-order-{$order->id}",
         ]);
+    }
+
+    /** @param array<string, mixed> $sessionParams */
+    protected function createStripeCheckoutSession(array $sessionParams): StripeSession
+    {
+        return StripeSession::create($sessionParams);
+    }
+
+    /** @param array<string, mixed> $params @param array<string, string> $options */
+    protected function createStripeRefund(array $params, array $options): Refund
+    {
+        return Refund::create($params, $options);
     }
 }
