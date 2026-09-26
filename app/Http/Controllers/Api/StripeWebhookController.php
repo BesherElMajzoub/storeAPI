@@ -141,6 +141,13 @@ class StripeWebhookController extends Controller
                 ]);
 
             if ($updated === 0) {
+                $isLateCancelledPayment = (string) $lockedOrder->getRawOriginal('status') === 'cancelled'
+                    && in_array((string) $lockedOrder->getRawOriginal('payment_status'), ['unpaid', 'failed'], true);
+
+                if (! $isLateCancelledPayment) {
+                    return null;
+                }
+
                 $payment = Payment::firstOrNew(['order_id' => $lockedOrder->id]);
                 $alreadyRequiresRefund = $payment->exists && $payment->getRawOriginal('status') === 'requires_refund'
                     && $payment->transaction_id === $paymentIntentId;
@@ -280,7 +287,6 @@ class StripeWebhookController extends Controller
 
             Payment::query()->where('order_id', $order->id)->update([
                 'status' => $isFullRefund ? 'refunded' : 'partially_refunded',
-                'amount' => $refundedAmount,
                 'updated_at' => now(),
             ]);
 

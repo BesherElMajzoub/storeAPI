@@ -13,6 +13,7 @@ use App\Services\StripeCheckoutService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
+use Mockery;
 use Stripe\Refund;
 use Tests\TestCase;
 
@@ -164,7 +165,6 @@ class StripeWebhookSecurityTest extends TestCase
             'payment_status' => 'failed',
         ]);
         $this->assertSame(1, $product->fresh()->stock_qty);
-        $this->assertNotNull($order->fresh()->stock_released_at);
     }
 
     public function test_an_expired_webhook_for_a_replaced_session_does_not_cancel_the_order(): void
@@ -262,7 +262,9 @@ class StripeWebhookSecurityTest extends TestCase
         $admin = User::factory()->create();
         $admin->roles()->attach(Role::create(['name' => 'Admin']));
         $this->mock(StripeCheckoutService::class, function ($mock): void {
-            $mock->shouldReceive('refundOrder')->once()->andReturn(Refund::constructFrom([
+            $mock->shouldReceive('refundOrder')->once()->with(Mockery::on(
+                fn (Order $candidate) => $candidate->stripe_payment_intent_id === 'pi_cancelled_paid'
+            ))->andReturn(Refund::constructFrom([
                 'id' => 're_manual_refund',
                 'status' => 'succeeded',
             ]));
@@ -282,6 +284,7 @@ class StripeWebhookSecurityTest extends TestCase
             'status' => 'refunded',
             'amount' => 100,
         ]);
+        $this->assertNotNull($order->fresh()->stock_released_at);
     }
 
     public function test_signed_partial_refund_records_amount_without_restocking_or_closing_order(): void
@@ -319,8 +322,39 @@ class StripeWebhookSecurityTest extends TestCase
         $this->assertDatabaseHas('payments', [
             'order_id' => $order->id,
             'status' => 'partially_refunded',
-            'amount' => 25,
+            'amount' => 100,
         ]);
+    }
+
+    public function test_completed_webhook_replay_after_full_refund_is_ignored_without_alerting(): void
+    {
+        $order = Order::factory()->for(User::factory())->create([
+            'status' => 'refunded',
+            'payment_status' => 'refunded',
+            'stripe_session_id' => 'cs_refunded_replay',
+            'stripe_payment_intent_id' => 'pi_refunded_replay',
+            'total' => 100,
+            'refunded_amount' => 100,
+        ]);
+        Payment::create([
+            'order_id' => $order->id,
+            'transaction_id' => 'pi_refunded_replay',
+            'payment_provider' => 'stripe',
+            'status' => 'refunded',
+            'amount' => 100,
+        ]);
+
+        $this->postSigned([
+            'id' => 'evt_refunded_replay', 'object' => 'event', 'type' => 'checkout.session.completed',
+            'data' => ['object' => [
+                'object' => 'checkout.session', 'id' => 'cs_refunded_replay',
+                'payment_intent' => 'pi_refunded_replay', 'amount_total' => 10000, 'currency' => 'usd',
+                'metadata' => ['order_id' => (string) $order->id],
+            ]],
+        ])->assertOk();
+
+        $this->assertDatabaseHas('payments', ['order_id' => $order->id, 'status' => 'refunded', 'amount' => 100]);
+        Queue::assertNothingPushed();
     }
 
     public function test_failed_refund_webhook_keeps_the_paid_order_open_and_alerts_admins(): void

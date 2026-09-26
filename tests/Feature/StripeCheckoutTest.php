@@ -577,9 +577,11 @@ class StripeCheckoutTest extends TestCase
 
         $this->actingAs($this->admin, 'sanctum')
             ->postJson("/api/v1/admin/orders/{$order->id}/refund")
-            ->assertStatus(502)
-            ->assertJsonPath('success', false)
-            ->assertJsonPath('message', 'Stripe refund is pending confirmation.');
+            ->assertAccepted()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('message', 'Refund is pending confirmation from Stripe.')
+            ->assertJsonPath('data.order_id', $order->id)
+            ->assertJsonPath('data.refund_status', 'pending');
 
         $this->assertDatabaseHas('orders', [
             'id' => $order->id,

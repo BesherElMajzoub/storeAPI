@@ -122,6 +122,24 @@ class OrderController extends Controller
     {
         $validated = $request->validated();
 
+        $preflightOrders = Order::query()->whereKey($validated['ids'])->get();
+        $preflightErrors = [];
+        foreach (collect($validated['ids'])->diff($preflightOrders->pluck('id')) as $missingId) {
+            $preflightErrors[(string) $missingId] = ['Order was not found.'];
+        }
+        foreach ($preflightOrders as $order) {
+            if (! $this->canTransition($order->status, $validated['status'], $this->statusTransitions())) {
+                $preflightErrors[(string) $order->id] = [
+                    "Cannot transition order from {$order->status} to {$validated['status']}.",
+                ];
+            }
+        }
+        if ($preflightErrors !== []) {
+            return $this->error('Status transition not allowed; no orders were changed.', 409, [
+                'orders' => $preflightErrors,
+            ]);
+        }
+
         $ordersToExpire = Order::query()->whereKey($validated['ids'])
             ->where('status', 'pending_payment')->get();
 
@@ -312,6 +330,7 @@ class OrderController extends Controller
     )]
     #[OA\Parameter(name: 'order', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))]
     #[OA\Response(response: 200, description: 'Order refunded')]
+    #[OA\Response(response: 202, description: 'Refund accepted and awaiting Stripe confirmation')]
     #[OA\Response(response: 409, description: 'Order not eligible for refund')]
     #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
     public function refund(int $order, StripeCheckoutService $stripe): JsonResponse
@@ -341,12 +360,24 @@ class OrderController extends Controller
                     $refund = $stripe->refundOrder($order);
 
                     if ($refund->status !== 'succeeded') {
+                        if (! in_array($refund->status, ['failed', 'canceled'], true)) {
+                            Log::warning('Stripe refund is pending confirmation.', [
+                                'order_id' => $order->id,
+                                'refund_status' => $refund->status,
+                            ]);
+
+                            return $this->success([
+                                'order_id' => $order->id,
+                                'refund_status' => $refund->status,
+                            ], 'Refund is pending confirmation from Stripe.', 202);
+                        }
+
                         Log::warning('Stripe refund is pending confirmation.', [
                             'order_id' => $order->id,
                             'refund_status' => $refund->status,
                         ]);
 
-                        return $this->error('Stripe refund is pending confirmation.', 502);
+                        return $this->error('Stripe refund failed.', 502);
                     }
                 } catch (\Throwable $e) {
                     Log::error('Stripe refund failed', [

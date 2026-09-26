@@ -107,6 +107,28 @@ class AdminOrderBulkStatusTest extends TestCase
         $this->assertSame('cancelled', $second->fresh()->status);
     }
 
+    public function test_bulk_cancellation_does_not_expire_a_session_when_another_transition_is_invalid(): void
+    {
+        $pendingPayment = Order::factory()->create([
+            'status' => 'pending_payment',
+            'payment_status' => 'unpaid',
+            'stripe_session_id' => 'cs_must_not_expire',
+        ]);
+        $delivered = Order::factory()->create(['status' => 'delivered']);
+
+        $this->mock(StripeCheckoutService::class, function ($mock): void {
+            $mock->shouldNotReceive('retrieveCheckoutSession');
+            $mock->shouldNotReceive('expireCheckoutSession');
+        });
+
+        $this->postJson('/api/v1/admin/orders/bulk-status', [
+            'ids' => [$pendingPayment->id, $delivered->id],
+            'status' => 'cancelled',
+        ])->assertConflict();
+
+        $this->assertSame('pending_payment', $pendingPayment->fresh()->status);
+    }
+
     protected function tearDown(): void
     {
         Mockery::close();
