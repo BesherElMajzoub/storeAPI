@@ -8,6 +8,7 @@ use App\Models\Order;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use OpenApi\Attributes as OA;
@@ -172,29 +173,31 @@ class StripeWebhookController extends Controller
             return;
         }
 
-        $order = Order::where('stripe_payment_intent_id', $paymentIntentId)->first();
-        if (! $order) {
-            return;
-        }
-
-        // Idempotency: skip if already refunded
-        if ($order->isRefunded()) {
-            return;
-        }
-
         $refundedAmount = round(((int) ($charge->amount_refunded ?? 0)) / 100, 2);
-        $isFullRefund = $refundedAmount >= (float) $order->total;
 
-        $order->update(array_filter([
-            'refunded_amount' => $refundedAmount,
-            'status' => $isFullRefund ? 'refunded' : null,
-            'payment_status' => $isFullRefund ? 'refunded' : null,
-            'refunded_at' => $isFullRefund ? now() : null,
-        ], fn ($value) => $value !== null));
+        DB::transaction(function () use ($paymentIntentId, $refundedAmount): void {
+            $order = Order::query()
+                ->where('stripe_payment_intent_id', $paymentIntentId)
+                ->lockForUpdate()
+                ->first();
 
-        Log::info("Stripe refund recorded for order {$order->order_number}.", [
-            'amount' => $refundedAmount,
-            'full_refund' => $isFullRefund,
-        ]);
+            if (! $order || $order->isRefunded() || $refundedAmount <= (float) $order->refunded_amount) {
+                return;
+            }
+
+            $isFullRefund = $refundedAmount >= (float) $order->total;
+
+            $order->update(array_filter([
+                'refunded_amount' => $refundedAmount,
+                'status' => $isFullRefund ? 'refunded' : null,
+                'payment_status' => $isFullRefund ? 'refunded' : null,
+                'refunded_at' => $isFullRefund ? now() : null,
+            ], fn ($value) => $value !== null));
+
+            Log::info("Stripe refund recorded for order {$order->order_number}.", [
+                'amount' => $refundedAmount,
+                'full_refund' => $isFullRefund,
+            ]);
+        });
     }
 }

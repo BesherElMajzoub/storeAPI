@@ -169,6 +169,40 @@ class StripeWebhookSecurityTest extends TestCase
         $this->assertNull($order->fresh()->stock_released_at);
     }
 
+    public function test_out_of_order_partial_refund_webhooks_do_not_reduce_the_recorded_refund_amount(): void
+    {
+        $order = Order::factory()->for(User::factory())->create([
+            'status' => 'processing',
+            'payment_status' => 'paid',
+            'stripe_payment_intent_id' => 'pi_out_of_order_refund',
+            'total' => 100,
+            'refunded_amount' => 0,
+        ]);
+
+        $this->postSigned([
+            'id' => 'evt_refund_newer', 'object' => 'event', 'type' => 'charge.refunded',
+            'data' => ['object' => [
+                'object' => 'charge', 'payment_intent' => 'pi_out_of_order_refund',
+                'amount_refunded' => 5000,
+            ]],
+        ])->assertOk();
+
+        $this->postSigned([
+            'id' => 'evt_refund_older', 'object' => 'event', 'type' => 'charge.refunded',
+            'data' => ['object' => [
+                'object' => 'charge', 'payment_intent' => 'pi_out_of_order_refund',
+                'amount_refunded' => 2500,
+            ]],
+        ])->assertOk();
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'refunded_amount' => 50,
+            'status' => 'processing',
+            'payment_status' => 'paid',
+        ]);
+    }
+
     private function postSigned(array $event)
     {
         $payload = json_encode($event, JSON_THROW_ON_ERROR);
