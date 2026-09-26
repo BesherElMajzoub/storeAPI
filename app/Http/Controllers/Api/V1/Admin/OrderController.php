@@ -291,7 +291,16 @@ class OrderController extends Controller
         }
 
         try {
-            $stripe->refundOrder($order);
+            $refund = $stripe->refundOrder($order);
+
+            if ($refund->status !== 'succeeded') {
+                Log::warning('Stripe refund is not complete.', [
+                    'order_id' => $order->id,
+                    'refund_status' => $refund->status,
+                ]);
+
+                return $this->error('Stripe refund has not completed.', 502);
+            }
         } catch (\Throwable $e) {
             Log::error('Stripe refund failed', [
                 'order_id' => $order->id,

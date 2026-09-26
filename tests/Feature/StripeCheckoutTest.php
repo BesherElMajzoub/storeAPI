@@ -420,7 +420,10 @@ class StripeCheckoutTest extends TestCase
         ]);
 
         $this->mock(StripeCheckoutService::class, function ($mock) {
-            $mock->shouldReceive('refundOrder')->once()->andReturn(new Refund);
+            $mock->shouldReceive('refundOrder')->once()->andReturn(Refund::constructFrom([
+                'id' => 're_succeeded',
+                'status' => 'succeeded',
+            ]));
         });
 
         $response = $this->actingAs($this->admin, 'sanctum')
@@ -437,6 +440,36 @@ class StripeCheckoutTest extends TestCase
     }
 
     // ── 7. Admin cannot refund an unpaid order ────────────────────────────────
+
+    public function test_admin_does_not_mark_an_order_refunded_until_stripe_confirms_the_refund(): void
+    {
+        $order = Order::factory()->create([
+            'user_id' => $this->user->id,
+            'status' => 'processing',
+            'payment_status' => 'paid',
+            'stripe_payment_intent_id' => 'pi_test_refund_pending',
+            'total' => 100.00,
+        ]);
+
+        $this->mock(StripeCheckoutService::class, function ($mock) {
+            $mock->shouldReceive('refundOrder')->once()->andReturn(Refund::constructFrom([
+                'id' => 're_pending',
+                'status' => 'pending',
+            ]));
+        });
+
+        $this->actingAs($this->admin, 'sanctum')
+            ->postJson("/api/v1/admin/orders/{$order->id}/refund")
+            ->assertStatus(502)
+            ->assertJsonPath('success', false);
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'status' => 'processing',
+            'payment_status' => 'paid',
+            'refunded_amount' => 0,
+        ]);
+    }
 
     public function test_admin_cannot_refund_unpaid_order(): void
     {
