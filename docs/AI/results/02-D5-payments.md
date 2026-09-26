@@ -135,6 +135,10 @@ Evidence: focused Stripe/admin tests **38 passed (117 assertions)**; Pint and PH
 
 ## Round 4 response
 
+## D4 entry conditions C1-C3
+
+C1 adds the post-refund stock and release-timestamp assertions to the late-payment recovery test. C2 adds the complete pending-admin-refund → signed full `charge.refunded` flow and replay assertion. C3 confirms this result file is saved as UTF-8 and removes the reported double-encoded separator characters. The conditions are committed with the first D4 test commit.
+
 R11 restores the expiry regression assertion for `stock_released_at`. R12 strengthens the late-payment/manual-refund path with a reserved product line: cancellation releases it once, while the late payment and subsequent refund leave both the product stock and release timestamp unchanged.
 
 R13 is covered by the pending-refund API assertion and the existing signed `charge.refunded` reconciliation path: pending returns 202 without local mutation; a signed refund event is the only path that finalizes the ledger/order. R14 evidence is consolidated below; no production behavior changed in this round.

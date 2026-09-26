@@ -298,6 +298,8 @@ class StripeWebhookSecurityTest extends TestCase
             'status' => 'refunded',
             'amount' => 100,
         ]);
+        $this->assertSame(1, $product->fresh()->stock_qty);
+        $this->assertEquals($releasedAt, $order->fresh()->stock_released_at);
     }
 
     public function test_signed_partial_refund_records_amount_without_restocking_or_closing_order(): void
@@ -393,6 +395,53 @@ class StripeWebhookSecurityTest extends TestCase
             'payment_status' => 'paid',
         ]);
         Queue::assertPushed(SendAdminAlert::class, 1);
+    }
+
+    public function test_pending_admin_refund_then_signed_full_refund_releases_stock_once(): void
+    {
+        $product = Product::factory()->create(['stock_qty' => 0, 'in_stock' => false]);
+        $order = Order::factory()->for(User::factory())->create([
+            'status' => 'processing', 'payment_status' => 'paid',
+            'stripe_session_id' => 'cs_full_refund', 'stripe_payment_intent_id' => 'pi_full_refund',
+            'total' => 100, 'stock_reserved_at' => now(),
+        ]);
+        $order->items()->create([
+            'product_id' => $product->id, 'product_name' => $product->name,
+            'price' => 100, 'quantity' => 1, 'total' => 100,
+        ]);
+        Payment::create([
+            'order_id' => $order->id, 'transaction_id' => 'pi_full_refund',
+            'payment_provider' => 'stripe', 'status' => 'completed', 'amount' => 100,
+        ]);
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::create(['name' => 'Admin']));
+        $this->mock(StripeCheckoutService::class, function ($mock): void {
+            $mock->shouldReceive('refundOrder')->once()->andReturn(Refund::constructFrom([
+                'id' => 're_pending_full', 'status' => 'pending',
+            ]));
+        });
+        $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/v1/admin/orders/{$order->id}/refund")
+            ->assertAccepted();
+
+        $this->postSigned([
+            'id' => 'evt_full_refund', 'object' => 'event', 'type' => 'charge.refunded',
+            'data' => ['object' => [
+                'object' => 'charge', 'payment_intent' => 'pi_full_refund', 'amount_refunded' => 10000,
+            ]],
+        ])->assertOk();
+        $releasedAt = $order->fresh()->stock_released_at;
+        $this->assertSame(1, $product->fresh()->stock_qty);
+        $this->assertDatabaseHas('payments', ['order_id' => $order->id, 'status' => 'refunded', 'amount' => 100]);
+
+        $this->postSigned([
+            'id' => 'evt_full_refund', 'object' => 'event', 'type' => 'charge.refunded',
+            'data' => ['object' => [
+                'object' => 'charge', 'payment_intent' => 'pi_full_refund', 'amount_refunded' => 10000,
+            ]],
+        ])->assertOk();
+        $this->assertSame(1, $product->fresh()->stock_qty);
+        $this->assertEquals($releasedAt, $order->fresh()->stock_released_at);
     }
 
     public function test_out_of_order_partial_refund_webhooks_do_not_reduce_the_recorded_refund_amount(): void
