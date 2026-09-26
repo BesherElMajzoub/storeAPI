@@ -12,7 +12,7 @@ Statuses: `NOT-STARTED` -> `IN-PROGRESS` -> `READY-FOR-REVIEW` ->
 | 02 Logic — D2 Catalog | `results/02-D2-catalog.md` | NOT-STARTED | — | — |
 | 02 Logic — D3 Pricing | `results/02-D3-pricing.md` | NOT-STARTED | — | — |
 | 02 Logic — D4 Inventory | `results/02-D4-inventory.md` | NOT-STARTED | — | — |
-| 02 Logic — D5 Payments | `results/02-D5-payments.md` | READY-FOR-REVIEW | — | 0 |
+| 02 Logic — D5 Payments | `results/02-D5-payments.md` | READY-FOR-REVIEW | — | 2 (NEEDS-DECISION) |
 | 02 Logic — D6 Shipping | `results/02-D6-shipping.md` | NOT-STARTED | — | — |
 | 02 Logic — D7 Order lifecycle | `results/02-D7-order-lifecycle.md` | NOT-STARTED | — | — |
 | 02 Logic — D8 Misc | `results/02-D8-misc.md` | NOT-STARTED | — | — |
