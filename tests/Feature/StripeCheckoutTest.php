@@ -38,7 +38,7 @@ class StripeCheckoutTest extends TestCase
         ]);
 
         // Grant admin role
-        $role = Role::firstOrCreate(['name' => 'admin']);
+        $role = Role::firstOrCreate(['name' => 'Admin']);
         $this->admin->roles()->attach($role->id);
     }
 
@@ -110,7 +110,8 @@ class StripeCheckoutTest extends TestCase
             'total' => 50,
         ]);
 
-        $stripe = new class extends StripeCheckoutService {
+        $stripe = new class extends StripeCheckoutService
+        {
             /** @var array<string, mixed> */
             public array $params = [];
 
@@ -130,7 +131,8 @@ class StripeCheckoutTest extends TestCase
     public function test_refund_request_uses_a_stable_order_idempotency_key(): void
     {
         $order = Order::factory()->create(['stripe_payment_intent_id' => 'pi_idempotent']);
-        $stripe = new class extends StripeCheckoutService {
+        $stripe = new class extends StripeCheckoutService
+        {
             /** @var array<string, mixed> */
             public array $params = [];
 
@@ -492,6 +494,48 @@ class StripeCheckoutTest extends TestCase
         ]);
     }
 
+    public function test_admin_cancellation_expires_an_open_checkout_session_before_releasing_the_order(): void
+    {
+        $order = Order::factory()->create([
+            'status' => 'pending_payment',
+            'payment_status' => 'unpaid',
+            'stripe_session_id' => 'cs_cancel_before_payment',
+        ]);
+        $openSession = StripeSession::constructFrom(['id' => 'cs_cancel_before_payment', 'status' => 'open']);
+
+        $this->mock(StripeCheckoutService::class, function ($mock) use ($openSession): void {
+            $mock->shouldReceive('retrieveCheckoutSession')->once()->with('cs_cancel_before_payment')->andReturn($openSession);
+            $mock->shouldReceive('expireCheckoutSession')->once()->with('cs_cancel_before_payment')->andReturn($openSession);
+        });
+
+        $this->actingAs($this->admin, 'sanctum')
+            ->postJson("/api/v1/admin/orders/{$order->id}/status", ['status' => 'cancelled'])
+            ->assertOk();
+
+        $this->assertSame('cancelled', $order->fresh()->status);
+    }
+
+    public function test_admin_cancellation_refuses_a_completed_checkout_session(): void
+    {
+        $order = Order::factory()->create([
+            'status' => 'pending_payment',
+            'payment_status' => 'unpaid',
+            'stripe_session_id' => 'cs_completed_before_cancel',
+        ]);
+        $completeSession = StripeSession::constructFrom(['id' => 'cs_completed_before_cancel', 'status' => 'complete']);
+
+        $this->mock(StripeCheckoutService::class, function ($mock) use ($completeSession): void {
+            $mock->shouldReceive('retrieveCheckoutSession')->once()->with('cs_completed_before_cancel')->andReturn($completeSession);
+            $mock->shouldNotReceive('expireCheckoutSession');
+        });
+
+        $this->actingAs($this->admin, 'sanctum')
+            ->postJson("/api/v1/admin/orders/{$order->id}/status", ['status' => 'cancelled'])
+            ->assertConflict();
+
+        $this->assertSame('pending_payment', $order->fresh()->status);
+    }
+
     // ── 7. Admin cannot refund an unpaid order ────────────────────────────────
 
     public function test_admin_does_not_mark_an_order_refunded_until_stripe_confirms_the_refund(): void
@@ -514,7 +558,8 @@ class StripeCheckoutTest extends TestCase
         $this->actingAs($this->admin, 'sanctum')
             ->postJson("/api/v1/admin/orders/{$order->id}/refund")
             ->assertStatus(502)
-            ->assertJsonPath('success', false);
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Stripe refund is pending confirmation.');
 
         $this->assertDatabaseHas('orders', [
             'id' => $order->id,

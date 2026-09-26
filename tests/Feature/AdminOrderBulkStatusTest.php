@@ -5,7 +5,10 @@ namespace Tests\Feature;
 use App\Models\Order;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\StripeCheckoutService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Mockery;
+use Stripe\Checkout\Session as StripeSession;
 use Tests\TestCase;
 
 class AdminOrderBulkStatusTest extends TestCase
@@ -71,5 +74,42 @@ class AdminOrderBulkStatusTest extends TestCase
             'ids' => [$order->id],
             'status' => 'cancelled',
         ])->assertUnprocessable()->assertJsonValidationErrors('ids.0');
+    }
+
+    public function test_bulk_cancellation_expires_every_open_checkout_session_before_updating_orders(): void
+    {
+        $first = Order::factory()->create([
+            'status' => 'pending_payment',
+            'payment_status' => 'unpaid',
+            'stripe_session_id' => 'cs_bulk_first',
+        ]);
+        $second = Order::factory()->create([
+            'status' => 'pending_payment',
+            'payment_status' => 'unpaid',
+            'stripe_session_id' => 'cs_bulk_second',
+        ]);
+
+        $this->mock(StripeCheckoutService::class, function ($mock): void {
+            foreach (['cs_bulk_first', 'cs_bulk_second'] as $sessionId) {
+                $mock->shouldReceive('retrieveCheckoutSession')->once()->with($sessionId)
+                    ->andReturn(StripeSession::constructFrom(['id' => $sessionId, 'status' => 'open']));
+                $mock->shouldReceive('expireCheckoutSession')->once()->with($sessionId)
+                    ->andReturn(StripeSession::constructFrom(['id' => $sessionId, 'status' => 'expired']));
+            }
+        });
+
+        $this->postJson('/api/v1/admin/orders/bulk-status', [
+            'ids' => [$first->id, $second->id],
+            'status' => 'cancelled',
+        ])->assertOk();
+
+        $this->assertSame('cancelled', $first->fresh()->status);
+        $this->assertSame('cancelled', $second->fresh()->status);
+    }
+
+    protected function tearDown(): void
+    {
+        Mockery::close();
+        parent::tearDown();
     }
 }

@@ -5,11 +5,15 @@ namespace Tests\Feature;
 use App\Jobs\SendAdminAlert;
 use App\Mail\OrderPaidMail;
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\Product;
+use App\Models\Role;
 use App\Models\User;
+use App\Services\StripeCheckoutService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
+use Stripe\Refund;
 use Tests\TestCase;
 
 class StripeWebhookSecurityTest extends TestCase
@@ -187,6 +191,99 @@ class StripeWebhookSecurityTest extends TestCase
         ]);
     }
 
+    public function test_expired_webhook_does_not_cancel_a_session_replaced_during_processing(): void
+    {
+        $order = Order::factory()->for(User::factory())->create([
+            'status' => 'pending_payment',
+            'payment_status' => 'unpaid',
+            'stripe_session_id' => 'cs_original_expiry',
+        ]);
+        $sessionWasReplaced = false;
+
+        Order::retrieved(function (Order $retrievedOrder) use ($order, &$sessionWasReplaced): void {
+            if ($sessionWasReplaced || $retrievedOrder->id !== $order->id) {
+                return;
+            }
+
+            $sessionWasReplaced = true;
+            $retrievedOrder->getConnection()->table('orders')
+                ->where('id', $order->id)
+                ->update(['stripe_session_id' => 'cs_replacement_expiry']);
+        });
+
+        $this->postSigned([
+            'id' => 'evt_replaced_expiry', 'object' => 'event', 'type' => 'checkout.session.expired',
+            'data' => ['object' => [
+                'object' => 'checkout.session', 'id' => 'cs_original_expiry',
+                'metadata' => ['order_id' => (string) $order->id],
+            ]],
+        ])->assertOk();
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'status' => 'pending_payment',
+            'payment_status' => 'unpaid',
+            'stripe_session_id' => 'cs_replacement_expiry',
+        ]);
+    }
+
+    public function test_signed_payment_for_a_cancelled_order_is_recorded_for_manual_refund(): void
+    {
+        $order = Order::factory()->for(User::factory())->create([
+            'status' => 'cancelled',
+            'payment_status' => 'unpaid',
+            'stripe_session_id' => 'cs_cancelled_paid',
+            'total' => 100,
+        ]);
+
+        $this->postSigned([
+            'id' => 'evt_cancelled_paid', 'object' => 'event', 'type' => 'checkout.session.completed',
+            'data' => ['object' => [
+                'object' => 'checkout.session', 'id' => 'cs_cancelled_paid',
+                'payment_intent' => 'pi_cancelled_paid', 'amount_total' => 10000, 'currency' => 'usd',
+                'metadata' => ['order_id' => (string) $order->id],
+            ]],
+        ])->assertOk();
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'status' => 'cancelled',
+            'payment_status' => 'unpaid',
+            'stripe_payment_intent_id' => 'pi_cancelled_paid',
+        ]);
+        $this->assertDatabaseHas('payments', [
+            'order_id' => $order->id,
+            'transaction_id' => 'pi_cancelled_paid',
+            'status' => 'requires_refund',
+            'amount' => 100,
+        ]);
+        Queue::assertPushed(SendAdminAlert::class, 1);
+
+        $admin = User::factory()->create();
+        $admin->roles()->attach(Role::create(['name' => 'Admin']));
+        $this->mock(StripeCheckoutService::class, function ($mock): void {
+            $mock->shouldReceive('refundOrder')->once()->andReturn(Refund::constructFrom([
+                'id' => 're_manual_refund',
+                'status' => 'succeeded',
+            ]));
+        });
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/v1/admin/orders/{$order->id}/refund")
+            ->assertOk();
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'status' => 'refunded',
+            'payment_status' => 'refunded',
+        ]);
+        $this->assertDatabaseHas('payments', [
+            'order_id' => $order->id,
+            'status' => 'refunded',
+            'amount' => 100,
+        ]);
+    }
+
     public function test_signed_partial_refund_records_amount_without_restocking_or_closing_order(): void
     {
         $order = Order::factory()->for(User::factory())->create([
@@ -195,6 +292,13 @@ class StripeWebhookSecurityTest extends TestCase
             'stripe_payment_intent_id' => 'pi_partial',
             'total' => 100,
             'refunded_amount' => 0,
+        ]);
+        Payment::create([
+            'order_id' => $order->id,
+            'transaction_id' => 'pi_partial',
+            'payment_provider' => 'stripe',
+            'status' => 'completed',
+            'amount' => 100,
         ]);
 
         $this->postSigned([
@@ -212,6 +316,36 @@ class StripeWebhookSecurityTest extends TestCase
             'refunded_amount' => 25,
         ]);
         $this->assertNull($order->fresh()->stock_released_at);
+        $this->assertDatabaseHas('payments', [
+            'order_id' => $order->id,
+            'status' => 'partially_refunded',
+            'amount' => 25,
+        ]);
+    }
+
+    public function test_failed_refund_webhook_keeps_the_paid_order_open_and_alerts_admins(): void
+    {
+        $order = Order::factory()->for(User::factory())->create([
+            'status' => 'processing',
+            'payment_status' => 'paid',
+            'stripe_payment_intent_id' => 'pi_failed_refund',
+            'total' => 100,
+        ]);
+
+        $this->postSigned([
+            'id' => 'evt_failed_refund', 'object' => 'event', 'type' => 'refund.failed',
+            'data' => ['object' => [
+                'object' => 'refund', 'id' => 're_failed',
+                'payment_intent' => 'pi_failed_refund', 'failure_reason' => 'lost_or_stolen_card',
+            ]],
+        ])->assertOk();
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'status' => 'processing',
+            'payment_status' => 'paid',
+        ]);
+        Queue::assertPushed(SendAdminAlert::class, 1);
     }
 
     public function test_out_of_order_partial_refund_webhooks_do_not_reduce_the_recorded_refund_amount(): void

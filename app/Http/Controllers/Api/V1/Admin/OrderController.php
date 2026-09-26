@@ -7,9 +7,12 @@ use App\Http\Requests\Api\V1\Admin\BulkUpdateOrderStatusRequest;
 use App\Http\Requests\Api\V1\Admin\UpdateOrderStatusRequest;
 use App\Http\Resources\AdminOrderResource;
 use App\Models\Order;
+use App\Models\Payment;
 use App\Services\StripeCheckoutService;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use OpenApi\Attributes as OA;
@@ -115,9 +118,31 @@ class OrderController extends Controller
     )]
     #[OA\Response(response: 200, description: 'All order statuses updated')]
     #[OA\Response(response: 409, description: 'At least one transition is invalid; no orders changed')]
-    public function bulkUpdateStatus(BulkUpdateOrderStatusRequest $request): JsonResponse
+    public function bulkUpdateStatus(BulkUpdateOrderStatusRequest $request, StripeCheckoutService $stripe): JsonResponse
     {
         $validated = $request->validated();
+
+        $ordersToExpire = Order::query()->whereKey($validated['ids'])
+            ->where('status', 'pending_payment')->get();
+
+        foreach ($ordersToExpire as $order) {
+            if ($validated['status'] !== 'cancelled') {
+                continue;
+            }
+
+            try {
+                if (! $this->expirePendingPaymentSession($order, $stripe)) {
+                    return $this->error('A Stripe Checkout Session has already completed; no orders were changed.', 409);
+                }
+            } catch (\Throwable $e) {
+                Log::error('Unable to expire Stripe Checkout Session before bulk cancellation.', [
+                    'order_id' => $order->id,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return $this->error('Payment provider error. No orders were changed.', 502);
+            }
+        }
 
         $outcome = DB::transaction(function () use ($validated): array {
             $orders = Order::query()
@@ -200,7 +225,7 @@ class OrderController extends Controller
     )]
     #[OA\Response(response: 409, description: 'Status transition not allowed')]
     #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
-    public function updateStatus(UpdateOrderStatusRequest $request, $id)
+    public function updateStatus(UpdateOrderStatusRequest $request, $id, StripeCheckoutService $stripe)
     {
         $order = Order::findOrFail($id);
         $data = $request->validated();
@@ -220,6 +245,21 @@ class OrderController extends Controller
 
         if ($errors) {
             return $this->error('Status transition not allowed.', 409, $errors);
+        }
+
+        if (($data['status'] ?? null) === 'cancelled' && (string) $order->getRawOriginal('status') === 'pending_payment') {
+            try {
+                if (! $this->expirePendingPaymentSession($order, $stripe)) {
+                    return $this->error('Stripe Checkout Session has already completed; the order was not cancelled.', 409);
+                }
+            } catch (\Throwable $e) {
+                Log::error('Unable to expire Stripe Checkout Session before cancellation.', [
+                    'order_id' => $order->id,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return $this->error('Payment provider error. The order was not cancelled.', 502);
+            }
         }
 
         $order = DB::transaction(function () use ($order, $data) {
@@ -278,49 +318,83 @@ class OrderController extends Controller
     {
         $order = Order::findOrFail($order);
 
-        if (! $order->isPaid()) {
-            return $this->error('Order is not paid and cannot be refunded.', 409);
-        }
-
-        if ($order->isRefunded()) {
-            return $this->error('Order has already been refunded.', 409);
-        }
-
-        if (! $order->stripe_payment_intent_id) {
-            return $this->error('No Stripe PaymentIntent found for this order.', 409);
-        }
-
         try {
-            $refund = $stripe->refundOrder($order);
+            return Cache::lock("order:{$order->id}:refund", 60)->block(5, function () use ($order, $stripe): JsonResponse {
+                $order->refresh();
+                $requiresRefund = Payment::query()
+                    ->where('order_id', $order->id)
+                    ->value('status') === 'requires_refund';
 
-            if ($refund->status !== 'succeeded') {
-                Log::warning('Stripe refund is not complete.', [
-                    'order_id' => $order->id,
-                    'refund_status' => $refund->status,
+                if (! $order->isPaid() && ! $requiresRefund) {
+                    return $this->error('Order is not paid and cannot be refunded.', 409);
+                }
+
+                if ($order->isRefunded()) {
+                    return $this->error('Order has already been refunded.', 409);
+                }
+
+                if (! $order->stripe_payment_intent_id) {
+                    return $this->error('No Stripe PaymentIntent found for this order.', 409);
+                }
+
+                try {
+                    $refund = $stripe->refundOrder($order);
+
+                    if ($refund->status !== 'succeeded') {
+                        Log::warning('Stripe refund is pending confirmation.', [
+                            'order_id' => $order->id,
+                            'refund_status' => $refund->status,
+                        ]);
+
+                        return $this->error('Stripe refund is pending confirmation.', 502);
+                    }
+                } catch (\Throwable $e) {
+                    Log::error('Stripe refund failed', [
+                        'order_id' => $order->id,
+                        'error' => $e->getMessage(),
+                    ]);
+
+                    return $this->error('Stripe refund failed.', 502);
+                }
+
+                $order->update([
+                    'status' => 'refunded',
+                    'payment_status' => 'refunded',
+                    'refunded_amount' => $order->total,
+                    'refunded_at' => now(),
+                ]);
+                $order->payment()?->update([
+                    'status' => 'refunded',
+                    'amount' => $order->total,
                 ]);
 
-                return $this->error('Stripe refund has not completed.', 502);
-            }
-        } catch (\Throwable $e) {
-            Log::error('Stripe refund failed', [
-                'order_id' => $order->id,
-                'error' => $e->getMessage(),
-            ]);
+                return $this->success(
+                    ['message' => "Order #{$order->order_number} has been refunded successfully."],
+                    'Order refunded.'
+                );
+            });
+        } catch (LockTimeoutException) {
+            return $this->error('A refund request is already in progress. Please try again.', 409);
+        }
+    }
 
-            return $this->error('Stripe refund failed.', 502);
+    private function expirePendingPaymentSession(Order $order, StripeCheckoutService $stripe): bool
+    {
+        if (! $order->stripe_session_id) {
+            return true;
         }
 
-        $order->update([
-            'status' => 'refunded',
-            'payment_status' => 'refunded',
-            'refunded_amount' => $order->total,
-            'refunded_at' => now(),
-        ]);
+        $session = $stripe->retrieveCheckoutSession($order->stripe_session_id);
 
-        return $this->success(
-            ['message' => "Order #{$order->order_number} has been refunded successfully."],
-            'Order refunded.'
-        );
+        if ($session->status === 'complete') {
+            return false;
+        }
+
+        if ($session->status === 'open') {
+            $stripe->expireCheckoutSession($order->stripe_session_id);
+        }
+
+        return true;
     }
 
     private function success($data, string $message, int $status = 200): JsonResponse

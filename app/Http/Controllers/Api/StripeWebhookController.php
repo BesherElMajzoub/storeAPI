@@ -60,6 +60,7 @@ class StripeWebhookController extends Controller
             'checkout.session.completed' => $this->handleSessionCompleted($event),
             'checkout.session.expired' => tap(true, fn () => $this->handleSessionExpired($event)),
             'charge.refunded' => tap(true, fn () => $this->handleChargeRefunded($event)),
+            'refund.failed' => tap(true, fn () => $this->handleRefundFailed($event)),
             default => true,
         };
 
@@ -110,7 +111,7 @@ class StripeWebhookController extends Controller
             return false;
         }
 
-        $order = DB::transaction(function () use ($order, $paymentIntentId, $session) {
+        $result = DB::transaction(function () use ($order, $paymentIntentId, $session): array|bool|null {
             $lockedOrder = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
 
             $expectedAmount = (int) round((float) $lockedOrder->total * 100);
@@ -140,7 +141,19 @@ class StripeWebhookController extends Controller
                 ]);
 
             if ($updated === 0) {
-                return false;
+                $payment = Payment::firstOrNew(['order_id' => $lockedOrder->id]);
+                $alreadyRequiresRefund = $payment->exists && $payment->getRawOriginal('status') === 'requires_refund'
+                    && $payment->transaction_id === $paymentIntentId;
+
+                $lockedOrder->update(['stripe_payment_intent_id' => $paymentIntentId]);
+                $payment->fill([
+                    'transaction_id' => $paymentIntentId,
+                    'payment_provider' => 'stripe',
+                    'status' => 'requires_refund',
+                    'amount' => $lockedOrder->total,
+                ])->save();
+
+                return ['state' => 'requires_refund', 'notify' => ! $alreadyRequiresRefund, 'order' => $lockedOrder->fresh()];
             }
 
             $lockedOrder->refresh();
@@ -155,16 +168,34 @@ class StripeWebhookController extends Controller
                 ]
             );
 
-            return $lockedOrder->fresh();
+            return ['state' => 'paid', 'order' => $lockedOrder->fresh()];
         });
 
-        if ($order === false) {
+        if ($result === false) {
             return false;
         }
 
-        if (! $order) {
+        if ($result === null) {
             return true;
         }
+
+        $resultOrder = $result['order'];
+
+        if ($result['state'] === 'requires_refund') {
+            if ($result['notify']) {
+                Log::critical('Stripe payment completed after the order stopped accepting payment.', [
+                    'order_id' => $resultOrder->id,
+                    'order_status' => $resultOrder->getRawOriginal('status'),
+                    'payment_intent_id' => $paymentIntentId,
+                ]);
+                SendAdminAlert::dispatch("URGENT: Stripe payment {$paymentIntentId} needs a manual refund for cancelled order {$resultOrder->order_number}.")
+                    ->onQueue('notifications');
+            }
+
+            return true;
+        }
+
+        $order = $resultOrder;
 
         $itemCount = (int) $order->items()->sum('quantity');
         $message = "🛒 New order {$order->order_number} — \${$order->total} — {$itemCount} items";
@@ -185,31 +216,36 @@ class StripeWebhookController extends Controller
             return;
         }
 
-        $order = Order::find($orderId);
-        if (! $order) {
-            return;
-        }
+        $cancelledOrder = DB::transaction(function () use ($orderId, $session): ?Order {
+            $order = Order::query()->whereKey($orderId)->lockForUpdate()->first();
 
-        if ((string) $session->id !== (string) $order->stripe_session_id) {
-            Log::warning('Stripe expired-session webhook did not match the order session.', [
-                'order_id' => $order->id,
+            if (! $order) {
+                return null;
+            }
+
+            $order->refresh();
+
+            if ((string) $session->id !== (string) $order->stripe_session_id) {
+                return null;
+            }
+
+            if ((string) $order->getRawOriginal('status') !== 'pending_payment'
+                || (string) $order->getRawOriginal('payment_status') !== 'unpaid') {
+                return null;
+            }
+
+            $order->update([
+                'status' => 'cancelled',
+                'payment_status' => 'failed',
+                'cancelled_at' => now(),
             ]);
 
-            return;
+            return $order;
+        });
+
+        if ($cancelledOrder) {
+            Log::info("Order {$cancelledOrder->order_number} cancelled due to expired Stripe session.");
         }
-
-        // Idempotency: skip if already decided
-        if (in_array($order->status, ['processing', 'cancelled', 'refunded'], true)) {
-            return;
-        }
-
-        $order->update([
-            'status' => 'cancelled',
-            'payment_status' => 'failed',
-            'cancelled_at' => now(),
-        ]);
-
-        Log::info("Order {$order->order_number} cancelled due to expired Stripe session.");
     }
 
     private function handleChargeRefunded(Event $event): void
@@ -242,10 +278,40 @@ class StripeWebhookController extends Controller
                 'refunded_at' => $isFullRefund ? now() : null,
             ], fn ($value) => $value !== null));
 
+            Payment::query()->where('order_id', $order->id)->update([
+                'status' => $isFullRefund ? 'refunded' : 'partially_refunded',
+                'amount' => $refundedAmount,
+                'updated_at' => now(),
+            ]);
+
             Log::info("Stripe refund recorded for order {$order->order_number}.", [
                 'amount' => $refundedAmount,
                 'full_refund' => $isFullRefund,
             ]);
         });
+    }
+
+    private function handleRefundFailed(Event $event): void
+    {
+        $refund = $event->data->object;
+        $paymentIntentId = $refund->payment_intent ?? null;
+
+        if (! $paymentIntentId) {
+            return;
+        }
+
+        $order = Order::query()->where('stripe_payment_intent_id', $paymentIntentId)->first();
+        if (! $order) {
+            return;
+        }
+
+        Log::critical('Stripe refund failed after it was created.', [
+            'order_id' => $order->id,
+            'payment_intent_id' => $paymentIntentId,
+            'refund_id' => $refund->id ?? null,
+            'failure_reason' => $refund->failure_reason ?? null,
+        ]);
+        SendAdminAlert::dispatch("URGENT: Stripe refund {$refund->id} failed for order {$order->order_number}; manual follow-up is required.")
+            ->onQueue('notifications');
     }
 }
