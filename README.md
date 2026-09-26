@@ -1,59 +1,126 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Otantik Queen — Store API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Laravel 12 backend API for the Otantik Queen e-commerce storefront: catalog,
+cart/checkout, Stripe payments, EasyPost shipping, coupons, wishlist,
+reviews, and an admin back office.
 
-## About Laravel
+## Requirements
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- PHP ^8.2 with the extensions Laravel 12 requires (mbstring, pdo_mysql,
+  openssl, etc.)
+- Composer
+- MySQL (or another Laravel-supported DB for local dev — see below for the
+  DB the test suite specifically requires)
+- Node.js + npm (for the Vite-built admin/asset pipeline)
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Setup
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+```
 
-## Learning Laravel
+Edit `.env` and set at minimum:
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+- `DB_*` — your local database connection.
+- `STRIPE_SECRET`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET` — required
+  for checkout/payments to work at all (use Stripe test-mode keys locally).
+- `EASYPOST_API_KEY`, `EASYPOST_WEBHOOK_SECRET` — required for shipping
+  rates/labels/tracking.
+- `GOOGLE_CLIENT_ID` — required for "Sign in with Google".
+- `GOOGLE_PLACES_API_KEY` / `GEOAPIFY_API_KEY` — required for address
+  autocomplete (only one provider is needed, set by `LOCATION_PROVIDER`).
+- `FRONTEND_URL` and `SANCTUM_STATEFUL_DOMAINS` — must match the storefront's
+  actual origin(s) for CORS and cookie-based auth to work.
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+Then:
 
-## Laravel Sponsors
+```bash
+php artisan migrate
+php artisan db:seed
+```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+Demo accounts (admin + sample products) are only created in `local`/`testing`
+environments — the seeders refuse to run them in production. Never reuse a
+local demo password for a deployed account.
 
-### Premium Partners
+Or run all of the above (except editing `.env`'s service keys) in one step:
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+```bash
+composer setup
+```
 
-## Contributing
+## Running the app
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```bash
+composer dev
+```
 
-## Code of Conduct
+This starts the HTTP server, queue worker, log tailer (`pail`), and Vite dev
+server together. Or run `php artisan serve` on its own if you don't need the
+queue worker/asset pipeline locally.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+- **Base URL**: `http://localhost:8000/api/v1`
+- **API docs**: Swagger UI at `/api/documentation` (via `l5-swagger`), or
+  import `postman_collection.json` into Postman.
 
-## Security Vulnerabilities
+## Running tests
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+The test suite requires its own **MySQL** database — it does not use SQLite
+or your dev database. `phpunit.xml` points tests at
+`127.0.0.1:3308` / database `storeapi_testing` / user `root` with no
+password. Start a MySQL instance matching that (a local install or a
+container mapped to port 3308 both work), then:
+
+```bash
+composer test
+```
+
+or directly:
+
+```bash
+php artisan test
+```
+
+Static analysis and style:
+
+```bash
+./vendor/bin/pint --test    # code style, no changes
+./vendor/bin/pint            # code style, auto-fix
+./vendor/bin/phpstan analyse --level=5
+```
+
+External providers (Stripe, EasyPost, Geoapify, Google, Telegram, mail) are
+always faked or mocked in tests — the suite never makes a real network call
+to any of them, and never needs real API keys to pass.
+
+## Architecture
+
+- **Controllers** (`app/Http/Controllers/Api/V1`): thin — validate via a
+  `FormRequest`, call a service, return a `Resource`.
+- **Services** (`app/Services`): business logic (pricing, inventory,
+  shipping, OTP, Stripe/EasyPost integration, etc.).
+- **Models** (`app/Models`): Eloquent models and relationships.
+- **Requests** (`app/Http/Requests`): all input validation.
+- **Resources** (`app/Http/Resources`): all API response shapes.
+- **Contracts** (`app/Contracts`) + provider bindings in
+  `AppServiceProvider`: external services (EasyPost, geolocation) are
+  swappable behind an interface; tests bind a fake implementation.
+- **Auth**: Laravel Sanctum (Bearer tokens for API clients, stateful
+  httpOnly-cookie sessions for the first-party SPA) plus a custom
+  `admin-access` Gate backed by a role/permission system.
+
+Frozen API contracts the frontend depends on — do not change a route,
+request field, response shape, status code, or error format without
+updating these and coordinating with the frontend:
+
+- `docs/AUTHENTICATION_CONTRACT.md`
+- `docs/PAYMENT_CHECKOUT_CONTRACT.md`
+- `docs/SHIPPING_CONTRACT.md`
+- `docs/API_V1_ROUTE_MIDDLEWARE.md`
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+The Laravel framework is open-sourced software licensed under the
+[MIT license](https://opensource.org/licenses/MIT).
