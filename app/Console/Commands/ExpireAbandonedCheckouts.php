@@ -30,20 +30,27 @@ class ExpireAbandonedCheckouts extends Command
 
                             continue;
                         }
+                        $sessionExpired = $session->status === 'expired'
+                            || ($session->status === 'open'
+                                && isset($session->expires_at)
+                                && (int) $session->expires_at <= now()->timestamp);
+
+                        if (! $sessionExpired) {
+                            continue;
+                        }
+
                         if ($session->status === 'open') {
                             $stripe->expireCheckoutSession($candidate->stripe_session_id);
                         }
-                        if (in_array($session->status, ['open', 'expired'], true)) {
-                            DB::transaction(function () use ($candidate): void {
-                                $order = Order::query()->whereKey($candidate->id)->lockForUpdate()->first();
-                                if ($order
-                                    && $order->getRawOriginal('status') === 'pending_payment'
-                                    && $order->getRawOriginal('payment_status') === 'unpaid'
-                                    && $order->stripe_session_id === $candidate->stripe_session_id) {
-                                    $order->update(['status' => 'cancelled', 'payment_status' => 'failed', 'cancelled_at' => now()]);
-                                }
-                            });
-                        }
+                        DB::transaction(function () use ($candidate): void {
+                            $order = Order::query()->whereKey($candidate->id)->lockForUpdate()->first();
+                            if ($order
+                                && $order->getRawOriginal('status') === 'pending_payment'
+                                && $order->getRawOriginal('payment_status') === 'unpaid'
+                                && $order->stripe_session_id === $candidate->stripe_session_id) {
+                                $order->update(['status' => 'cancelled', 'payment_status' => 'failed', 'cancelled_at' => now()]);
+                            }
+                        });
                     } catch (\Throwable $e) {
                         Log::warning('Unable to expire abandoned checkout; will retry.', ['order_id' => $candidate->id, 'error' => $e->getMessage()]);
                     }
