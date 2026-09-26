@@ -498,8 +498,11 @@ class OrderController extends Controller
 
         // 2️⃣ Create Stripe Checkout Session
         if ((float) $order->total === 0.0) {
-            $order->update(['status' => 'processing', 'payment_status' => 'paid', 'paid_at' => now()]);
-            Payment::create(['order_id' => $order->id, 'payment_provider' => 'free', 'status' => 'completed', 'amount' => 0]);
+            DB::transaction(function () use ($order): void {
+                $order->update(['status' => 'processing', 'payment_status' => 'paid', 'paid_at' => now()]);
+                Payment::create(['order_id' => $order->id, 'payment_provider' => 'free', 'status' => 'completed', 'amount' => 0]);
+            });
+
             SendAdminAlert::dispatch("New free order {$order->order_number}")->onQueue('notifications');
             Mail::to($order->user()->value('email'))->queue(new OrderPaidMail($order));
 

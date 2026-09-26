@@ -114,4 +114,33 @@ class PricingBatchTest extends TestCase
         $this->assertSame(10.0, (float) $order->shipping_cost);
         $this->assertNull($order->free_shipping_reason);
     }
+
+    public function test_free_shipping_threshold_minus_one_cent_charges_shipping(): void
+    {
+        app(FreeShippingService::class)->update(true, 100);
+        $this->product->update(['price' => 99.99]);
+        $shipping = $this->createShippingQuote($this->product, amount: 10);
+
+        $this->actingAs($this->user, 'sanctum')->postJson('/api/v1/orders', [
+            'items' => $shipping['items'], 'shipping_address' => $shipping['address'], 'shipping_rate_id' => $shipping['rateId'],
+        ])->assertCreated();
+
+        $order = Order::firstOrFail();
+        $this->assertSame(10.0, (float) $order->shipping_cost);
+        $this->assertNull($order->free_shipping_reason);
+    }
+
+    public function test_free_shipping_threshold_exactly_is_free(): void
+    {
+        app(FreeShippingService::class)->update(true, 100);
+        $shipping = $this->createShippingQuote($this->product, amount: 10);
+
+        $this->actingAs($this->user, 'sanctum')->postJson('/api/v1/orders', [
+            'items' => $shipping['items'], 'shipping_address' => $shipping['address'], 'shipping_rate_id' => $shipping['rateId'],
+        ])->assertCreated();
+
+        $order = Order::firstOrFail();
+        $this->assertSame(0.0, (float) $order->shipping_cost);
+        $this->assertSame('threshold', $order->free_shipping_reason);
+    }
 }

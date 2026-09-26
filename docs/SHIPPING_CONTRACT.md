@@ -89,7 +89,7 @@ Successful response (`200`):
 
 Two independent mechanisms can waive the customer's shipping charge to `$0`. If either qualifies, `shipping_cost` on the order is `0` — the backend still tracks the real carrier cost separately for its own accounting, which is not exposed to customers.
 
-**1. Automatic subtotal threshold.** Admin-configurable, evaluated against the cart's raw subtotal (before any discount), inclusive (`subtotal >= threshold`).
+**1. Automatic subtotal threshold.** Admin-configurable, evaluated against the cart subtotal after coupon discount, inclusive (`subtotal - discount >= threshold`). Frontends should use the discounted subtotal when calculating the remaining amount needed for free shipping.
 
 **2. `free_shipping` coupon type.** A coupon can now have `type: "free_shipping"` in addition to `percentage`/`fixed`. It follows every normal coupon rule (active, not expired, usage limits, `minimum_order_amount`) but produces a `$0` subtotal discount — it only waives shipping, it does not also discount the cart.
 

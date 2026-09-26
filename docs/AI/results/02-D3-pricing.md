@@ -54,6 +54,6 @@ Composer audit: No security vulnerability advisories found.
 
 ## Frontend impact
 
-Paid checkout contracts remain unchanged. A zero-total order returns `checkout_url: null`, `payment_required: false`, and a null session id so the storefront skips the Stripe redirect. Minimum-charge rejection is HTTP 422 with error code `minimum_charge`.
+Paid checkout contracts remain unchanged. A zero-total order returns `checkout_url: null`, `payment_required: false`, and a null session id so the storefront skips the Stripe redirect. Minimum-charge rejection is HTTP 422 with error code `minimum_charge`. Free-shipping progress indicators must calculate eligibility and "X more" from `subtotal - discount`, not the raw subtotal.
 
 This domain is `READY-FOR-REVIEW` pending the B1 full-suite gate.
