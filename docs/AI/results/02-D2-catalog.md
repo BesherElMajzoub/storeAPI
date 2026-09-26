@@ -91,6 +91,16 @@ unchecked are now covered).
 - **Location:** `app/Models/Campaign.php`, `app/Models/Post.php`
 - **Problem:** `grep -rn "App\\Models\\Campaign\|App\\Models\\Post\b|Campaign::|Post::"` across `app/`, `routes/`, and `database/factories/` finds zero references outside the model files themselves — no controller, route, factory, seeder, or migration-backed table interaction touches either model in the current codebase (only false-positive substring matches like `Route::post` and `EasyPost*` appear in a naive grep). Flagged per the D8/D2 checklist for phase-03 removal, not deleted now to stay in scope.
 
+### D2-F4 — P1: editing or deleting a review 500'd for everyone, owner included
+
+Filed and fixed in full under `results/04-e2e-journeys.md` (found via the J14
+authorization-sweep journey in B4). Cross-referenced here since the bug lives
+in the D2 Reviews feature: `ReviewController::update`/`::destroy` called
+`$this->authorize(...)`, an undefined method (neither the controller nor its
+base class used `AuthorizesRequests`), so both routes threw a 500 for
+everyone, not just cross-user attempts. Fixed by adding the trait to the base
+`Controller`; see `results/04-e2e-journeys.md` for full evidence.
+
 ## Tests added/strengthened
 
 - `tests/Feature/AdminDashboardTest.php` (new file):
