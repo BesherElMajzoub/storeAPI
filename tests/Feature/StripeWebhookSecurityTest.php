@@ -50,6 +50,13 @@ class StripeWebhookSecurityTest extends TestCase
             'payment_status' => 'paid',
             'stripe_payment_intent_id' => 'pi_signed',
         ]);
+        $this->assertDatabaseHas('payments', [
+            'order_id' => $order->id,
+            'transaction_id' => 'pi_signed',
+            'payment_provider' => 'stripe',
+            'status' => 'completed',
+            'amount' => 100,
+        ]);
         Mail::assertQueued(OrderPaidMail::class, 1);
 
         // Replay is idempotent and does not change the final state.

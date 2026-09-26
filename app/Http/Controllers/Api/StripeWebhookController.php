@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Jobs\SendAdminAlert;
 use App\Mail\OrderPaidMail;
 use App\Models\Order;
+use App\Models\Payment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -105,17 +106,37 @@ class StripeWebhookController extends Controller
             return false;
         }
 
-        // Idempotency: skip if already paid
-        if ($order->isPaid()) {
+        $order = DB::transaction(function () use ($order, $session): ?Order {
+            $lockedOrder = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
+
+            // Idempotency: only the transaction that moves the order to paid sends side effects.
+            if ($lockedOrder->isPaid()) {
+                return null;
+            }
+
+            $lockedOrder->update([
+                'status' => 'processing',
+                'payment_status' => 'paid',
+                'stripe_payment_intent_id' => $session->payment_intent,
+                'paid_at' => now(),
+            ]);
+
+            Payment::updateOrCreate(
+                ['order_id' => $lockedOrder->id],
+                [
+                    'transaction_id' => $session->payment_intent,
+                    'payment_provider' => 'stripe',
+                    'status' => 'completed',
+                    'amount' => $lockedOrder->total,
+                ]
+            );
+
+            return $lockedOrder->fresh();
+        });
+
+        if (! $order) {
             return true;
         }
-
-        $order->update([
-            'status' => 'processing',
-            'payment_status' => 'paid',
-            'stripe_payment_intent_id' => $session->payment_intent,
-            'paid_at' => now(),
-        ]);
 
         $order->load('items');
         $itemCount = $order->items->sum('quantity');
