@@ -1,6 +1,7 @@
 # 02 D2 Catalog - results
 
-Status: IN-PROGRESS (B3 started; spot-checked, not yet exhaustive).
+Status: READY-FOR-REVIEW (B3-full — checklist items the B2 review flagged as
+unchecked are now covered).
 
 ## Entry points
 
@@ -59,10 +60,55 @@ Status: IN-PROGRESS (B3 started; spot-checked, not yet exhaustive).
   Recommended fix for phase 03: catch `\Illuminate\Database\QueryException` in `ReviewService::create`
   specifically and rethrow the same friendly message.
 
+### D2-F2 — P1: admin dashboard "pending orders" metrics were permanently stuck at zero
+
+- **Severity:** P1
+- **Status:** FIXED
+- **Location:** `app/Http/Controllers/Api/V1/Admin/DashboardController.php:59,65`
+- **Problem:** `current_orders_count` and `alerts.pending_orders` both queried `Order::where('status', 'pending')`. As established in D7-F1 (previous batch), `'pending'` is a dead status value — nothing has created an order with it since Stripe checkout replaced it with `'pending_payment'`. Both dashboard metrics have therefore always returned `0`, regardless of how many real orders are actually awaiting payment.
+- **Scenario:** An admin opens the dashboard while 50 customers have unpaid, in-progress checkouts. The dashboard shows `current_orders_count: 0` and `alerts.pending_orders: 0`, hiding exactly the actionable backlog these fields exist to surface.
+- **Test:** `tests/Feature/AdminDashboardTest.php::test_dashboard_counts_orders_still_awaiting_payment` — seeds 3 real `pending_payment` orders plus a `processing` and a `cancelled` one; fails on pre-fix code (`Failed asserting that 0 is identical to 3`), passes after.
+- **Fix:** Both queries now check `status === 'pending_payment'`, the actual value the checkout flow sets. Commit: (this batch).
+- **Evidence:**
+  ```
+  # pre-fix
+  FAILED Tests\Feature\AdminDashboardTest > dashboard counts orders still awaiting payment
+  Failed asserting that 0 is identical to 3.
+  Tests: 1 failed, 2 passed (6 assertions)
+
+  # post-fix
+  PASS  Tests\Feature\AdminDashboardTest
+  ✓ dashboard counts orders still awaiting payment
+  ✓ dashboard month sales total excludes unpaid and cancelled orders
+  ✓ dashboard low stock alert counts products under the threshold
+  Tests: 3 passed (7 assertions)
+  ```
+
+### D2-F3 — Report only: dead models `Campaign` and `Post` are entirely unused
+
+- **Severity:** P3 (report only, per the domain checklist — "removal in phase 03")
+- **Status:** OPEN (not removed here — out of scope for phase 02)
+- **Location:** `app/Models/Campaign.php`, `app/Models/Post.php`
+- **Problem:** `grep -rn "App\\Models\\Campaign\|App\\Models\\Post\b|Campaign::|Post::"` across `app/`, `routes/`, and `database/factories/` finds zero references outside the model files themselves — no controller, route, factory, seeder, or migration-backed table interaction touches either model in the current codebase (only false-positive substring matches like `Route::post` and `EasyPost*` appear in a naive grep). Flagged per the D8/D2 checklist for phase-03 removal, not deleted now to stay in scope.
+
 ## Tests added/strengthened
 
-None yet this pass (spot-check only, no P0/P1 found).
+- `tests/Feature/AdminDashboardTest.php` (new file):
+  - `test_dashboard_counts_orders_still_awaiting_payment`
+  - `test_dashboard_month_sales_total_excludes_unpaid_and_cancelled_orders` (regression guard — already correct, seeded with known totals to pin `150.00`)
+  - `test_dashboard_low_stock_alert_counts_products_under_the_threshold` (regression guard — already correct, seeded to pin `2`)
+
+## Test suite output
+
+Full suite, run at the end of B3-full (D2+D8+Security), three consecutive runs:
+```
+Tests:    229 passed (1224 assertions)   Duration: 47.29s
+Tests:    229 passed (1224 assertions)   Duration: 46.19s
+Tests:    229 passed (1224 assertions)   Duration: 45.54s
+```
+Pint: `{"tool":"pint","result":"passed"}`
+PHPStan level 5: `[OK] No errors`
 
 ## Frontend impact
 
-None identified.
+None — `current_orders_count`/`alerts.pending_orders` now return the real count instead of always `0`; the field names, types, and route are unchanged, only the (previously always-wrong) value.
