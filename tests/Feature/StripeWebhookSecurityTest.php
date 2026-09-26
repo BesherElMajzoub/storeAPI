@@ -91,6 +91,44 @@ class StripeWebhookSecurityTest extends TestCase
         $this->assertSame('unpaid', $order->fresh()->payment_status);
     }
 
+    public function test_completed_webhook_is_rejected_when_its_session_is_replaced_during_processing(): void
+    {
+        $order = Order::factory()->for(User::factory())->create([
+            'status' => 'pending_payment',
+            'payment_status' => 'unpaid',
+            'stripe_session_id' => 'cs_original',
+            'total' => 100,
+        ]);
+        $sessionWasReplaced = false;
+
+        Order::retrieved(function (Order $retrievedOrder) use ($order, &$sessionWasReplaced): void {
+            if ($sessionWasReplaced || $retrievedOrder->id !== $order->id) {
+                return;
+            }
+
+            $sessionWasReplaced = true;
+            $retrievedOrder->getConnection()->table('orders')
+                ->where('id', $order->id)
+                ->update(['stripe_session_id' => 'cs_replacement']);
+        });
+
+        $this->postSigned([
+            'id' => 'evt_replaced_session', 'object' => 'event', 'type' => 'checkout.session.completed',
+            'data' => ['object' => [
+                'object' => 'checkout.session', 'id' => 'cs_original',
+                'payment_intent' => 'pi_replaced_session', 'amount_total' => 10000, 'currency' => 'usd',
+                'metadata' => ['order_id' => (string) $order->id],
+            ]],
+        ])->assertUnprocessable();
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'status' => 'pending_payment',
+            'payment_status' => 'unpaid',
+            'stripe_session_id' => 'cs_replacement',
+        ]);
+    }
+
     public function test_signed_expired_session_cancels_only_the_matching_order(): void
     {
         $product = Product::factory()->create(['stock_qty' => 0, 'in_stock' => false]);

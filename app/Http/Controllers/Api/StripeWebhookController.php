@@ -106,12 +106,25 @@ class StripeWebhookController extends Controller
             return false;
         }
 
-        $order = DB::transaction(function () use ($order, $session): ?Order {
+        $order = DB::transaction(function () use ($order, $session) {
             $lockedOrder = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
+
+            $expectedAmount = (int) round((float) $lockedOrder->total * 100);
+            $amountMatches = (int) ($session->amount_total ?? -1) === $expectedAmount;
+            $currencyMatches = strtolower((string) ($session->currency ?? '')) === config('services.stripe.currency', 'usd');
+            $sessionMatches = (string) $session->id === (string) $lockedOrder->stripe_session_id;
+
+            if (! $amountMatches || ! $currencyMatches || ! $sessionMatches) {
+                return false;
+            }
 
             // Idempotency: only the transaction that moves the order to paid sends side effects.
             if ($lockedOrder->isPaid()) {
                 return null;
+            }
+
+            if ($lockedOrder->status !== 'pending_payment' || $lockedOrder->payment_status !== 'unpaid') {
+                return false;
             }
 
             $lockedOrder->update([
@@ -133,6 +146,10 @@ class StripeWebhookController extends Controller
 
             return $lockedOrder->fresh();
         });
+
+        if ($order === false) {
+            return false;
+        }
 
         if (! $order) {
             return true;
