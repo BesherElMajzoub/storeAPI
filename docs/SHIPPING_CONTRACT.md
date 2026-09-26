@@ -85,6 +85,67 @@ Successful response (`200`):
 
 `expires_at` is authoritative. The default quote lifetime is 15 minutes and is configurable through `EASYPOST_QUOTE_TTL_MINUTES`.
 
+## Free shipping (new — September 26, 2026)
+
+Two independent mechanisms can waive the customer's shipping charge to `$0`. If either qualifies, `shipping_cost` on the order is `0` — the backend still tracks the real carrier cost separately for its own accounting, which is not exposed to customers.
+
+**1. Automatic subtotal threshold.** Admin-configurable, evaluated against the cart's raw subtotal (before any discount), inclusive (`subtotal >= threshold`).
+
+**2. `free_shipping` coupon type.** A coupon can now have `type: "free_shipping"` in addition to `percentage`/`fixed`. It follows every normal coupon rule (active, not expired, usage limits, `minimum_order_amount`) but produces a `$0` subtotal discount — it only waives shipping, it does not also discount the cart.
+
+If both would apply to the same order, the automatic threshold takes priority (no functional difference to the customer either way — shipping is still exactly `$0`).
+
+### Check the current offer before checkout
+
+`GET /api/v1/shipping/free-shipping` — public, no authentication required.
+
+```json
+{
+  "success": true,
+  "message": "Free shipping status retrieved.",
+  "data": {
+    "enabled": true,
+    "threshold": 100
+  },
+  "errors": null
+}
+```
+
+`threshold` is `null` when `enabled` is `false`, or when free shipping is enabled but an admin hasn't set a threshold yet (should not happen in practice — the admin endpoint requires a threshold whenever `enabled: true` is saved). Use this to render "spend $X more for free shipping" banners. **Current default: enabled at $100** — poll this endpoint rather than hardcoding the number, since an admin can change it at any time via the (admin-only) `PUT /api/v1/admin/settings/shipping`.
+
+### Check a coupon before checkout
+
+`POST /api/v1/coupons/validate` now also returns a `free_shipping` boolean:
+
+```json
+{
+  "success": true,
+  "data": {
+    "code": "FREESHIP",
+    "subtotal": 150.00,
+    "discount": 0,
+    "total": 150.00,
+    "free_shipping": true
+  },
+  "errors": null
+}
+```
+
+When `free_shipping` is `true`, show the customer that shipping will be waived even though `discount` is `0` — don't read `discount` alone as "this coupon does nothing."
+
+### After order creation
+
+`POST /api/v1/orders` and `GET /api/v1/orders/{id}` both include:
+
+```json
+{
+  "shipping_cost": 0,
+  "free_shipping_reason": "threshold"
+}
+```
+
+`free_shipping_reason` is one of `"threshold"`, `"coupon"`, or `null`. Use it to show *why* shipping was free (e.g. "Free shipping — order over $100" vs. "Free shipping — coupon FREESHIP applied").
+
 ## Deprecated v1 parcel contract
 
 For compatibility, the endpoint still accepts `address + parcel` without `items`. The caller supplies `parcel.length`, `width`, `height`, and `weight`; dimensions are inches and weight is ounces.

@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\GetShippingRatesRequest;
 use App\Http\Requests\Api\V1\VerifyAddressRequest;
 use App\Http\Resources\ShippingRateResource;
+use App\Services\FreeShippingService;
 use App\Services\ShippingQuoteService;
 use Exception;
 use Illuminate\Http\JsonResponse;
@@ -21,6 +22,44 @@ class ShippingController extends Controller
     public function __construct(EasyPostServiceInterface $easyPostService, private readonly ShippingQuoteService $quotes)
     {
         $this->easyPostService = $easyPostService;
+    }
+
+    #[OA\Get(
+        path: '/api/v1/shipping/free-shipping',
+        summary: 'Get the current automatic free-shipping offer',
+        description: 'Public, read-only. Lets the storefront show "spend $X more for free shipping" without exposing any other admin settings.',
+        tags: ['Shipping']
+    )]
+    #[OA\Response(
+        response: 200,
+        description: 'Current free-shipping configuration',
+        content: new OA\JsonContent(
+            type: 'object',
+            properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(
+                    property: 'data',
+                    type: 'object',
+                    properties: [
+                        new OA\Property(property: 'enabled', type: 'boolean', example: true),
+                        new OA\Property(property: 'threshold', type: 'number', format: 'float', nullable: true, example: 100),
+                    ]
+                ),
+                new OA\Property(property: 'errors', type: 'object', nullable: true, example: null),
+            ]
+        )
+    )]
+    public function freeShipping(FreeShippingService $freeShipping): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'message' => 'Free shipping status retrieved.',
+            'data' => [
+                'enabled' => $freeShipping->isEnabled(),
+                'threshold' => $freeShipping->threshold(),
+            ],
+            'errors' => null,
+        ]);
     }
 
     #[OA\Post(

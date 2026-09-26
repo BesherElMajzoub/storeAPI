@@ -22,7 +22,7 @@ The first implementation batch is complete and verified:
 - **Verification:** Laravel Pint passed, `git diff --check` passed, and the full suite passed with **159 tests / 901 assertions** after the P2/P3 local implementation batches. No test contacted Telegram.
 - **BE-1 defense in depth:** inactive-category products are now excluded from public list/detail responses and rejected by both shipping-rate normalization and final inventory reservation, preventing stale carts or direct product IDs from bypassing the storefront filter.
 - **Still operationally blocked:** production credential rotation, product-measurement backfill, demo-data cleanup, EasyPost/warehouse configuration, production readiness output, and the end-to-end sandbox lifecycle require production/operations access and catalog-owner data.
-- **Still decision-blocked:** tax, public geo behavior, and explicit variant-`null` semantics (product sign-off still wanted even though the code now preserves-unless-provided).
+- **Still decision-blocked:** tax, public geo behavior, and explicit variant-`null` semantics (product sign-off still wanted even though the code now preserves-unless-provided). *(Update — batch 3: tax and variant-`null` semantics are now resolved; see below. `geo/me` remains open.)*
 
 ## Implementation Progress — September 26, 2026 (batch 2)
 
@@ -43,7 +43,12 @@ A second local batch closes three of the six items previously listed as decision
   - `SESSION_SECURE_COOKIE`, `SESSION_SAME_SITE`, and `SANCTUM_STATEFUL_DOMAINS` were added to `.env.example` with guidance comments; CORS (`supports_credentials: true`, `sanctum/csrf-cookie` in `paths`) was already correctly configured from prior work and needed no changes.
 - **Tests added:** `tests/Feature/FreeShippingTest.php` (14 tests — admin settings CRUD/authorization, automatic threshold on/off/boundary, free-shipping coupon, both methods together, minimum-order enforcement, public validate flag, admin coupon creation, and a resume-payment interaction test) and `tests/Feature/SpaAuthTest.php` (7 tests — stateful middleware wiring, httpOnly/SameSite cookie flags on login, session-only authentication, a full login→access→logout→revoked cookie round trip, non-frontend requests are unaffected and Bearer auth still works, unauthenticated checkout is 401, and order ownership/IDOR).
 - **Verification:** Laravel Pint applied to every file touched in this batch (pre-existing style debt elsewhere in the repo was left untouched — out of scope); `git diff --check` clean; full suite passed with **183 tests / 1032 assertions**, zero failures, no test contacted Telegram/Stripe/EasyPost.
-- **Still open:** Q1/Q2 (tax) and BE-3 (`geo/me`) remain genuine product decisions with no code change. ADM-EP3/Q28's *implemented* direction (omitted fields preserved, explicit `null` clears) still wants a product sign-off that this is the intended contract.
+- **Still open:** BE-3 (`geo/me`) remains a genuine product decision with no code change.
+- **Resolved — September 26, 2026 (batch 3):** three of the four remaining decision-blocked items now have a confirmed business answer, with no further code change needed:
+  - **Q1/Q2 (tax):** confirmed as an explicit launch decision, not an unresolved blocker — tax stays `0` for the current launch; no tax system is being built yet. `orders.tax` remains hardcoded to `0` intentionally.
+  - **ADM-EP3/Q28 (variant `null` semantics):** approved as the permanent, official API contract — omitted field = leave unchanged, explicit `null` = clear the value. Q28 is closed.
+  - **Q3 (free shipping default):** the $100 automatic threshold is confirmed as correct and ships enabled by default at launch. Both mechanisms (automatic threshold + `free_shipping` coupon) stay as implemented.
+  - **EasyPost package weight capacities (§4 of `docs/backend-remediation-remaining.md`):** the assumed capacities (`bag_small` 24 oz, `box_small` 32 oz, `bag_large` 48 oz, `box_medium` 64 oz, `box_large` 112 oz) are accepted for launch. They remain documented as operational assumptions, not supplier-certified limits, and should still be sanity-checked against real fulfillment when convenient.
 
 ---
 
@@ -275,14 +280,11 @@ Non-launch-blocking, confirmed absent, build only after P0–P2:
 
 ## 12. Open Decisions
 
-Only items genuinely requiring business/product/infra input:
+Only items genuinely requiring business/product/infra input. **Resolved as of batch 3 (September 26, 2026):** tax (Q1/Q2), variant-`null` semantics (Q28), the free-shipping default (Q3), and the EasyPost package weight capacities — see the batch-3 note above. What's left:
 
-1. **Tax (Q1/Q2)**: is tax required at all for this launch, and if so, flat/destination/provider-based?
-2. **BE-3 / `geo/me`**: open the endpoint publicly, or tell the frontend to use a different signal for country detection?
-3. **ADM-EP3 / Q28 null semantics**: the code now implements "omitted field = unchanged, explicit `null` = clear" — this matches the frontend's stated preference, but still wants formal product/frontend sign-off that it's the intended, permanent contract (not just an engineering guess) before closing Q28.
-4. **Default free-shipping threshold (Q3)**: both mechanisms are built and ship enabled at a **$100** default; the business should confirm this is the right number (or disable/change it via `PUT /admin/settings/shipping`) before launch.
-5. **BLK-1 interim policy** (§7): if catalog-owner measurement can't complete before launch, what temporary policy is acceptable (e.g., auto-draft unmeasured products) — this is a launch-timeline call, not an engineering one.
-6. **D7/D8/D9/D-E5 and §11 items** referencing documents this repo doesn't contain (backup/restore evidence, secret rotation, live Stripe/EasyPost credential setup, the full production-readiness command's historical output) — **missing evidence**, cannot be assessed from code alone; needs whoever holds those artifacts (or production access) to attach them.
+1. **BE-3 / `geo/me`**: open the endpoint publicly, or tell the frontend to use a different signal for country detection? **No decision made yet — leave `GET /api/v1/geo/me` unchanged/admin-only for now.**
+2. **BLK-1 interim policy** (§7): if catalog-owner measurement can't complete before launch, what temporary policy is acceptable (e.g., auto-draft unmeasured products) — this is a launch-timeline call, not an engineering one.
+3. **D7/D8/D9/D-E5 and §11 items** referencing documents this repo doesn't contain (backup/restore evidence, secret rotation, live Stripe/EasyPost credential setup, the full production-readiness command's historical output) — **missing evidence**, cannot be assessed from code alone; needs whoever holds those artifacts (or production access) to attach them.
 
 ---
 
@@ -304,7 +306,7 @@ Only items genuinely requiring business/product/infra input:
 | Q30 shipped-email | Backend Team | — | `Mail::assertQueued` test passes | **Completed locally** |
 | Q24 resume payment | Backend Team | — | Owner/state checks, open-session reuse, expired-session replacement, race handling, and stale-webhook tests pass | **Completed locally / deploy pending** |
 | Q5/Q6b/Q7/Q8/Q15/Q17/Q20/Q29 local API batch | Backend Team | — | Sitemap, audit log, stock delta, fake shipping, batch lookup/wishlist merge, contact filters, explicit user resources, and bulk order-status tests pass | **Completed locally / deploy pending** |
-| Q3 free shipping (automatic threshold + coupon, $100 default) | Backend Team | Business confirms/adjusts the $100 default | 14 tests in `FreeShippingTest.php` pass | **Completed locally / deploy pending** |
+| Q3 free shipping (automatic threshold + coupon, $100 default) | Backend Team | — ($100 default confirmed) | 14 tests in `FreeShippingTest.php` pass | **Confirmed, completed locally / deploy pending** |
 | Q21 guest checkout confirmed unsupported | Backend Team | — | Regression test passes | **Confirmed by design** |
 | Q22 httpOnly-cookie SPA auth (Bearer preserved) | Backend Team | Set `SANCTUM_STATEFUL_DOMAINS`/`SESSION_SECURE_COOKIE` in production | 7 tests in `SpaAuthTest.php` pass, including a full login/logout cookie round trip | **Completed locally / deploy pending** |
 | Backup/restore evidence (D7/D-E5) | DevOps | External to this repo | Verified restore drill log | **Missing evidence** |

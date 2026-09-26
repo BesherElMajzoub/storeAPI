@@ -69,6 +69,21 @@ class FreeShippingTest extends TestCase
             ->assertJsonPath('data.free_shipping_threshold', 100);
     }
 
+    public function test_public_endpoint_reports_the_current_free_shipping_offer(): void
+    {
+        $this->getJson('/api/v1/shipping/free-shipping')
+            ->assertOk()
+            ->assertJsonPath('data.enabled', true)
+            ->assertJsonPath('data.threshold', 100);
+
+        app(FreeShippingService::class)->update(false, null);
+
+        $this->getJson('/api/v1/shipping/free-shipping')
+            ->assertOk()
+            ->assertJsonPath('data.enabled', false)
+            ->assertJsonPath('data.threshold', null);
+    }
+
     public function test_admin_can_enable_automatic_free_shipping_with_a_threshold(): void
     {
         $this->actingAs($this->admin, 'sanctum')

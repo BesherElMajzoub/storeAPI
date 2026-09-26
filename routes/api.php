@@ -74,6 +74,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
     // Shipping
     Route::post('shipping/verify-address', [ShippingController::class, 'verifyAddress']);
     Route::post('shipping/rates', [ShippingController::class, 'getRates']);
+    Route::get('shipping/free-shipping', [ShippingController::class, 'freeShipping']);
     Route::post('orders/track', [PublicOrderTrackingController::class, 'track'])
         ->middleware('throttle:order-tracking');
 
