@@ -99,4 +99,11 @@ Status: IN-PROGRESS (B2).
 
 ## Test suite output
 
-See end-of-batch full run in the B2 handover.
+Full suite, run at the end of B2 (D1+D6+D7), three consecutive runs:
+```
+Tests:    224 passed (1205 assertions)   Duration: 46.61s
+Tests:    224 passed (1205 assertions)   Duration: 58.78s
+Tests:    224 passed (1205 assertions)   Duration: 46.97s
+```
+Pint: `{"tool":"pint","result":"passed"}`
+PHPStan level 5: `[OK] No errors`

@@ -88,3 +88,14 @@ Tests: 22 passed (111 assertions)
 ## Frontend impact
 
 - `POST /api/v1/orders/{id}/cancel` now actually succeeds for an unpaid order within 3 hours of creation instead of always returning 400 — this is a bug fix restoring documented behavior, not a new contract. If the frontend built a workaround (e.g. always routing to the cancellation-request flow because direct cancel "never worked"), it can now use the direct-cancel button/flow as originally designed.
+
+## Test suite output
+
+Full suite, run at the end of B2 (D1+D6+D7), three consecutive runs:
+```
+Tests:    224 passed (1205 assertions)   Duration: 46.61s
+Tests:    224 passed (1205 assertions)   Duration: 58.78s
+Tests:    224 passed (1205 assertions)   Duration: 46.97s
+```
+Pint: `{"tool":"pint","result":"passed"}`
+PHPStan level 5: `[OK] No errors`
