@@ -16,14 +16,14 @@ class VerifyAddressRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name'       => ['required', 'string', 'max:255'],
-            'street1'    => ['required', 'string', 'max:255'],
-            'street2'    => ['nullable', 'string', 'max:255'],
-            'city'       => ['required', 'string', 'max:255'],
-            'state'      => ['required', 'string', 'max:255'],
-            'zip'        => ['required', 'string', 'max:20'],
-            'country'    => ['required', 'string', 'size:2'], // 2-letter ISO code
-            'phone'      => ['nullable', 'string', 'max:50'],
+            'name' => ['required', 'string', 'max:255'],
+            'street1' => ['required', 'string', 'max:255'],
+            'street2' => ['nullable', 'string', 'max:255'],
+            'city' => ['required', 'string', 'max:255'],
+            'state' => ['required', 'string', 'max:255'],
+            'zip' => ['required', 'string', 'max:20'],
+            'country' => ['required', 'string', 'size:2'], // 2-letter ISO code
+            'phone' => ['nullable', 'string', 'max:50'],
         ];
     }
 
@@ -32,8 +32,8 @@ class VerifyAddressRequest extends FormRequest
         throw new HttpResponseException(response()->json([
             'success' => false,
             'message' => 'Validation failed.',
-            'data'    => null,
-            'errors'  => $validator->errors(),
+            'data' => null,
+            'errors' => $validator->errors(),
         ], 422));
     }
 }

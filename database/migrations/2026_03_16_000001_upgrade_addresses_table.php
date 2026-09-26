@@ -8,7 +8,7 @@ return new class extends Migration
 {
     /**
      * Upgrade the addresses table to support the full user address management system.
-     * 
+     *
      * The existing table has: type, name, phone, line1, line2, city, state, postal_code, country, is_default
      * We're adding: label (home/work/other), full_name, area, street, building, floor, apartment, notes
      * and renaming/aliasing the old fields while keeping backward compatibility.

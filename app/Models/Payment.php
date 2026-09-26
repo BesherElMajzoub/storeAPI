@@ -8,7 +8,7 @@ class Payment extends Model
 {
     protected $fillable = [
         'order_id', 'transaction_id', 'payment_provider',
-        'status', 'amount', 'payload'
+        'status', 'amount', 'payload',
     ];
 
     protected $casts = [

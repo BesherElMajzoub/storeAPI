@@ -32,17 +32,17 @@ class RecordWishlistEvent
     {
         try {
             WishlistEvent::create([
-                'user_id'    => $userId,
+                'user_id' => $userId,
                 'product_id' => $productId,
-                'action'     => $action,
+                'action' => $action,
             ]);
         } catch (\Throwable $e) {
             // Analytics failures must never break the main flow
             Log::warning('Failed to record wishlist event', [
-                'user_id'    => $userId,
+                'user_id' => $userId,
                 'product_id' => $productId,
-                'action'     => $action,
-                'error'      => $e->getMessage(),
+                'action' => $action,
+                'error' => $e->getMessage(),
             ]);
         }
     }

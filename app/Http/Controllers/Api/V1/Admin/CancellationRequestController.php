@@ -18,29 +18,29 @@ class CancellationRequestController extends Controller
     // ── List ─────────────────────────────────────────────────────────────────
 
     #[OA\Get(
-        path: "/api/v1/admin/cancellation-requests",
-        summary: "Admin – List Cancellation Requests",
-        description: "Paginated list of order cancellation requests. Filter by `status` (pending/accepted/rejected).",
-        security: [["bearerAuth" => []]],
-        tags: ["Admin Cancellation Requests"]
+        path: '/api/v1/admin/cancellation-requests',
+        summary: 'Admin – List Cancellation Requests',
+        description: 'Paginated list of order cancellation requests. Filter by `status` (pending/accepted/rejected).',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Cancellation Requests']
     )]
-    #[OA\Parameter(name: "status",   in: "query", schema: new OA\Schema(type: "string", enum: ["pending", "accepted", "rejected"]))]
-    #[OA\Parameter(name: "per_page", in: "query", schema: new OA\Schema(type: "integer", default: 20))]
+    #[OA\Parameter(name: 'status', in: 'query', schema: new OA\Schema(type: 'string', enum: ['pending', 'accepted', 'rejected']))]
+    #[OA\Parameter(name: 'per_page', in: 'query', schema: new OA\Schema(type: 'integer', default: 20))]
     #[OA\Response(
         response: 200,
-        description: "Requests fetched",
+        description: 'Requests fetched',
         content: new OA\JsonContent(
-            type: "object",
+            type: 'object',
             properties: [
-                new OA\Property(property: "success", type: "boolean"),
-                new OA\Property(property: "data",    type: "object"),
+                new OA\Property(property: 'success', type: 'boolean'),
+                new OA\Property(property: 'data', type: 'object'),
             ]
         )
     )]
     public function index(Request $request): JsonResponse
     {
         $perPage = min(max((int) $request->get('per_page', 20), 1), 100);
-        $status  = $request->query('status');
+        $status = $request->query('status');
 
         $requests = OrderCancellationRequest::with(['order', 'user'])
             ->byStatus($status)
@@ -56,16 +56,16 @@ class CancellationRequestController extends Controller
     // ── Accept ───────────────────────────────────────────────────────────────
 
     #[OA\Post(
-        path: "/api/v1/admin/cancellation-requests/{id}/accept",
-        summary: "Admin – Accept Cancellation Request",
-        description: "Accept the request: cancel the order, restock variants, and email the user.",
-        security: [["bearerAuth" => []]],
-        tags: ["Admin Cancellation Requests"]
+        path: '/api/v1/admin/cancellation-requests/{id}/accept',
+        summary: 'Admin – Accept Cancellation Request',
+        description: 'Accept the request: cancel the order, restock variants, and email the user.',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Cancellation Requests']
     )]
-    #[OA\Parameter(name: "id", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
-    #[OA\Response(response: 200, description: "Request accepted, order cancelled")]
-    #[OA\Response(response: 409, description: "Request already decided")]
-    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
+    #[OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))]
+    #[OA\Response(response: 200, description: 'Request accepted, order cancelled')]
+    #[OA\Response(response: 409, description: 'Request already decided')]
+    #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
     public function accept(Request $request, int $id): JsonResponse
     {
         $cancellation = OrderCancellationRequest::with(['order.items.product', 'user'])->findOrFail($id);
@@ -80,12 +80,10 @@ class CancellationRequestController extends Controller
             // Cancel the order
             $order->update(['status' => 'cancelled']);
 
-
-
             // Mark the cancellation request as accepted
             $cancellation->update([
-                'status'     => 'accepted',
-                'admin_id'   => $request->user()->id,
+                'status' => 'accepted',
+                'admin_id' => $request->user()->id,
                 'decided_at' => now(),
             ]);
         });
@@ -103,25 +101,25 @@ class CancellationRequestController extends Controller
     // ── Reject ───────────────────────────────────────────────────────────────
 
     #[OA\Post(
-        path: "/api/v1/admin/cancellation-requests/{id}/reject",
-        summary: "Admin – Reject Cancellation Request",
-        description: "Reject the request. Order is left untouched. An email with the admin note is sent to the user.",
-        security: [["bearerAuth" => []]],
-        tags: ["Admin Cancellation Requests"]
+        path: '/api/v1/admin/cancellation-requests/{id}/reject',
+        summary: 'Admin – Reject Cancellation Request',
+        description: 'Reject the request. Order is left untouched. An email with the admin note is sent to the user.',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Cancellation Requests']
     )]
-    #[OA\Parameter(name: "id", in: "path", required: true, schema: new OA\Schema(type: "integer"))]
+    #[OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))]
     #[OA\RequestBody(
         required: true,
         content: new OA\JsonContent(
-            required: ["admin_note"],
+            required: ['admin_note'],
             properties: [
-                new OA\Property(property: "admin_note", type: "string", minLength: 5, example: "Your order has already been dispatched and cannot be cancelled."),
+                new OA\Property(property: 'admin_note', type: 'string', minLength: 5, example: 'Your order has already been dispatched and cannot be cancelled.'),
             ]
         )
     )]
-    #[OA\Response(response: 200, description: "Request rejected, user notified")]
-    #[OA\Response(response: 409, description: "Request already decided")]
-    #[OA\Response(response: 404, ref: "#/components/responses/NotFoundResponse")]
+    #[OA\Response(response: 200, description: 'Request rejected, user notified')]
+    #[OA\Response(response: 409, description: 'Request already decided')]
+    #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
     public function reject(RejectCancellationRequestRequest $request, int $id): JsonResponse
     {
         $cancellation = OrderCancellationRequest::with(['order', 'user'])->findOrFail($id);
@@ -131,8 +129,8 @@ class CancellationRequestController extends Controller
         }
 
         $cancellation->update([
-            'status'     => 'rejected',
-            'admin_id'   => $request->user()->id,
+            'status' => 'rejected',
+            'admin_id' => $request->user()->id,
             'admin_note' => $request->validated('admin_note'),
             'decided_at' => now(),
         ]);
@@ -154,8 +152,8 @@ class CancellationRequestController extends Controller
         return response()->json([
             'success' => true,
             'message' => $message,
-            'data'    => $data,
-            'errors'  => null,
+            'data' => $data,
+            'errors' => null,
         ], $status);
     }
 
@@ -164,8 +162,8 @@ class CancellationRequestController extends Controller
         return response()->json([
             'success' => false,
             'message' => $message,
-            'data'    => null,
-            'errors'  => null,
+            'data' => null,
+            'errors' => null,
         ], $status);
     }
 }

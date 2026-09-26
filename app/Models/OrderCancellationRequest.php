@@ -44,6 +44,7 @@ class OrderCancellationRequest extends Model
         if ($status) {
             $query->where('status', $status);
         }
+
         return $query;
     }
 }

@@ -29,15 +29,11 @@ class SendAdminAlert implements ShouldQueue
 
     /**
      * The message to send.
-     *
-     * @var string
      */
     public string $message;
 
     /**
      * Create a new job instance.
-     *
-     * @param string $message
      */
     public function __construct(string $message)
     {
@@ -47,9 +43,6 @@ class SendAdminAlert implements ShouldQueue
 
     /**
      * Execute the job.
-     *
-     * @param TelegramNotifier $notifier
-     * @return void
      */
     public function handle(TelegramNotifier $notifier): void
     {

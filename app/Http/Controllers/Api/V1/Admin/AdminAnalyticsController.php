@@ -9,29 +9,28 @@ use App\Models\Visitor;
 use App\Models\VisitorSession;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use OpenApi\Attributes as OA;
 
 class AdminAnalyticsController extends Controller
 {
     #[OA\Get(
-        path: "/api/v1/admin/analytics/dashboard",
-        summary: "Admin Analytics Dashboard Stats",
-        description: "Returns aggregated visitor statistics, traffic trends, and conversion rate for the dashboard.",
-        security: [["bearerAuth" => []]],
-        tags: ["Admin Analytics"]
+        path: '/api/v1/admin/analytics/dashboard',
+        summary: 'Admin Analytics Dashboard Stats',
+        description: 'Returns aggregated visitor statistics, traffic trends, and conversion rate for the dashboard.',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Analytics']
     )]
-    #[OA\Parameter(name: "days", in: "query", schema: new OA\Schema(type: "integer", default: 30), description: "Number of days for historical trends")]
+    #[OA\Parameter(name: 'days', in: 'query', schema: new OA\Schema(type: 'integer', default: 30), description: 'Number of days for historical trends')]
     #[OA\Response(
         response: 200,
-        description: "Analytics statistics fetched successfully"
+        description: 'Analytics statistics fetched successfully'
     )]
     public function dashboard(Request $request): JsonResponse
     {
         $days = (int) $request->query('days', 30);
         $days = min(max($days, 1), 365); // Cap between 1 and 365 days
-        
+
         $startDate = now()->subDays($days)->startOfDay();
         $todayStart = now()->startOfDay();
 
@@ -93,7 +92,7 @@ class AdminAnalyticsController extends Controller
 
         // 7. Funnel & Conversion Rate (checkout_started -> order_completed)
         $totalSessions = VisitorSession::where('created_at', '>=', $startDate)->count();
-        
+
         $checkoutStartedSessions = AnalyticsEvent::where('event_name', 'checkout_started')
             ->where('visited_at', '>=', $startDate)
             ->distinct('session_uuid')
@@ -104,8 +103,8 @@ class AdminAnalyticsController extends Controller
             ->distinct('session_uuid')
             ->count('session_uuid');
 
-        $conversionRate = $totalSessions > 0 
-            ? round(($orderCompletedSessions / $totalSessions) * 100, 2) 
+        $conversionRate = $totalSessions > 0
+            ? round(($orderCompletedSessions / $totalSessions) * 100, 2)
             : 0;
 
         // 8. Recent Visitors
@@ -115,16 +114,17 @@ class AdminAnalyticsController extends Controller
             ->map(function ($visitor) {
                 $latestSession = $visitor->sessions()->latest()->first();
                 $latestView = $visitor->pageViews()->latest()->first();
+
                 return [
-                    'visitor_uuid'     => $visitor->visitor_uuid,
-                    'browser'          => $visitor->browser,
-                    'device'           => $visitor->device,
+                    'visitor_uuid' => $visitor->visitor_uuid,
+                    'browser' => $visitor->browser,
+                    'device' => $visitor->device,
                     'operating_system' => $visitor->operating_system,
-                    'country'          => $visitor->country,
-                    'city'             => $visitor->city,
-                    'last_active_at'   => $latestView ? $latestView->visited_at->toIso8601String() : $visitor->created_at->toIso8601String(),
-                    'landing_page'     => $latestSession ? $latestSession->landing_page : null,
-                    'utm_source'       => $latestSession ? $latestSession->utm_source : null,
+                    'country' => $visitor->country,
+                    'city' => $visitor->city,
+                    'last_active_at' => $latestView ? $latestView->visited_at->toIso8601String() : $visitor->created_at->toIso8601String(),
+                    'landing_page' => $latestSession ? $latestSession->landing_page : null,
+                    'utm_source' => $latestSession ? $latestSession->utm_source : null,
                 ];
             });
 
@@ -149,30 +149,30 @@ class AdminAnalyticsController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Analytics dashboard stats fetched.',
-            'data'    => [
+            'data' => [
                 'summary' => [
-                    'visitors_today'    => $visitorsToday,
-                    'unique_visitors'   => $uniqueVisitorsPeriod,
-                    'total_page_views'  => $pageViewsPeriod,
-                    'total_sessions'    => $sessionsPeriod,
-                    'conversion_rate'   => $conversionRate,
+                    'visitors_today' => $visitorsToday,
+                    'unique_visitors' => $uniqueVisitorsPeriod,
+                    'total_page_views' => $pageViewsPeriod,
+                    'total_sessions' => $sessionsPeriod,
+                    'conversion_rate' => $conversionRate,
                 ],
                 'funnel' => [
-                    'total_sessions'    => $totalSessions,
-                    'checkout_started'  => $checkoutStartedSessions,
-                    'order_completed'   => $orderCompletedSessions,
+                    'total_sessions' => $totalSessions,
+                    'checkout_started' => $checkoutStartedSessions,
+                    'order_completed' => $orderCompletedSessions,
                 ],
-                'top_countries'     => $topCountries,
-                'top_cities'        => $topCities,
-                'top_referrers'     => $topReferrers,
+                'top_countries' => $topCountries,
+                'top_cities' => $topCities,
+                'top_referrers' => $topReferrers,
                 'top_landing_pages' => $topLandingPages,
-                'top_events'        => $topEvents,
-                'recent_visitors'   => $recentVisitors,
+                'top_events' => $topEvents,
+                'recent_visitors' => $recentVisitors,
                 'charts' => [
                     'visits_by_day' => $visitsByDay,
                     'events_by_day' => $eventsByDay,
-                ]
-            ]
+                ],
+            ],
         ]);
     }
 }

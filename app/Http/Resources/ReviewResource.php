@@ -12,24 +12,24 @@ class ReviewResource extends JsonResource
         $user = $request->user();
 
         return [
-            'id'                   => $this->id,
-            'rating'               => (int) $this->rating,
-            'comment'              => $this->comment,
-            'status'               => $this->status,
-            'is_approved'          => $this->status === 'approved',
+            'id' => $this->id,
+            'rating' => (int) $this->rating,
+            'comment' => $this->comment,
+            'status' => $this->status,
+            'is_approved' => $this->status === 'approved',
             'is_verified_purchase' => (bool) $this->is_verified_purchase,
             // Only show if it's the reviewer's own review (for "my review" context)
-            'is_own_review'        => $user?->id === $this->user_id,
-            'created_at'           => $this->created_at?->toIso8601String(),
-            'updated_at'           => $this->updated_at?->toIso8601String(),
-            'user'                 => $this->whenLoaded('user', fn() => [
-                'id'         => $this->user?->id,
-                'name'       => $this->user?->name,
+            'is_own_review' => $user?->id === $this->user_id,
+            'created_at' => $this->created_at?->toIso8601String(),
+            'updated_at' => $this->updated_at?->toIso8601String(),
+            'user' => $this->whenLoaded('user', fn () => [
+                'id' => $this->user?->id,
+                'name' => $this->user?->name,
                 'avatar_url' => $this->user?->avatar_url,
             ]),
-            'product'              => new ProductResource($this->whenLoaded('product')),
+            'product' => new ProductResource($this->whenLoaded('product')),
             // Only included in admin context
-            'admin_note'           => $this->when(
+            'admin_note' => $this->when(
                 $user?->hasRole('Admin'),
                 $this->admin_note
             ),

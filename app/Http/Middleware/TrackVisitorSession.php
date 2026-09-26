@@ -15,12 +15,12 @@ class TrackVisitorSession
     /**
      * Handle an incoming request.
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
         // 1. Check if analytics is enabled
-        if (!config('analytics.enabled', true)) {
+        if (! config('analytics.enabled', true)) {
             return $next($request);
         }
 
@@ -43,25 +43,25 @@ class TrackVisitorSession
 
         // 5. Gather tracking payload
         $payload = [
-            'visitor_uuid'     => $visitorUuid,
-            'session_uuid'     => $sessionUuid,
-            'user_id'          => $request->user()?->id,
-            'ip'               => $request->ip(),
-            'url'              => $request->fullUrl(),
-            'referrer'         => $request->header('Referer'),
-            'user_agent'       => $userAgent,
-            'browser'          => $uaData['browser'],
-            'device'           => $uaData['device'],
+            'visitor_uuid' => $visitorUuid,
+            'session_uuid' => $sessionUuid,
+            'user_id' => $request->user()?->id,
+            'ip' => $request->ip(),
+            'url' => $request->fullUrl(),
+            'referrer' => $request->header('Referer'),
+            'user_agent' => $userAgent,
+            'browser' => $uaData['browser'],
+            'device' => $uaData['device'],
             'operating_system' => $uaData['operating_system'],
-            
+
             // UTM tracking parameters
-            'utm_source'       => $request->query('utm_source'),
-            'utm_medium'       => $request->query('utm_medium'),
-            'utm_campaign'     => $request->query('utm_campaign'),
-            'utm_term'         => $request->query('utm_term'),
-            'utm_content'      => $request->query('utm_content'),
-            
-            'visited_at'       => now(),
+            'utm_source' => $request->query('utm_source'),
+            'utm_medium' => $request->query('utm_medium'),
+            'utm_campaign' => $request->query('utm_campaign'),
+            'utm_term' => $request->query('utm_term'),
+            'utm_content' => $request->query('utm_content'),
+
+            'visited_at' => now(),
         ];
 
         // 6. Dispatch the LogPageViewJob to be executed asynchronously
@@ -73,11 +73,11 @@ class TrackVisitorSession
         // 8. Attach visitor/session cookies & headers to response
         if ($response instanceof Response) {
             // Long-lived cookie for visitor (1 year)
-            if (!$request->cookie('visitor_id') && !$request->header('X-Visitor-ID')) {
+            if (! $request->cookie('visitor_id') && ! $request->header('X-Visitor-ID')) {
                 $response->headers->setCookie(cookie('visitor_id', $visitorUuid, 525600, null, null, false, false));
             }
             // Session cookie for visitor session (ends when browser closed)
-            if (!$request->cookie('visitor_session_id') && !$request->header('X-Session-ID')) {
+            if (! $request->cookie('visitor_session_id') && ! $request->header('X-Session-ID')) {
                 $response->headers->setCookie(cookie('visitor_session_id', $sessionUuid, 0, null, null, false, false));
             }
 
@@ -100,7 +100,7 @@ class TrackVisitorSession
         }
 
         // Exclude Laravel internal paths (Telescope, Swagger, health check)
-        $path = '/' . ltrim($request->path(), '/');
+        $path = '/'.ltrim($request->path(), '/');
         $exclusions = [
             '/up', // default health check
             '/telescope',
@@ -128,7 +128,7 @@ class TrackVisitorSession
     private function cleanUuid(?string $uuid): string
     {
         if (empty($uuid)) {
-            return (string) \Illuminate\Support\Str::uuid();
+            return (string) Str::uuid();
         }
 
         // If the UUID looks like an encrypted Laravel cookie (it is long)
@@ -142,8 +142,8 @@ class TrackVisitorSession
             } catch (\Throwable $e) {
                 // Ignore and fall back to fresh UUID
             }
-            
-            return (string) \Illuminate\Support\Str::uuid();
+
+            return (string) Str::uuid();
         }
 
         return $uuid;

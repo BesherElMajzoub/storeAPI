@@ -30,10 +30,10 @@ class CancellationRequestDecidedMail extends Mailable implements ShouldQueue
             ->subject($subject)
             ->view('emails.cancellation_request_decided')
             ->with([
-                'decision'           => $this->decision,
-                'orderNumber'        => $order->order_number,
-                'adminNote'          => $this->cancellationRequest->admin_note,
-                'decidedAt'          => $this->cancellationRequest->decided_at,
+                'decision' => $this->decision,
+                'orderNumber' => $order->order_number,
+                'adminNote' => $this->cancellationRequest->admin_note,
+                'decidedAt' => $this->cancellationRequest->decided_at,
             ]);
     }
 }

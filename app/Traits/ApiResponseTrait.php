@@ -11,8 +11,8 @@ trait ApiResponseTrait
         return response()->json([
             'success' => true,
             'message' => $message,
-            'data'    => $data,
-            'errors'  => null,
+            'data' => $data,
+            'errors' => null,
         ], $status);
     }
 
@@ -21,8 +21,8 @@ trait ApiResponseTrait
         return response()->json([
             'success' => false,
             'message' => $message,
-            'data'    => null,
-            'errors'  => $errors,
+            'data' => null,
+            'errors' => $errors,
         ], $status);
     }
 
@@ -31,14 +31,14 @@ trait ApiResponseTrait
         return response()->json([
             'success' => true,
             'message' => $message,
-            'data'    => $resource->items(),
-            'meta'    => [
+            'data' => $resource->items(),
+            'meta' => [
                 'current_page' => $resource->currentPage(),
-                'last_page'    => $resource->lastPage(),
-                'per_page'     => $resource->perPage(),
-                'total'        => $resource->total(),
+                'last_page' => $resource->lastPage(),
+                'per_page' => $resource->perPage(),
+                'total' => $resource->total(),
             ],
-            'errors'  => null,
+            'errors' => null,
         ]);
     }
 }

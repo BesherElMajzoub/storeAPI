@@ -26,16 +26,16 @@ class WishlistAnalyticsController extends Controller
     #[OA\Response(response: 200, description: 'Analytics fetched')]
     public function index(Request $request): JsonResponse
     {
-        $perPage  = min(max((int) $request->get('per_page', 20), 1), 100);
+        $perPage = min(max((int) $request->get('per_page', 20), 1), 100);
         $products = $this->analyticsService->getProductsByWishlistCount($perPage);
 
-        $formatted = $products->through(fn($product) => [
-            'id'             => $product->id,
-            'name'           => $product->name,
-            'slug'           => $product->slug,
-            'price'          => (float) $product->price,
-            'final_price'    => (float) $product->final_price,
-            'image'          => $product->images->first()?->url,
+        $formatted = $products->through(fn ($product) => [
+            'id' => $product->id,
+            'name' => $product->name,
+            'slug' => $product->slug,
+            'price' => (float) $product->price,
+            'final_price' => (float) $product->final_price,
+            'image' => $product->images->first()?->url,
             'wishlist_count' => (int) $product->wishlist_count,
         ]);
 
@@ -70,18 +70,18 @@ class WishlistAnalyticsController extends Controller
     #[OA\Response(response: 200, description: 'Trending products fetched')]
     public function trending(Request $request): JsonResponse
     {
-        $days    = min(max((int) $request->get('days', 7), 1), 90);
+        $days = min(max((int) $request->get('days', 7), 1), 90);
         $perPage = min(max((int) $request->get('per_page', 20), 1), 100);
 
         $products = $this->analyticsService->getTrending($days, $perPage);
 
-        $formatted = $products->through(fn($product) => [
-            'id'          => $product->id,
-            'name'        => $product->name,
-            'slug'        => $product->slug,
-            'price'       => (float) $product->price,
+        $formatted = $products->through(fn ($product) => [
+            'id' => $product->id,
+            'name' => $product->name,
+            'slug' => $product->slug,
+            'price' => (float) $product->price,
             'final_price' => (float) $product->final_price,
-            'image'       => $product->images->first()?->url,
+            'image' => $product->images->first()?->url,
             'recent_adds' => (int) $product->recent_adds,
         ]);
 
@@ -99,22 +99,22 @@ class WishlistAnalyticsController extends Controller
     #[OA\Response(response: 200, description: 'Conversion data fetched')]
     public function conversions(Request $request): JsonResponse
     {
-        $perPage  = min(max((int) $request->get('per_page', 20), 1), 100);
+        $perPage = min(max((int) $request->get('per_page', 20), 1), 100);
         $products = $this->analyticsService->getConversions($perPage);
 
         $formatted = $products->through(function ($product) {
             $wishlisted = (int) $product->total_wishlisted;
-            $converted  = (int) $product->total_converted;
+            $converted = (int) $product->total_converted;
 
             return [
-                'id'               => $product->id,
-                'name'             => $product->name,
-                'slug'             => $product->slug,
-                'price'            => (float) $product->price,
-                'image'            => $product->images->first()?->url,
+                'id' => $product->id,
+                'name' => $product->name,
+                'slug' => $product->slug,
+                'price' => (float) $product->price,
+                'image' => $product->images->first()?->url,
                 'total_wishlisted' => $wishlisted,
-                'total_converted'  => $converted,
-                'conversion_rate'  => $wishlisted > 0
+                'total_converted' => $converted,
+                'conversion_rate' => $wishlisted > 0
                     ? round(($converted / $wishlisted) * 100, 1)
                     : 0,
             ];

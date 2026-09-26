@@ -28,25 +28,25 @@ class ReviewService
         }
 
         // Check: user must have purchased the product before (verified purchase)
-        if (!$this->isVerifiedPurchase($user, $product->id)) {
+        if (! $this->isVerifiedPurchase($user, $product->id)) {
             throw new \Exception('You can only review products you have purchased.');
         }
 
         $review = Review::create([
-            'user_id'              => $user->id,
-            'product_id'           => $product->id,
-            'order_id'             => $this->findVerifiedPurchaseOrderId($user, $product->id),
-            'rating'               => $data['rating'],
-            'comment'              => $data['comment'] ?? null,
-            'status'               => 'pending', // All reviews go through moderation
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'order_id' => $this->findVerifiedPurchaseOrderId($user, $product->id),
+            'rating' => $data['rating'],
+            'comment' => $data['comment'] ?? null,
+            'status' => 'pending', // All reviews go through moderation
             'is_verified_purchase' => $this->isVerifiedPurchase($user, $product->id),
-            'ip_address'           => $ipAddress,
+            'ip_address' => $ipAddress,
         ]);
 
         Log::info('New review submitted', [
-            'user_id'    => $user->id,
+            'user_id' => $user->id,
             'product_id' => $product->id,
-            'review_id'  => $review->id,
+            'review_id' => $review->id,
         ]);
 
         return $review;
@@ -59,9 +59,9 @@ class ReviewService
     public function update(Review $review, array $data): Review
     {
         $review->update([
-            'rating'  => $data['rating'] ?? $review->rating,
+            'rating' => $data['rating'] ?? $review->rating,
             'comment' => $data['comment'] ?? $review->comment,
-            'status'  => 'pending', // Re-moderate after edit
+            'status' => 'pending', // Re-moderate after edit
         ]);
 
         return $review->fresh();
@@ -83,13 +83,13 @@ class ReviewService
     public function moderate(Review $review, string $action, ?string $adminNote = null): Review
     {
         $review->update([
-            'status'     => ($action === 'approve' ? 'approved' : 'rejected'),
-            'admin_note'  => $adminNote,
+            'status' => ($action === 'approve' ? 'approved' : 'rejected'),
+            'admin_note' => $adminNote,
         ]);
 
         Log::info('Review moderated', [
-            'review_id'  => $review->id,
-            'action'     => $action,
+            'review_id' => $review->id,
+            'action' => $action,
             'product_id' => $review->product_id,
         ]);
 
@@ -113,7 +113,7 @@ class ReviewService
     {
         return $user->orders()
             ->where('status', 'delivered')
-            ->whereHas('items', fn($q) => $q->where('product_id', $productId))
+            ->whereHas('items', fn ($q) => $q->where('product_id', $productId))
             ->exists();
     }
 
@@ -124,7 +124,7 @@ class ReviewService
     {
         $order = $user->orders()
             ->where('status', 'delivered')
-            ->whereHas('items', fn($q) => $q->where('product_id', $productId))
+            ->whereHas('items', fn ($q) => $q->where('product_id', $productId))
             ->latest()
             ->first();
 

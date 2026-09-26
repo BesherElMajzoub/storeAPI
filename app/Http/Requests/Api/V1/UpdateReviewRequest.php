@@ -14,7 +14,7 @@ class UpdateReviewRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'rating'  => 'sometimes|required|integer|between:1,5',
+            'rating' => 'sometimes|required|integer|between:1,5',
             'comment' => 'nullable|string|min:10|max:2000',
         ];
     }
@@ -23,8 +23,8 @@ class UpdateReviewRequest extends FormRequest
     {
         return [
             'rating.between' => 'Rating must be between 1 and 5.',
-            'comment.min'    => 'Comment must be at least 10 characters.',
-            'comment.max'    => 'Comment cannot exceed 2000 characters.',
+            'comment.min' => 'Comment must be at least 10 characters.',
+            'comment.max' => 'Comment cannot exceed 2000 characters.',
         ];
     }
 }

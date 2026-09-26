@@ -4,10 +4,10 @@ namespace App\Providers;
 
 use App\Models\User;
 use Illuminate\Support\Facades\Gate;
+use Laravel\Telescope\EntryType;
 use Laravel\Telescope\IncomingEntry;
 use Laravel\Telescope\Telescope;
 use Laravel\Telescope\TelescopeApplicationServiceProvider;
-use Laravel\Telescope\EntryType;
 
 class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
 {
@@ -65,7 +65,7 @@ class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
 
             try {
                 if (auth()->check()) {
-                    return ['user:' . auth()->id()];
+                    return ['user:'.auth()->id()];
                 }
             } catch (\Throwable) {
                 // Silently ignore — auth may not be available yet

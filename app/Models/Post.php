@@ -11,7 +11,7 @@ class Post extends Model
 
     protected $fillable = [
         'title', 'slug', 'content', 'image', 'status', 'published_at',
-        'author_id', 'meta_title', 'meta_description'
+        'author_id', 'meta_title', 'meta_description',
     ];
 
     protected $casts = [
@@ -26,6 +26,6 @@ class Post extends Model
     public function scopePublished($query)
     {
         return $query->where('status', 'published')
-                     ->where('published_at', '<=', now());
+            ->where('published_at', '<=', now());
     }
 }

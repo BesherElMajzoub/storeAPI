@@ -2,8 +2,8 @@
 
 namespace App\Observers;
 
-use App\Models\Review;
 use App\Models\Product;
+use App\Models\Review;
 use Illuminate\Support\Facades\Log;
 
 class ReviewObserver
@@ -51,13 +51,13 @@ class ReviewObserver
                 ->first();
 
             Product::where('id', $productId)->update([
-                'rating'        => round((float) ($stats->avg_rating ?? 0), 2),
+                'rating' => round((float) ($stats->avg_rating ?? 0), 2),
                 'reviews_count' => (int) ($stats->total ?? 0),
             ]);
         } catch (\Throwable $e) {
             Log::error('Failed to recalculate product rating', [
                 'product_id' => $productId,
-                'error'      => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
         }
     }

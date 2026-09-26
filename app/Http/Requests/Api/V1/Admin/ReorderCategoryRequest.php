@@ -30,7 +30,7 @@ class ReorderCategoryRequest extends BaseAdminRequest
     {
         $validator->after(function ($validator) {
             $categories = $this->input('categories', []);
-            if (!is_array($categories) || $categories === []) {
+            if (! is_array($categories) || $categories === []) {
                 return;
             }
 
@@ -47,7 +47,7 @@ class ReorderCategoryRequest extends BaseAdminRequest
             if ($circularIds !== []) {
                 $validator->errors()->add(
                     'categories',
-                    'Circular parent assignment detected for ids: ' . implode(', ', $circularIds) . '.'
+                    'Circular parent assignment detected for ids: '.implode(', ', $circularIds).'.'
                 );
             }
         });

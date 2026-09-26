@@ -2,8 +2,6 @@
 
 namespace App\Mail;
 
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
 
@@ -18,8 +16,7 @@ class OtpCodeMail extends Mailable
         public string $intendedFor,
         public string $deliveredTo,
         public bool $sentToOverride
-    ) {
-    }
+    ) {}
 
     public function build()
     {

@@ -14,7 +14,9 @@ class OrderStockTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private Product $product;
+
     private ProductVariant $variant;
 
     protected function setUp(): void
@@ -22,7 +24,7 @@ class OrderStockTest extends TestCase
         parent::setUp();
 
         $this->user = User::factory()->create();
-        
+
         $this->product = Product::create([
             'name' => 'Test Product',
             'slug' => 'test-product',

@@ -25,8 +25,8 @@ class StoreCancellationRequestRequest extends FormRequest
         throw new HttpResponseException(response()->json([
             'success' => false,
             'message' => 'Validation failed.',
-            'data'    => null,
-            'errors'  => $validator->errors(),
+            'data' => null,
+            'errors' => $validator->errors(),
         ], 422));
     }
 }

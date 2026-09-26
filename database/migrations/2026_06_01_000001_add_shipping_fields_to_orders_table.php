@@ -9,13 +9,13 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('orders', function (Blueprint $table) {
-            if (!Schema::hasColumn('orders', 'easypost_shipment_id')) {
+            if (! Schema::hasColumn('orders', 'easypost_shipment_id')) {
                 $table->string('easypost_shipment_id')->nullable()->after('notes');
             }
-            if (!Schema::hasColumn('orders', 'tracking_number')) {
+            if (! Schema::hasColumn('orders', 'tracking_number')) {
                 $table->string('tracking_number')->nullable()->after('easypost_shipment_id');
             }
-            if (!Schema::hasColumn('orders', 'label_url')) {
+            if (! Schema::hasColumn('orders', 'label_url')) {
                 $table->text('label_url')->nullable()->after('tracking_number');
             }
         });

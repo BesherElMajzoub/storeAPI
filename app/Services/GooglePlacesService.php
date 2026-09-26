@@ -2,18 +2,19 @@
 
 namespace App\Services;
 
+use App\Contracts\LocationServiceInterface;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use App\Contracts\LocationServiceInterface;
 
 class GooglePlacesService implements LocationServiceInterface
 {
     private string $apiKey;
+
     private string $baseUrl;
 
     public function __construct()
     {
-        $this->apiKey  = (string) (config('services.google.places_api_key') ?? '');
+        $this->apiKey = (string) (config('services.google.places_api_key') ?? '');
         $this->baseUrl = (string) (config('services.google.places_base_url') ?? 'https://places.googleapis.com/v1');
     }
 
@@ -24,6 +25,7 @@ class GooglePlacesService implements LocationServiceInterface
     {
         if (empty($this->apiKey)) {
             Log::error('Google Places API key is missing.');
+
             return ['error' => 'Google Places API is not configured.', 'status' => 500];
         }
 
@@ -32,20 +34,21 @@ class GooglePlacesService implements LocationServiceInterface
                 ->retry(2, 500)
                 ->withHeaders([
                     'X-Goog-Api-Key' => $this->apiKey,
-                    'Content-Type'   => 'application/json',
+                    'Content-Type' => 'application/json',
                 ])
                 ->post("{$this->baseUrl}/places:autocomplete", [
-                    'input'               => $query,
+                    'input' => $query,
                     'includedRegionCodes' => ['us', 'ca'],
-                    'sessionToken'        => $sessionToken,
+                    'sessionToken' => $sessionToken,
                 ]);
 
             if ($response->failed()) {
                 Log::error('Google Places Autocomplete failed.', ['response' => $response->json()]);
-                
+
                 if ($response->status() === 429) {
                     return ['error' => 'API quota exceeded or rate limited.', 'status' => 429];
                 }
+
                 return ['error' => 'Failed to fetch suggestions from Google API.', 'status' => 502];
             }
 
@@ -57,9 +60,9 @@ class GooglePlacesService implements LocationServiceInterface
                     $placePrediction = $suggestion['placePrediction'] ?? [];
                     if (isset($placePrediction['placeId'])) {
                         $suggestions[] = [
-                            'place_id'       => $placePrediction['placeId'],
-                            'description'    => $placePrediction['text']['text'] ?? '',
-                            'main_text'      => $placePrediction['structuredFormat']['mainText']['text'] ?? '',
+                            'place_id' => $placePrediction['placeId'],
+                            'description' => $placePrediction['text']['text'] ?? '',
+                            'main_text' => $placePrediction['structuredFormat']['mainText']['text'] ?? '',
                             'secondary_text' => $placePrediction['structuredFormat']['secondaryText']['text'] ?? '',
                         ];
                     }
@@ -70,6 +73,7 @@ class GooglePlacesService implements LocationServiceInterface
 
         } catch (\Throwable $e) {
             Log::error('Google Places Autocomplete exception.', ['error' => $e->getMessage()]);
+
             return ['error' => 'A connection timeout or unexpected error occurred.', 'status' => 504];
         }
     }
@@ -81,6 +85,7 @@ class GooglePlacesService implements LocationServiceInterface
     {
         if (empty($this->apiKey)) {
             Log::error('Google Places API key is missing.');
+
             return ['error' => 'Google Places API is not configured.', 'status' => 500];
         }
 
@@ -88,7 +93,7 @@ class GooglePlacesService implements LocationServiceInterface
             $response = Http::timeout(10)
                 ->retry(2, 500)
                 ->withHeaders([
-                    'X-Goog-Api-Key'   => $this->apiKey,
+                    'X-Goog-Api-Key' => $this->apiKey,
                     'X-Goog-FieldMask' => 'addressComponents,formattedAddress,location',
                 ])
                 ->get("{$this->baseUrl}/places/{$placeId}", [
@@ -109,14 +114,15 @@ class GooglePlacesService implements LocationServiceInterface
             }
 
             $data = $response->json();
-            
+
             return [
                 'data' => $this->mapAddressComponents($data),
-                'status' => 200
+                'status' => 200,
             ];
 
         } catch (\Throwable $e) {
             Log::error('Google Places Details exception.', ['error' => $e->getMessage()]);
+
             return ['error' => 'A connection timeout or unexpected error occurred.', 'status' => 504];
         }
     }
@@ -127,14 +133,14 @@ class GooglePlacesService implements LocationServiceInterface
     private function mapAddressComponents(array $data): array
     {
         $normalized = [
-            'line1'             => '',
-            'city'              => '',
-            'state'             => '',
-            'postal_code'       => '',
-            'country'           => '',
+            'line1' => '',
+            'city' => '',
+            'state' => '',
+            'postal_code' => '',
+            'country' => '',
             'formatted_address' => $data['formattedAddress'] ?? '',
-            'lat'               => $data['location']['latitude'] ?? null,
-            'lng'               => $data['location']['longitude'] ?? null,
+            'lat' => $data['location']['latitude'] ?? null,
+            'lng' => $data['location']['longitude'] ?? null,
         ];
 
         $components = $data['addressComponents'] ?? [];

@@ -14,7 +14,7 @@ class GoogleLoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'id_token'    => 'required|string',
+            'id_token' => 'required|string',
             'device_name' => 'nullable|string|max:255',
         ];
     }

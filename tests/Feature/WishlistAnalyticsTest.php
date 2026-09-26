@@ -16,7 +16,9 @@ class WishlistAnalyticsTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Product $product;
+
     private User $customer;
 
     protected function setUp(): void
@@ -65,9 +67,9 @@ class WishlistAnalyticsTest extends TestCase
                             'final_price',
                             'image',
                             'wishlist_count',
-                        ]
-                    ]
-                ]
+                        ],
+                    ],
+                ],
             ]);
     }
 
@@ -109,7 +111,7 @@ class WishlistAnalyticsTest extends TestCase
                     'this_week_adds',
                     'last_week_adds',
                     'growth_rate',
-                ]
+                ],
             ]);
     }
 
@@ -143,9 +145,9 @@ class WishlistAnalyticsTest extends TestCase
                             'final_price',
                             'image',
                             'recent_adds',
-                        ]
-                    ]
-                ]
+                        ],
+                    ],
+                ],
             ]);
     }
 
@@ -160,7 +162,7 @@ class WishlistAnalyticsTest extends TestCase
             'product_id' => $this->product->id,
         ]);
 
-                // Place a delivered order to simulate a converted checkout
+        // Place a delivered order to simulate a converted checkout
         $orderId = DB::table('orders')->insertGetId([
             'order_number' => 'ORD-TEST-100',
             'user_id' => $this->customer->id,
@@ -202,9 +204,9 @@ class WishlistAnalyticsTest extends TestCase
                             'total_wishlisted',
                             'total_converted',
                             'conversion_rate',
-                        ]
-                    ]
-                ]
+                        ],
+                    ],
+                ],
             ]);
     }
 }

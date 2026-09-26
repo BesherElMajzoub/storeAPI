@@ -73,11 +73,11 @@ return new class extends Migration
             $table->string('image')->nullable();
             $table->boolean('is_active')->default(true);
             $table->integer('sort_order')->default(0);
-            
+
             // SEO
             $table->string('meta_title')->nullable();
             $table->text('meta_description')->nullable();
-            
+
             $table->timestamps();
             $table->softDeletes();
         });
@@ -87,25 +87,25 @@ return new class extends Migration
             $table->string('name');
             $table->string('slug')->unique();
             $table->text('description')->nullable();
-            
+
             $table->decimal('price', 12, 2);
             $table->decimal('discount_price', 12, 2)->nullable();
-            
+
             $table->string('sku')->unique()->nullable();
             $table->integer('stock_qty')->default(0);
             $table->string('status')->default('draft'); // draft, published, archived
-            
+
             $table->foreignId('category_id')->nullable()->constrained()->nullOnDelete();
-            
+
             // Flexible attributes
             $table->json('options')->nullable(); // e.g. ["Color", "Size"]
             $table->boolean('in_stock')->default(true);
             $table->boolean('is_featured')->default(false);
-            
+
             // SEO
             $table->string('meta_title')->nullable();
             $table->text('meta_description')->nullable();
-            
+
             $table->decimal('rating', 3, 2)->default(0);
             $table->integer('reviews_count')->default(0);
 
@@ -145,37 +145,37 @@ return new class extends Migration
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
-        
+
         Schema::create('campaigns', function (Blueprint $table) {
-             $table->id();
-             $table->string('name');
-             $table->string('type')->default('flash_sale'); // flash_sale, bogo, etc
-             $table->json('conditions')->nullable();
-             $table->timestamp('starts_at')->nullable();
-             $table->timestamp('expires_at')->nullable();
-             $table->boolean('is_active')->default(true);
-             $table->timestamps();
+            $table->id();
+            $table->string('name');
+            $table->string('type')->default('flash_sale'); // flash_sale, bogo, etc
+            $table->json('conditions')->nullable();
+            $table->timestamp('starts_at')->nullable();
+            $table->timestamp('expires_at')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
         });
 
         Schema::create('orders', function (Blueprint $table) {
             $table->id();
             $table->string('order_number')->unique();
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete(); // Nullable for guest checkout if needed, though Requirements say "Auth Module" implies mostly users
-            
+
             $table->enum('status', ['pending', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'])->default('pending');
             $table->enum('payment_status', ['unpaid', 'paid', 'failed', 'refunded'])->default('unpaid');
-            
+
             $table->decimal('subtotal', 12, 2);
             $table->decimal('tax', 12, 2)->default(0);
             $table->decimal('shipping_cost', 12, 2)->default(0);
             $table->decimal('discount', 12, 2)->default(0);
             $table->decimal('total', 12, 2);
-            
+
             $table->string('coupon_code')->nullable();
-            
+
             $table->json('shipping_address');
             $table->json('billing_address')->nullable();
-            
+
             $table->text('notes')->nullable();
             $table->timestamps();
             $table->softDeletes();
@@ -186,15 +186,15 @@ return new class extends Migration
             $table->foreignId('order_id')->constrained()->cascadeOnDelete();
             $table->foreignId('product_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('variant_id')->nullable()->constrained('product_variants')->nullOnDelete();
-            
+
             $table->string('product_name');
             $table->string('variant_name')->nullable();
             $table->string('sku')->nullable();
-            
+
             $table->decimal('price', 12, 2); // Unit price at booking
             $table->integer('quantity');
             $table->decimal('total', 12, 2);
-            
+
             $table->timestamps();
         });
 
@@ -220,8 +220,8 @@ return new class extends Migration
             $table->enum('status', ['pending', 'approved', 'rejected'])->default('pending');
             $table->timestamps();
         });
-        
-         // --- ADMIN / SYSTEM ---
+
+        // --- ADMIN / SYSTEM ---
         Schema::create('audit_logs', function (Blueprint $table) {
             $table->id();
             $table->nullableMorphs('causer'); // User or Admin who did it
@@ -240,7 +240,7 @@ return new class extends Migration
             $table->string('type')->default('string'); // string, boolean, integer, json
             $table->timestamps();
         });
-        
+
         // --- BLOG ---
         Schema::create('posts', function (Blueprint $table) {
             $table->id();
@@ -250,13 +250,13 @@ return new class extends Migration
             $table->string('image')->nullable();
             $table->enum('status', ['draft', 'scheduled', 'published'])->default('draft');
             $table->timestamp('published_at')->nullable();
-            
+
             $table->foreignId('author_id')->nullable()->constrained('users');
-            
+
             // SEO
             $table->string('meta_title')->nullable();
             $table->text('meta_description')->nullable();
-            
+
             $table->timestamps();
         });
 
@@ -269,7 +269,7 @@ return new class extends Migration
             $table->nullableMorphs('model'); // attach to anything
             $table->timestamps();
         });
-        
+
         Schema::create('notifications', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->string('type');

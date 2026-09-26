@@ -7,8 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 class Campaign extends Model
 {
     protected $fillable = [
-        'name', 'type', 'conditions', 'starts_at', 
-        'expires_at', 'is_active'
+        'name', 'type', 'conditions', 'starts_at',
+        'expires_at', 'is_active',
     ];
 
     protected $casts = [

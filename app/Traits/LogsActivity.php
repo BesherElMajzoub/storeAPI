@@ -15,7 +15,7 @@ trait LogsActivity
             'action' => $action,
             'description' => $description,
             'ip_address' => request()->ip(),
-            'changes' => $changes
+            'changes' => $changes,
         ]);
     }
 }

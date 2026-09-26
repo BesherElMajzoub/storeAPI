@@ -21,7 +21,7 @@ class AnalyticsEvent extends Model
 
     protected $casts = [
         'event_metadata' => 'array',
-        'visited_at'     => 'datetime',
+        'visited_at' => 'datetime',
     ];
 
     /**

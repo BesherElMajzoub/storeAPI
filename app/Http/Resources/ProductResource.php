@@ -16,35 +16,35 @@ class ProductResource extends JsonResource
     public function toArray(Request $request): array
     {
         $data = [
-            'id'             => $this->id,
-            'name'           => $this->name,
-            'slug'           => $this->slug,
-            'description'    => $this->description,
-            'price'          => (float) $this->price,
+            'id' => $this->id,
+            'name' => $this->name,
+            'slug' => $this->slug,
+            'description' => $this->description,
+            'price' => (float) $this->price,
             'discount_price' => $this->discount_price !== null ? (float) $this->discount_price : null,
-            'final_price'    => (float) $this->final_price,
-            'sku'            => $this->sku,
-            'stock_qty'      => $this->stock_qty,
-            'in_stock'       => $this->in_stock,
-            'is_featured'    => $this->is_featured,
-            'rating'         => (float) $this->rating,
-            'reviews_count'  => (int) $this->reviews_count,
-            'category'       => new CategoryResource($this->whenLoaded('category')),
-            'variants'       => $this->whenLoaded('variants', function () {
+            'final_price' => (float) $this->final_price,
+            'sku' => $this->sku,
+            'stock_qty' => $this->stock_qty,
+            'in_stock' => $this->in_stock,
+            'is_featured' => $this->is_featured,
+            'rating' => (float) $this->rating,
+            'reviews_count' => (int) $this->reviews_count,
+            'category' => new CategoryResource($this->whenLoaded('category')),
+            'variants' => $this->whenLoaded('variants', function () {
                 return $this->variants->map(fn ($variant) => [
-                    'id'         => $variant->id,
-                    'name'       => $variant->name,
-                    'sku'        => $variant->sku,
-                    'price'      => (float) $variant->price,
-                    'stock_qty'  => $variant->stock_qty,
+                    'id' => $variant->id,
+                    'name' => $variant->name,
+                    'sku' => $variant->sku,
+                    'price' => (float) $variant->price,
+                    'stock_qty' => $variant->stock_qty,
                     'attributes' => $variant->attributes,
                 ]);
             }),
-            'attributes'     => $this->options,
+            'attributes' => $this->options,
         ];
 
         // Build image block from Spatie media
-        $data['image']   = $this->buildImageBlock();
+        $data['image'] = $this->buildImageBlock();
         $data['gallery'] = static::$detail ? $this->buildGallery() : [];
 
         // Reviews only appear on detail responses
@@ -71,24 +71,24 @@ class ProductResource extends JsonResource
 
         if (! $media) {
             return [
-                'thumb'  => null,
-                'card'   => null,
+                'thumb' => null,
+                'card' => null,
                 'detail' => null,
-                'zoom'   => null,
+                'zoom' => null,
             ];
         }
 
         return [
-            'thumb'  => $media->hasGeneratedConversion('product_thumb')
+            'thumb' => $media->hasGeneratedConversion('product_thumb')
                 ? $media->getUrl('product_thumb')
                 : $media->getUrl(),
-            'card'   => $media->hasGeneratedConversion('product_card')
+            'card' => $media->hasGeneratedConversion('product_card')
                 ? $media->getUrl('product_card')
                 : $media->getUrl(),
             'detail' => $media->hasGeneratedConversion('product_detail')
                 ? $media->getUrl('product_detail')
                 : $media->getUrl(),
-            'zoom'   => $media->hasGeneratedConversion('product_zoom')
+            'zoom' => $media->hasGeneratedConversion('product_zoom')
                 ? $media->getUrl('product_zoom')
                 : $media->getUrl(),
         ];
@@ -101,14 +101,14 @@ class ProductResource extends JsonResource
     {
         return $this->getMedia('product_images')
             ->map(fn ($media) => [
-                'id'     => $media->id,
+                'id' => $media->id,
                 'detail' => $media->hasGeneratedConversion('product_detail')
                     ? $media->getUrl('product_detail')
                     : $media->getUrl(),
-                'zoom'   => $media->hasGeneratedConversion('product_zoom')
+                'zoom' => $media->hasGeneratedConversion('product_zoom')
                     ? $media->getUrl('product_zoom')
                     : $media->getUrl(),
-                'order'  => $media->order_column,
+                'order' => $media->order_column,
             ])
             ->values()
             ->all();

@@ -31,6 +31,7 @@ abstract class BaseAdminRequest extends FormRequest
                 $data[$key] = null;
             }
         }
+
         return $data;
     }
 

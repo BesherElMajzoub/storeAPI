@@ -15,6 +15,7 @@ class AdminCouponTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private User $customer;
 
     protected function setUp(): void
@@ -36,12 +37,12 @@ class AdminCouponTest extends TestCase
     {
         $response = $this->actingAs($this->admin, 'sanctum')
             ->postJson('/api/v1/admin/coupons', [
-                'code'                    => 'welcome50', // tests lowercase autocasing
-                'type'                    => 'percentage',
-                'value'                   => 50.00,
-                'minimum_order_amount'    => 10.00,
+                'code' => 'welcome50', // tests lowercase autocasing
+                'type' => 'percentage',
+                'value' => 50.00,
+                'minimum_order_amount' => 10.00,
                 'maximum_discount_amount' => 50.00,
-                'is_active'               => true,
+                'is_active' => true,
             ]);
 
         $response->assertStatus(201)
@@ -62,9 +63,9 @@ class AdminCouponTest extends TestCase
     {
         $response = $this->actingAs($this->admin, 'sanctum')
             ->postJson('/api/v1/admin/coupons', [
-                'code'      => 'save20',
-                'type'      => 'fixed',
-                'value'     => 20.00,
+                'code' => 'save20',
+                'type' => 'fixed',
+                'value' => 20.00,
                 'is_active' => true,
             ]);
 
@@ -75,8 +76,8 @@ class AdminCouponTest extends TestCase
             ->assertJsonPath('data.value', '20.00');
 
         $this->assertDatabaseHas('coupons', [
-            'code'  => 'SAVE20',
-            'type'  => 'fixed',
+            'code' => 'SAVE20',
+            'type' => 'fixed',
             'value' => 20.00,
         ]);
     }
@@ -86,16 +87,16 @@ class AdminCouponTest extends TestCase
     public function test_admin_cannot_create_duplicate_code(): void
     {
         Coupon::create([
-            'code'      => 'WELCOME50',
-            'type'      => 'percentage',
-            'value'     => 50.00,
+            'code' => 'WELCOME50',
+            'type' => 'percentage',
+            'value' => 50.00,
             'is_active' => true,
         ]);
 
         $response = $this->actingAs($this->admin, 'sanctum')
             ->postJson('/api/v1/admin/coupons', [
-                'code'  => 'welcome50', // tests lowercase uppercase uniqueness
-                'type'  => 'percentage',
+                'code' => 'welcome50', // tests lowercase uppercase uniqueness
+                'type' => 'percentage',
                 'value' => 50.00,
             ]);
 
@@ -109,8 +110,8 @@ class AdminCouponTest extends TestCase
     {
         $response = $this->actingAs($this->admin, 'sanctum')
             ->postJson('/api/v1/admin/coupons', [
-                'code'  => 'FREEPASS',
-                'type'  => 'percentage',
+                'code' => 'FREEPASS',
+                'type' => 'percentage',
                 'value' => 150.00, // Invalid > 100
             ]);
 
@@ -124,17 +125,17 @@ class AdminCouponTest extends TestCase
     public function test_admin_can_update_coupon(): void
     {
         $coupon = Coupon::create([
-            'code'      => 'OLDCODE',
-            'type'      => 'fixed',
-            'value'     => 10.00,
+            'code' => 'OLDCODE',
+            'type' => 'fixed',
+            'value' => 10.00,
             'is_active' => true,
         ]);
 
         $response = $this->actingAs($this->admin, 'sanctum')
             ->putJson("/api/v1/admin/coupons/{$coupon->id}", [
-                'code'      => 'newcode',
-                'type'      => 'fixed',
-                'value'     => 15.00,
+                'code' => 'newcode',
+                'type' => 'fixed',
+                'value' => 15.00,
                 'is_active' => true,
             ]);
 
@@ -144,7 +145,7 @@ class AdminCouponTest extends TestCase
             ->assertJsonPath('data.value', '15.00');
 
         $this->assertDatabaseHas('coupons', [
-            'id'   => $coupon->id,
+            'id' => $coupon->id,
             'code' => 'NEWCODE',
         ]);
     }
@@ -154,9 +155,9 @@ class AdminCouponTest extends TestCase
     public function test_admin_can_toggle_coupon_status(): void
     {
         $coupon = Coupon::create([
-            'code'      => 'TOGGLEME',
-            'type'      => 'fixed',
-            'value'     => 10.00,
+            'code' => 'TOGGLEME',
+            'type' => 'fixed',
+            'value' => 10.00,
             'is_active' => true,
         ]);
 
@@ -176,27 +177,27 @@ class AdminCouponTest extends TestCase
     {
         // 1. Scheduled coupon
         Coupon::create([
-            'code'      => 'FUTURE1',
-            'type'      => 'fixed',
-            'value'     => 10.00,
+            'code' => 'FUTURE1',
+            'type' => 'fixed',
+            'value' => 10.00,
             'starts_at' => now()->addDays(5),
             'is_active' => true,
         ]);
 
         // 2. Expired coupon
         Coupon::create([
-            'code'       => 'PAST1',
-            'type'       => 'percentage',
-            'value'      => 15.00,
+            'code' => 'PAST1',
+            'type' => 'percentage',
+            'value' => 15.00,
             'expires_at' => now()->subDays(5),
-            'is_active'  => true,
+            'is_active' => true,
         ]);
 
         // 3. Active coupon
         Coupon::create([
-            'code'      => 'ACTIVE1',
-            'type'      => 'fixed',
-            'value'     => 20.00,
+            'code' => 'ACTIVE1',
+            'type' => 'fixed',
+            'value' => 20.00,
             'is_active' => true,
         ]);
 
@@ -227,25 +228,25 @@ class AdminCouponTest extends TestCase
     public function test_admin_can_view_coupon_usages(): void
     {
         $coupon = Coupon::create([
-            'code'      => 'USAGETEST',
-            'type'      => 'fixed',
-            'value'     => 10.00,
+            'code' => 'USAGETEST',
+            'type' => 'fixed',
+            'value' => 10.00,
             'is_active' => true,
         ]);
 
         $order = Order::create([
-            'order_number'     => 'ORD-1001',
-            'user_id'          => $this->customer->id,
-            'status'           => 'delivered',
-            'subtotal'         => 100.00,
-            'total'            => 90.00,
+            'order_number' => 'ORD-1001',
+            'user_id' => $this->customer->id,
+            'status' => 'delivered',
+            'subtotal' => 100.00,
+            'total' => 90.00,
             'shipping_address' => ['name' => 'John'],
         ]);
 
         CouponUsage::create([
-            'coupon_id'       => $coupon->id,
-            'user_id'         => $this->customer->id,
-            'order_id'        => $order->id,
+            'coupon_id' => $coupon->id,
+            'user_id' => $this->customer->id,
+            'order_id' => $order->id,
             'discount_amount' => 10.00,
         ]);
 
@@ -266,9 +267,9 @@ class AdminCouponTest extends TestCase
                             'user' => ['id', 'name', 'email'],
                             'discount_amount',
                             'created_at',
-                        ]
-                    ]
-                ]
+                        ],
+                    ],
+                ],
             ]);
     }
 
@@ -277,11 +278,11 @@ class AdminCouponTest extends TestCase
     public function test_used_coupon_cannot_be_deleted_directly(): void
     {
         $coupon = Coupon::create([
-            'code'       => 'CANNOTDELETE',
-            'type'       => 'fixed',
-            'value'      => 10.00,
+            'code' => 'CANNOTDELETE',
+            'type' => 'fixed',
+            'value' => 10.00,
             'used_count' => 1,
-            'is_active'  => true,
+            'is_active' => true,
         ]);
 
         $response = $this->actingAs($this->admin, 'sanctum')

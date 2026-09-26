@@ -5,9 +5,9 @@ namespace App\Http\Controllers\Api\V1\Admin;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
-use Laravel\Telescope\Storage\EntryQueryOptions;
 use Laravel\Telescope\Contracts\EntriesRepository;
 use Laravel\Telescope\EntryType;
+use Laravel\Telescope\Storage\EntryQueryOptions;
 use OpenApi\Attributes as OA;
 
 /**
@@ -41,7 +41,7 @@ class TelescopeApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $this->formatEntries($entries),
+            'data' => $this->formatEntries($entries),
         ]);
     }
 
@@ -64,7 +64,7 @@ class TelescopeApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $this->formatEntries($entries),
+            'data' => $this->formatEntries($entries),
         ]);
     }
 
@@ -87,7 +87,7 @@ class TelescopeApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $this->formatEntries($entries),
+            'data' => $this->formatEntries($entries),
         ]);
     }
 
@@ -110,7 +110,7 @@ class TelescopeApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $this->formatEntries($entries),
+            'data' => $this->formatEntries($entries),
         ]);
     }
 
@@ -133,7 +133,7 @@ class TelescopeApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $this->formatEntries($entries),
+            'data' => $this->formatEntries($entries),
         ]);
     }
 
@@ -156,7 +156,7 @@ class TelescopeApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $this->formatEntries($entries),
+            'data' => $this->formatEntries($entries),
         ]);
     }
 
@@ -179,7 +179,7 @@ class TelescopeApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $this->formatEntries($entries),
+            'data' => $this->formatEntries($entries),
         ]);
     }
 
@@ -202,7 +202,7 @@ class TelescopeApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $this->formatEntries($entries),
+            'data' => $this->formatEntries($entries),
         ]);
     }
 
@@ -225,7 +225,7 @@ class TelescopeApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $this->formatEntries($entries),
+            'data' => $this->formatEntries($entries),
         ]);
     }
 
@@ -242,15 +242,15 @@ class TelescopeApiController extends Controller
     public function summary(): JsonResponse
     {
         $types = [
-            'requests'      => EntryType::REQUEST,
-            'exceptions'    => EntryType::EXCEPTION,
-            'jobs'          => EntryType::JOB,
-            'logs'          => EntryType::LOG,
-            'queries'       => EntryType::QUERY,
-            'mail'          => EntryType::MAIL,
+            'requests' => EntryType::REQUEST,
+            'exceptions' => EntryType::EXCEPTION,
+            'jobs' => EntryType::JOB,
+            'logs' => EntryType::LOG,
+            'queries' => EntryType::QUERY,
+            'mail' => EntryType::MAIL,
             'notifications' => EntryType::NOTIFICATION,
-            'cache'         => EntryType::CACHE,
-            'events'        => EntryType::EVENT,
+            'cache' => EntryType::CACHE,
+            'events' => EntryType::EVENT,
         ];
 
         $summary = [];
@@ -258,14 +258,14 @@ class TelescopeApiController extends Controller
             $options = EntryQueryOptions::forIndex($type, null, 50);
             $entries = $this->storage->get($type, $options);
             $summary[$label] = [
-                'count'   => count($entries),
-                'latest'  => collect($entries)->first()?->content ?? null,
+                'count' => count($entries),
+                'latest' => collect($entries)->first()?->content ?? null,
             ];
         }
 
         return response()->json([
             'success' => true,
-            'data'    => $summary,
+            'data' => $summary,
         ]);
     }
 
@@ -283,11 +283,11 @@ class TelescopeApiController extends Controller
     private function formatEntries(array $entries): array
     {
         return collect($entries)->map(fn ($entry) => [
-            'id'         => $entry->id,
-            'uuid'       => $entry->uuid,
-            'type'       => $entry->type,
-            'content'    => $entry->content,
-            'tags'       => $entry->tags,
+            'id' => $entry->id,
+            'uuid' => $entry->uuid,
+            'type' => $entry->type,
+            'content' => $entry->content,
+            'tags' => $entry->tags,
             'created_at' => $entry->createdAt,
         ])->values()->all();
     }

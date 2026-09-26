@@ -36,11 +36,11 @@ class GeoLocationService
             return [
                 'country_code' => strtoupper($cfCountry),
                 'country_name' => null,
-                'region'       => null,
-                'city'         => null,
-                'latitude'     => null,
-                'longitude'    => null,
-                'source'       => 'cloudflare',
+                'region' => null,
+                'city' => null,
+                'latitude' => null,
+                'longitude' => null,
+                'source' => 'cloudflare',
             ];
         }
 
@@ -61,11 +61,11 @@ class GeoLocationService
                     return [
                         'country_code' => $data['countryCode'] ?? null,
                         'country_name' => $data['country'] ?? null,
-                        'region'       => $data['regionName'] ?? null,
-                        'city'         => $data['city'] ?? null,
-                        'latitude'     => $data['lat'] ?? null,
-                        'longitude'    => $data['lon'] ?? null,
-                        'source'       => 'ip-api.com',
+                        'region' => $data['regionName'] ?? null,
+                        'city' => $data['city'] ?? null,
+                        'latitude' => $data['lat'] ?? null,
+                        'longitude' => $data['lon'] ?? null,
+                        'source' => 'ip-api.com',
                     ];
                 }
             }
@@ -86,11 +86,11 @@ class GeoLocationService
                     return [
                         'country_code' => $data['country_code'] ?? null,
                         'country_name' => $data['country_name'] ?? null,
-                        'region'       => $data['region']       ?? null,
-                        'city'         => $data['city']         ?? null,
-                        'latitude'     => $data['latitude']     ?? null,
-                        'longitude'    => $data['longitude']    ?? null,
-                        'source'       => 'ipapi.co',
+                        'region' => $data['region'] ?? null,
+                        'city' => $data['city'] ?? null,
+                        'latitude' => $data['latitude'] ?? null,
+                        'longitude' => $data['longitude'] ?? null,
+                        'source' => 'ipapi.co',
                     ];
                 } else {
                     Log::warning('GeoLocationService: ipapi.co error', ['ip' => $ip, 'reason' => $data['reason'] ?? null]);
@@ -110,11 +110,11 @@ class GeoLocationService
         return [
             'country_code' => null,
             'country_name' => null,
-            'region'       => null,
-            'city'         => null,
-            'latitude'     => null,
-            'longitude'    => null,
-            'source'       => null,
+            'region' => null,
+            'city' => null,
+            'latitude' => null,
+            'longitude' => null,
+            'source' => null,
         ];
     }
 

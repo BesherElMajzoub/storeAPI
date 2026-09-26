@@ -18,7 +18,7 @@ class ProductService
         $suffix = 2;
 
         while ($this->slugExists($slug, $ignoreId)) {
-            $slug = $base . '-' . $suffix;
+            $slug = $base.'-'.$suffix;
             $suffix++;
         }
 

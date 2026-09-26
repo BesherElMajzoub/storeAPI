@@ -9,9 +9,6 @@ class TelegramNotifier
 {
     /**
      * Send an HTTPS POST alert to the Telegram admin chat.
-     *
-     * @param string $message
-     * @return void
      */
     public function sendAdminAlert(string $message): void
     {
@@ -20,9 +17,10 @@ class TelegramNotifier
 
         if (empty($botToken) || empty($chatId)) {
             Log::warning('TelegramNotifier: Telegram credentials are not fully configured.', [
-                'has_token' => !empty($botToken),
-                'has_chat_id' => !empty($chatId),
+                'has_token' => ! empty($botToken),
+                'has_chat_id' => ! empty($chatId),
             ]);
+
             return;
         }
 
@@ -42,7 +40,7 @@ class TelegramNotifier
                     'body' => $response->body(),
                     'message' => $message,
                 ]);
-                throw new \RuntimeException("Telegram API failed with status: " . $response->status());
+                throw new \RuntimeException('Telegram API failed with status: '.$response->status());
             }
         } catch (\Throwable $e) {
             Log::error('TelegramNotifier: Exception occurred while sending alert.', [

@@ -16,10 +16,10 @@ class CategoryResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id'       => $this->id,
-            'name'     => $this->name,
-            'slug'     => $this->slug,
-            'image'    => $this->buildImageBlock(),
+            'id' => $this->id,
+            'name' => $this->name,
+            'slug' => $this->slug,
+            'image' => $this->buildImageBlock(),
             'children' => CategoryResource::collection($this->whenLoaded('children')),
         ];
     }
@@ -34,17 +34,17 @@ class CategoryResource extends JsonResource
 
         if (! $media) {
             return [
-                'thumb'  => null,
-                'card'   => null,
+                'thumb' => null,
+                'card' => null,
                 'banner' => null,
             ];
         }
 
         return [
-            'thumb'  => $media->hasGeneratedConversion('category_thumb')
+            'thumb' => $media->hasGeneratedConversion('category_thumb')
                 ? $media->getUrl('category_thumb')
                 : $media->getUrl(),
-            'card'   => $media->hasGeneratedConversion('category_card')
+            'card' => $media->hasGeneratedConversion('category_card')
                 ? $media->getUrl('category_card')
                 : $media->getUrl(),
             'banner' => static::$detail

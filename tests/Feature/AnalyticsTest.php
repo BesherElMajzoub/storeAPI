@@ -10,11 +10,8 @@ use App\Models\Role;
 use App\Models\User;
 use App\Models\Visitor;
 use App\Models\VisitorSession;
-use App\Services\GeoLocationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
-use Illuminate\Support\Facades\Cookie;
-use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -51,7 +48,7 @@ class AnalyticsTest extends TestCase
 
         $response = $this->postJson('/api/v1/analytics/event', [
             'event_name' => 'whatsapp_clicked',
-            'url'        => 'http://localhost/products/1',
+            'url' => 'http://localhost/products/1',
             'visitor_uuid' => (string) Str::uuid(),
             'session_uuid' => (string) Str::uuid(),
         ]);
@@ -74,20 +71,20 @@ class AnalyticsTest extends TestCase
         $sessionUuid = (string) Str::uuid();
 
         $payload = [
-            'visitor_uuid'     => $visitorUuid,
-            'session_uuid'     => $sessionUuid,
-            'user_id'          => null,
-            'ip'               => '8.8.8.8',
-            'url'              => 'http://localhost/test',
-            'referrer'         => 'http://google.com',
-            'user_agent'       => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'browser'          => 'Chrome',
-            'device'           => 'desktop',
+            'visitor_uuid' => $visitorUuid,
+            'session_uuid' => $sessionUuid,
+            'user_id' => null,
+            'ip' => '8.8.8.8',
+            'url' => 'http://localhost/test',
+            'referrer' => 'http://google.com',
+            'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'browser' => 'Chrome',
+            'device' => 'desktop',
             'operating_system' => 'Windows',
-            'utm_source'       => 'google',
-            'utm_medium'       => 'cpc',
-            'utm_campaign'     => 'spring_sale',
-            'visited_at'       => now(),
+            'utm_source' => 'google',
+            'utm_medium' => 'cpc',
+            'utm_campaign' => 'spring_sale',
+            'visited_at' => now(),
         ];
 
         // Disable GeoIP check to speed up tests and avoid external HTTP queries
@@ -99,19 +96,19 @@ class AnalyticsTest extends TestCase
         // Verify visitor, session, and page view records exist in the database
         $this->assertDatabaseHas('visitors', [
             'visitor_uuid' => $visitorUuid,
-            'browser'      => 'Chrome',
-            'device'       => 'desktop',
+            'browser' => 'Chrome',
+            'device' => 'desktop',
         ]);
 
         $this->assertDatabaseHas('visitor_sessions', [
             'session_uuid' => $sessionUuid,
-            'utm_source'   => 'google',
+            'utm_source' => 'google',
             'utm_campaign' => 'spring_sale',
         ]);
 
         $this->assertDatabaseHas('page_views', [
             'session_uuid' => $sessionUuid,
-            'url'          => 'http://localhost/test',
+            'url' => 'http://localhost/test',
         ]);
     }
 
@@ -124,17 +121,17 @@ class AnalyticsTest extends TestCase
         $sessionUuid = (string) Str::uuid();
 
         $payload = [
-            'visitor_uuid'     => $visitorUuid,
-            'session_uuid'     => $sessionUuid,
-            'user_id'          => null,
-            'ip'               => '8.8.8.8',
-            'url'              => 'http://localhost/test-dup',
-            'referrer'         => null,
-            'user_agent'       => 'Mozilla',
-            'browser'          => 'Chrome',
-            'device'           => 'desktop',
+            'visitor_uuid' => $visitorUuid,
+            'session_uuid' => $sessionUuid,
+            'user_id' => null,
+            'ip' => '8.8.8.8',
+            'url' => 'http://localhost/test-dup',
+            'referrer' => null,
+            'user_agent' => 'Mozilla',
+            'browser' => 'Chrome',
+            'device' => 'desktop',
             'operating_system' => 'Windows',
-            'visited_at'       => now(),
+            'visited_at' => now(),
         ];
 
         config(['analytics.geoip_enabled' => false]);
@@ -160,19 +157,19 @@ class AnalyticsTest extends TestCase
         $sessionUuid = (string) Str::uuid();
 
         $payload = [
-            'visitor_uuid'   => $visitorUuid,
-            'session_uuid'   => $sessionUuid,
-            'user_id'        => null,
-            'ip'             => '8.8.8.8',
-            'url'            => 'http://localhost/checkout',
-            'referrer'       => null,
-            'user_agent'     => 'Mozilla',
-            'browser'        => 'Chrome',
-            'device'         => 'desktop',
+            'visitor_uuid' => $visitorUuid,
+            'session_uuid' => $sessionUuid,
+            'user_id' => null,
+            'ip' => '8.8.8.8',
+            'url' => 'http://localhost/checkout',
+            'referrer' => null,
+            'user_agent' => 'Mozilla',
+            'browser' => 'Chrome',
+            'device' => 'desktop',
             'operating_system' => 'Windows',
-            'event_name'     => 'checkout_started',
+            'event_name' => 'checkout_started',
             'event_metadata' => ['total' => 250.00],
-            'visited_at'     => now(),
+            'visited_at' => now(),
         ];
 
         config(['analytics.geoip_enabled' => false]);
@@ -182,7 +179,7 @@ class AnalyticsTest extends TestCase
 
         $this->assertDatabaseHas('analytics_events', [
             'session_uuid' => $sessionUuid,
-            'event_name'   => 'checkout_started',
+            'event_name' => 'checkout_started',
         ]);
     }
 
@@ -199,32 +196,32 @@ class AnalyticsTest extends TestCase
         // 2. Generate seed data in database
         $visitor = Visitor::create([
             'visitor_uuid' => (string) Str::uuid(),
-            'ip_hash'      => hash('sha256', '8.8.8.8'),
-            'browser'      => 'Firefox',
-            'device'       => 'mobile',
-            'country'      => 'Saudi Arabia',
-            'city'         => 'Riyadh',
+            'ip_hash' => hash('sha256', '8.8.8.8'),
+            'browser' => 'Firefox',
+            'device' => 'mobile',
+            'country' => 'Saudi Arabia',
+            'city' => 'Riyadh',
         ]);
 
         $session = VisitorSession::create([
             'session_uuid' => (string) Str::uuid(),
             'visitor_uuid' => $visitor->visitor_uuid,
-            'referrer'     => 'http://google.com',
-            'utm_source'   => 'google',
+            'referrer' => 'http://google.com',
+            'utm_source' => 'google',
         ]);
 
         PageView::create([
             'session_uuid' => $session->session_uuid,
             'visitor_uuid' => $visitor->visitor_uuid,
-            'url'          => 'http://localhost/',
-            'visited_at'   => now(),
+            'url' => 'http://localhost/',
+            'visited_at' => now(),
         ]);
 
         AnalyticsEvent::create([
             'session_uuid' => $session->session_uuid,
             'visitor_uuid' => $visitor->visitor_uuid,
-            'event_name'   => 'order_completed',
-            'visited_at'   => now(),
+            'event_name' => 'order_completed',
+            'visited_at' => now(),
         ]);
 
         // 3. Request admin dashboard as authenticated admin
@@ -257,8 +254,8 @@ class AnalyticsTest extends TestCase
                     'charts' => [
                         'visits_by_day',
                         'events_by_day',
-                    ]
-                ]
+                    ],
+                ],
             ]);
     }
 }

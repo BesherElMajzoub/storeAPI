@@ -13,7 +13,7 @@ class GeoapifyAddressControllerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        
+
         $this->session = Str::uuid()->toString();
         config(['services.location_provider' => 'geoapify']);
         config(['services.geoapify.api_key' => 'test_geoapify_key']);
@@ -30,18 +30,18 @@ class GeoapifyAddressControllerTest extends TestCase
                             'formatted' => '123 Main St, Anytown, CA, USA',
                             'address_line1' => '123 Main St',
                             'address_line2' => 'Anytown, CA, USA',
-                        ]
-                    ]
-                ]
-            ], 200)
+                        ],
+                    ],
+                ],
+            ], 200),
         ]);
 
         $response = $this->getJson("/api/v1/address/autocomplete?q=123+Main&session={$this->session}");
 
         $response->assertStatus(200)
-                 ->assertJsonPath('success', true)
-                 ->assertJsonPath('data.0.place_id', 'geo_xyz123')
-                 ->assertJsonPath('data.0.main_text', '123 Main St');
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.0.place_id', 'geo_xyz123')
+            ->assertJsonPath('data.0.main_text', '123 Main St');
     }
 
     public function test_geoapify_details_success()
@@ -61,22 +61,22 @@ class GeoapifyAddressControllerTest extends TestCase
                             'formatted' => '123 Main St, Anytown, CA 12345, USA',
                             'lat' => 37.7749,
                             'lon' => -122.4194,
-                        ]
-                    ]
-                ]
-            ], 200)
+                        ],
+                    ],
+                ],
+            ], 200),
         ]);
 
         $response = $this->getJson("/api/v1/address/details?place_id=geo_xyz123&session={$this->session}");
 
         $response->assertStatus(200)
-                 ->assertJsonPath('success', true)
-                 ->assertJsonPath('data.line1', '123 Main St')
-                 ->assertJsonPath('data.city', 'Anytown')
-                 ->assertJsonPath('data.state', 'CA')
-                 ->assertJsonPath('data.postal_code', '12345')
-                 ->assertJsonPath('data.country', 'US')
-                 ->assertJsonPath('data.lat', 37.7749)
-                 ->assertJsonPath('data.lng', -122.4194);
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.line1', '123 Main St')
+            ->assertJsonPath('data.city', 'Anytown')
+            ->assertJsonPath('data.state', 'CA')
+            ->assertJsonPath('data.postal_code', '12345')
+            ->assertJsonPath('data.country', 'US')
+            ->assertJsonPath('data.lat', 37.7749)
+            ->assertJsonPath('data.lng', -122.4194);
     }
 }

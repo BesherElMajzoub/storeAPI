@@ -10,7 +10,7 @@ class EnsureAdminRole
     public function handle(Request $request, Closure $next)
     {
         $user = $request->user();
-        if (!$user || !$user->hasRole('Admin')) {
+        if (! $user || ! $user->hasRole('Admin')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Forbidden.',

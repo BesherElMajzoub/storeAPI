@@ -6,50 +6,49 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
-use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 
 class DashboardController extends Controller
 {
     #[OA\Get(
-        path: "/api/v1/admin/dashboard",
-        summary: "Admin Dashboard Stats",
-        description: "Get general statistics for the admin dashboard",
-        security: [["bearerAuth" => []]],
-        tags: ["Admin Dashboard"]
+        path: '/api/v1/admin/dashboard',
+        summary: 'Admin Dashboard Stats',
+        description: 'Get general statistics for the admin dashboard',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Dashboard']
     )]
     #[OA\Response(
         response: 200,
-        description: "Dashboard stats fetched successfully",
+        description: 'Dashboard stats fetched successfully',
         content: new OA\JsonContent(
-            type: "object",
+            type: 'object',
             properties: [
-                new OA\Property(property: "month_sales_total", type: "number", format: "float", example: 1540.50),
-                new OA\Property(property: "current_orders_count", type: "integer", example: 25),
-                new OA\Property(property: "users_count", type: "integer", example: 150),
+                new OA\Property(property: 'month_sales_total', type: 'number', format: 'float', example: 1540.50),
+                new OA\Property(property: 'current_orders_count', type: 'integer', example: 25),
+                new OA\Property(property: 'users_count', type: 'integer', example: 150),
                 new OA\Property(
-                    property: "top_products",
-                    type: "array",
-                    items: new OA\Items(ref: "#/components/schemas/Product")
+                    property: 'top_products',
+                    type: 'array',
+                    items: new OA\Items(ref: '#/components/schemas/Product')
                 ),
                 new OA\Property(
-                    property: "latest_orders",
-                    type: "array",
-                    items: new OA\Items(ref: "#/components/schemas/Order")
+                    property: 'latest_orders',
+                    type: 'array',
+                    items: new OA\Items(ref: '#/components/schemas/Order')
                 ),
                 new OA\Property(
-                    property: "alerts",
-                    type: "object",
+                    property: 'alerts',
+                    type: 'object',
                     properties: [
-                        new OA\Property(property: "low_stock", type: "integer", example: 3),
-                        new OA\Property(property: "pending_orders", type: "integer", example: 5)
+                        new OA\Property(property: 'low_stock', type: 'integer', example: 3),
+                        new OA\Property(property: 'pending_orders', type: 'integer', example: 5),
                     ]
-                )
+                ),
             ]
         )
     )]
-    #[OA\Response(response: 401, ref: "#/components/responses/UnauthorizedResponse")]
-    #[OA\Response(response: 403, ref: "#/components/responses/ForbiddenResponse")]
+    #[OA\Response(response: 401, ref: '#/components/responses/UnauthorizedResponse')]
+    #[OA\Response(response: 403, ref: '#/components/responses/ForbiddenResponse')]
     public function index()
     {
         return response()->json([
@@ -64,7 +63,7 @@ class DashboardController extends Controller
             'alerts' => [
                 'low_stock' => Product::where('stock_qty', '<', 3)->count(),
                 'pending_orders' => Order::where('status', 'pending')->count(),
-            ]
+            ],
         ]);
     }
 }

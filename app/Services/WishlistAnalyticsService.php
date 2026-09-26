@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Product;
 use App\Models\WishlistEvent;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
 class WishlistAnalyticsService
@@ -11,7 +12,7 @@ class WishlistAnalyticsService
     /**
      * Products ranked by current wishlist count (paginated).
      */
-    public function getProductsByWishlistCount(int $perPage = 20): \Illuminate\Pagination\LengthAwarePaginator
+    public function getProductsByWishlistCount(int $perPage = 20): LengthAwarePaginator
     {
         return Product::select('products.*')
             ->addSelect(DB::raw('COUNT(wishlist_items.id) as wishlist_count'))
@@ -29,9 +30,9 @@ class WishlistAnalyticsService
      */
     public function getSummary(): array
     {
-        $totalEntries    = DB::table('wishlist_items')->count();
-        $uniqueProducts  = DB::table('wishlist_items')->distinct()->count('product_id'); // Bug fixed
-        $uniqueUsers     = DB::table('wishlist_items')->distinct()->count('user_id');    // Bug fixed
+        $totalEntries = DB::table('wishlist_items')->count();
+        $uniqueProducts = DB::table('wishlist_items')->distinct()->count('product_id'); // Bug fixed
+        $uniqueUsers = DB::table('wishlist_items')->distinct()->count('user_id');    // Bug fixed
 
         $topProduct = Product::select('products.*')
             ->addSelect(DB::raw('COUNT(wishlist_items.id) as wishlist_count'))
@@ -43,27 +44,27 @@ class WishlistAnalyticsService
             ->first();
 
         // Week-over-week trend
-        $thisWeekAdded    = WishlistEvent::where('action', 'added')
+        $thisWeekAdded = WishlistEvent::where('action', 'added')
             ->where('created_at', '>=', now()->startOfWeek())
             ->count();
 
-        $lastWeekAdded    = WishlistEvent::where('action', 'added')
+        $lastWeekAdded = WishlistEvent::where('action', 'added')
             ->whereBetween('created_at', [now()->subWeek()->startOfWeek(), now()->subWeek()->endOfWeek()])
             ->count();
 
         return [
-            'total_wishlist_entries'     => $totalEntries,
+            'total_wishlist_entries' => $totalEntries,
             'unique_wishlisted_products' => $uniqueProducts,
-            'users_with_wishlist'        => $uniqueUsers,
-            'top_product'                => $topProduct ? [
-                'id'             => $topProduct->id,
-                'name'           => $topProduct->name,
+            'users_with_wishlist' => $uniqueUsers,
+            'top_product' => $topProduct ? [
+                'id' => $topProduct->id,
+                'name' => $topProduct->name,
                 'wishlist_count' => (int) $topProduct->wishlist_count,
-                'image'          => $topProduct->images->first()?->url,
+                'image' => $topProduct->images->first()?->url,
             ] : null,
-            'this_week_adds'  => $thisWeekAdded,
-            'last_week_adds'  => $lastWeekAdded,
-            'growth_rate'     => $lastWeekAdded > 0
+            'this_week_adds' => $thisWeekAdded,
+            'last_week_adds' => $lastWeekAdded,
+            'growth_rate' => $lastWeekAdded > 0
                 ? round((($thisWeekAdded - $lastWeekAdded) / $lastWeekAdded) * 100, 1)
                 : null,
         ];
@@ -72,7 +73,7 @@ class WishlistAnalyticsService
     /**
      * Products trending by wishlist adds in the last N days.
      */
-    public function getTrending(int $days = 7, int $perPage = 20): \Illuminate\Pagination\LengthAwarePaginator
+    public function getTrending(int $days = 7, int $perPage = 20): LengthAwarePaginator
     {
         $since = now()->subDays($days);
 
@@ -80,8 +81,8 @@ class WishlistAnalyticsService
             ->addSelect(DB::raw('COUNT(wishlist_events.id) as recent_adds'))
             ->join('wishlist_events', function ($join) use ($since) {
                 $join->on('wishlist_events.product_id', '=', 'products.id')
-                     ->where('wishlist_events.action', '=', 'added')
-                     ->where('wishlist_events.created_at', '>=', $since);
+                    ->where('wishlist_events.action', '=', 'added')
+                    ->where('wishlist_events.created_at', '>=', $since);
             })
             ->whereNull('products.deleted_at')
             ->groupBy('products.id')
@@ -94,7 +95,7 @@ class WishlistAnalyticsService
      * Wishlist-to-purchase conversion data.
      * Shows products that users wishlisted and then actually bought.
      */
-    public function getConversions(int $perPage = 20): \Illuminate\Pagination\LengthAwarePaginator
+    public function getConversions(int $perPage = 20): LengthAwarePaginator
     {
         // Products that appear in both wishlist_items and delivered order_items
         return Product::select('products.*')

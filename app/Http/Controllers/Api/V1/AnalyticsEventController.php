@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Http\Controllers\Controller;
 use App\Helpers\UserAgentParser;
+use App\Http\Controllers\Controller;
 use App\Jobs\LogEventJob;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,7 +17,7 @@ class AnalyticsEventController extends Controller
      */
     public function track(Request $request): JsonResponse
     {
-        if (!config('analytics.enabled', true)) {
+        if (! config('analytics.enabled', true)) {
             return response()->json(['success' => false, 'message' => 'Tracking disabled.'], 200);
         }
 
@@ -36,12 +36,12 @@ class AnalyticsEventController extends Controller
                     'product_viewed',
                     'add_to_cart',
                     'checkout_started',
-                ])
+                ]),
             ],
             'event_metadata' => 'nullable|array',
-            'visitor_uuid'   => 'nullable|string|uuid',
-            'session_uuid'   => 'nullable|string|uuid',
-            'url'            => 'nullable|string|url',
+            'visitor_uuid' => 'nullable|string|uuid',
+            'session_uuid' => 'nullable|string|uuid',
+            'url' => 'nullable|string|url',
         ]);
 
         // Bot Detection
@@ -69,27 +69,27 @@ class AnalyticsEventController extends Controller
 
         // Build Payload
         $payload = [
-            'visitor_uuid'     => $visitorUuid,
-            'session_uuid'     => $sessionUuid,
-            'user_id'          => $request->user()?->id,
-            'ip'               => $request->ip(),
-            'url'              => $url,
-            'referrer'         => $request->header('Referer'),
-            'user_agent'       => $userAgent,
-            'browser'          => $uaData['browser'],
-            'device'           => $uaData['device'],
+            'visitor_uuid' => $visitorUuid,
+            'session_uuid' => $sessionUuid,
+            'user_id' => $request->user()?->id,
+            'ip' => $request->ip(),
+            'url' => $url,
+            'referrer' => $request->header('Referer'),
+            'user_agent' => $userAgent,
+            'browser' => $uaData['browser'],
+            'device' => $uaData['device'],
             'operating_system' => $uaData['operating_system'],
-            
-            // UTM tracking parameters (attempt to extract from URL if query params exist)
-            'utm_source'       => $request->query('utm_source') ?? $this->getQueryParam($url, 'utm_source'),
-            'utm_medium'       => $request->query('utm_medium') ?? $this->getQueryParam($url, 'utm_medium'),
-            'utm_campaign'     => $request->query('utm_campaign') ?? $this->getQueryParam($url, 'utm_campaign'),
-            'utm_term'         => $request->query('utm_term') ?? $this->getQueryParam($url, 'utm_term'),
-            'utm_content'      => $request->query('utm_content') ?? $this->getQueryParam($url, 'utm_content'),
 
-            'event_name'       => $validated['event_name'],
-            'event_metadata'   => $validated['event_metadata'] ?? [],
-            'visited_at'       => now(),
+            // UTM tracking parameters (attempt to extract from URL if query params exist)
+            'utm_source' => $request->query('utm_source') ?? $this->getQueryParam($url, 'utm_source'),
+            'utm_medium' => $request->query('utm_medium') ?? $this->getQueryParam($url, 'utm_medium'),
+            'utm_campaign' => $request->query('utm_campaign') ?? $this->getQueryParam($url, 'utm_campaign'),
+            'utm_term' => $request->query('utm_term') ?? $this->getQueryParam($url, 'utm_term'),
+            'utm_content' => $request->query('utm_content') ?? $this->getQueryParam($url, 'utm_content'),
+
+            'event_name' => $validated['event_name'],
+            'event_metadata' => $validated['event_metadata'] ?? [],
+            'visited_at' => now(),
         ];
 
         // Dispatch queued job
@@ -98,10 +98,10 @@ class AnalyticsEventController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Event queued successfully.',
-            'data'    => [
+            'data' => [
                 'visitor_uuid' => $visitorUuid,
                 'session_uuid' => $sessionUuid,
-            ]
+            ],
         ]);
     }
 
@@ -130,7 +130,7 @@ class AnalyticsEventController extends Controller
     private function cleanUuid(?string $uuid): string
     {
         if (empty($uuid)) {
-            return (string) \Illuminate\Support\Str::uuid();
+            return (string) Str::uuid();
         }
 
         // If the UUID looks like an encrypted Laravel cookie (it is long)
@@ -144,8 +144,8 @@ class AnalyticsEventController extends Controller
             } catch (\Throwable $e) {
                 // Ignore and fall back to fresh UUID
             }
-            
-            return (string) \Illuminate\Support\Str::uuid();
+
+            return (string) Str::uuid();
         }
 
         return $uuid;

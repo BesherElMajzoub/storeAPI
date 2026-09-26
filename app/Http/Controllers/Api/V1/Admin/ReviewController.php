@@ -31,7 +31,7 @@ class ReviewController extends Controller
     public function index(Request $request): JsonResponse
     {
         $perPage = min(max((int) $request->get('per_page', 20), 1), 100);
-        $query   = Review::with(['user', 'product']);
+        $query = Review::with(['user', 'product']);
 
         // Filter by status
         if ($request->has('status') && in_array($request->status, ['pending', 'approved', 'rejected'], true)) {
@@ -90,17 +90,17 @@ class ReviewController extends Controller
     public function moderate(Request $request, Review $review): JsonResponse
     {
         $data = $request->validate([
-            'action'     => 'required|in:approve,reject',
+            'action' => 'required|in:approve,reject',
             'admin_note' => 'nullable|string|max:500',
         ]);
 
         $updated = $this->reviewService->moderate(
-            review:    $review,
-            action:    $data['action'],
+            review: $review,
+            action: $data['action'],
             adminNote: $data['admin_note'] ?? null,
         );
 
-        $verb    = $data['action'] === 'approve' ? 'approved' : 'rejected';
+        $verb = $data['action'] === 'approve' ? 'approved' : 'rejected';
         $message = "Review {$verb} successfully. Product rating updated.";
 
         return $this->success(new ReviewResource($updated->load(['user', 'product'])), $message);

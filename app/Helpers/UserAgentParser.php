@@ -7,13 +7,12 @@ class UserAgentParser
     /**
      * Parse the given User-Agent string.
      *
-     * @param string|null $userAgent
      * @return array{browser:string, device:string, operating_system:string, is_bot:bool}
      */
     public static function parse(?string $userAgent): array
     {
         $userAgent = $userAgent ?? '';
-        
+
         $browser = self::getBrowser($userAgent);
         $device = self::getDevice($userAgent);
         $os = self::getOS($userAgent);
@@ -50,7 +49,7 @@ class UserAgentParser
         if (preg_match('/msie|trident/i', $ua)) {
             return 'Internet Explorer';
         }
-        
+
         return 'Unknown Browser';
     }
 
@@ -101,7 +100,7 @@ class UserAgentParser
     private static function checkIsBot(string $ua): bool
     {
         $botSignatures = config('analytics.bot_signatures', []);
-        
+
         if (empty($ua)) {
             return true;
         }

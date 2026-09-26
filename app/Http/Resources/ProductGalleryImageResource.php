@@ -17,12 +17,12 @@ class ProductGalleryImageResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id'     => $this->id,
-            'thumb'  => $this->hasGeneratedConversion('product_thumb')  ? $this->getUrl('product_thumb')  : null,
-            'card'   => $this->hasGeneratedConversion('product_card')   ? $this->getUrl('product_card')   : null,
+            'id' => $this->id,
+            'thumb' => $this->hasGeneratedConversion('product_thumb') ? $this->getUrl('product_thumb') : null,
+            'card' => $this->hasGeneratedConversion('product_card') ? $this->getUrl('product_card') : null,
             'detail' => $this->hasGeneratedConversion('product_detail') ? $this->getUrl('product_detail') : null,
-            'zoom'   => $this->hasGeneratedConversion('product_zoom')   ? $this->getUrl('product_zoom')   : null,
-            'order'  => $this->order_column,
+            'zoom' => $this->hasGeneratedConversion('product_zoom') ? $this->getUrl('product_zoom') : null,
+            'order' => $this->order_column,
         ];
     }
 }

@@ -15,7 +15,7 @@ class AddressDetailsRequest extends FormRequest
     {
         return [
             'place_id' => ['required', 'string'],
-            'session'  => ['required', 'uuid'],
+            'session' => ['required', 'uuid'],
         ];
     }
 }

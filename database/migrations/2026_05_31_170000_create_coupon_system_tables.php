@@ -10,13 +10,13 @@ return new class extends Migration
     {
         // 1. Update coupons table
         Schema::table('coupons', function (Blueprint $table) {
-            if (!Schema::hasColumn('coupons', 'minimum_order_amount')) {
+            if (! Schema::hasColumn('coupons', 'minimum_order_amount')) {
                 $table->decimal('minimum_order_amount', 12, 2)->nullable()->after('value');
             }
-            if (!Schema::hasColumn('coupons', 'maximum_discount_amount')) {
+            if (! Schema::hasColumn('coupons', 'maximum_discount_amount')) {
                 $table->decimal('maximum_discount_amount', 12, 2)->nullable()->after('minimum_order_amount');
             }
-            if (!Schema::hasColumn('coupons', 'usage_limit_per_user')) {
+            if (! Schema::hasColumn('coupons', 'usage_limit_per_user')) {
                 $table->integer('usage_limit_per_user')->nullable()->after('used_count');
             }
         });
@@ -33,7 +33,7 @@ return new class extends Migration
 
         // 3. Update orders table
         Schema::table('orders', function (Blueprint $table) {
-            if (!Schema::hasColumn('orders', 'coupon_id')) {
+            if (! Schema::hasColumn('orders', 'coupon_id')) {
                 $table->foreignId('coupon_id')->nullable()->after('user_id')->constrained('coupons')->nullOnDelete();
             }
         });
@@ -52,7 +52,7 @@ return new class extends Migration
             $table->dropColumn([
                 'minimum_order_amount',
                 'maximum_discount_amount',
-                'usage_limit_per_user'
+                'usage_limit_per_user',
             ]);
         });
     }

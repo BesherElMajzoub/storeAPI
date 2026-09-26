@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Models\Category;
-use App\Models\Product;
 use App\Models\ProductImage;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
@@ -28,7 +27,7 @@ class MigrateImagesToSpatie extends Command
     public function handle(): int
     {
         $dryRun = (bool) $this->option('dry-run');
-        $only   = $this->option('only');
+        $only = $this->option('only');
 
         if ($dryRun) {
             $this->warn('DRY RUN — no files will be moved, no DB records created.');
@@ -66,6 +65,7 @@ class MigrateImagesToSpatie extends Command
 
         if ($images->isEmpty()) {
             $this->line('  No ProductImage records found.');
+
             return;
         }
 
@@ -82,6 +82,7 @@ class MigrateImagesToSpatie extends Command
                 $this->newLine();
                 $this->warn("  Skipped ProductImage #{$img->id} — product missing.");
                 $fail++;
+
                 continue;
             }
 
@@ -91,6 +92,7 @@ class MigrateImagesToSpatie extends Command
                 $this->newLine();
                 $this->warn("  Skipped ProductImage #{$img->id} — file not found: {$img->path}");
                 $fail++;
+
                 continue;
             }
 
@@ -101,6 +103,7 @@ class MigrateImagesToSpatie extends Command
 
             if ($alreadyMigrated) {
                 $ok++;
+
                 continue;
             }
 
@@ -147,6 +150,7 @@ class MigrateImagesToSpatie extends Command
 
         if ($categories->isEmpty()) {
             $this->line('  No categories with image column found.');
+
             return;
         }
 
@@ -164,6 +168,7 @@ class MigrateImagesToSpatie extends Command
             // Skip if already migrated
             if ($cat->getFirstMedia('category_image')) {
                 $ok++;
+
                 continue;
             }
 
@@ -183,6 +188,7 @@ class MigrateImagesToSpatie extends Command
                     $this->line("  [DRY] Would add from URL for category #{$cat->id}: {$rawImage}");
                     $ok++;
                 }
+
                 continue;
             }
 
@@ -191,6 +197,7 @@ class MigrateImagesToSpatie extends Command
                 $this->newLine();
                 $this->warn("  Skipped category #{$cat->id} — file not found: {$rawImage}");
                 $fail++;
+
                 continue;
             }
 

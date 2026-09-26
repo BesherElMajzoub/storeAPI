@@ -83,7 +83,7 @@ class ReviewController extends Controller
             ->with('user')
             ->first();
 
-        if (!$review) {
+        if (! $review) {
             return $this->error('You have not reviewed this product yet.', 404);
         }
 
