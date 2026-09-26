@@ -5,6 +5,8 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -53,7 +55,7 @@ class User extends Authenticatable
         ];
     }
 
-    public function roles()
+    public function roles(): BelongsToMany
     {
         return $this->belongsToMany(Role::class);
     }
@@ -71,7 +73,7 @@ class User extends Authenticatable
         return $this->roles()->where('name', $role)->exists();
     }
 
-    public function addresses()
+    public function addresses(): HasMany
     {
         return $this->hasMany(Address::class);
     }
@@ -79,7 +81,7 @@ class User extends Authenticatable
     /**
      * Alias for addresses() — used by the address management system.
      */
-    public function userAddresses()
+    public function userAddresses(): HasMany
     {
         return $this->hasMany(Address::class);
     }
@@ -87,22 +89,22 @@ class User extends Authenticatable
     /**
      * Items in this user's wishlist
      */
-    public function wishlistItems()
+    public function wishlistItems(): HasMany
     {
         return $this->hasMany(WishlistItem::class);
     }
 
-    public function orders()
+    public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
     }
 
-    public function reviews()
+    public function reviews(): HasMany
     {
         return $this->hasMany(Review::class);
     }
 
-    public function walletTransactions()
+    public function walletTransactions(): HasMany
     {
         return $this->hasMany(WalletTransaction::class);
     }
@@ -115,7 +117,7 @@ class User extends Authenticatable
         return $credits - $debits;
     }
 
-    public function couponUsages()
+    public function couponUsages(): HasMany
     {
         return $this->hasMany(CouponUsage::class);
     }

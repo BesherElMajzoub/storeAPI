@@ -5,6 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Image\Enums\Fit;
 use Spatie\MediaLibrary\HasMedia;
@@ -76,12 +79,12 @@ class Product extends Model implements HasMedia
     //  Relations
     // ──────────────────────────────────────────
 
-    public function category()
+    public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
     }
 
-    public function variants()
+    public function variants(): HasMany
     {
         return $this->hasMany(ProductVariant::class);
     }
@@ -89,17 +92,17 @@ class Product extends Model implements HasMedia
     /**
      * @deprecated Kept temporarily for backward compatibility during migration.
      */
-    public function images()
+    public function images(): HasMany
     {
         return $this->hasMany(ProductImage::class)->orderBy('sort_order');
     }
 
-    public function reviews()
+    public function reviews(): HasMany
     {
         return $this->hasMany(Review::class);
     }
 
-    public function wishlistedByUsers()
+    public function wishlistedByUsers(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'wishlist_items')->withTimestamps();
     }

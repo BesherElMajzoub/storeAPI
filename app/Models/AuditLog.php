@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class AuditLog extends Model
 {
@@ -15,7 +16,7 @@ class AuditLog extends Model
         'changes' => 'array',
     ];
 
-    public function causer()
+    public function causer(): MorphTo
     {
         return $this->morphTo();
     }

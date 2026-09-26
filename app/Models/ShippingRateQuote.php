@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ShippingRateQuote extends Model
 {
@@ -19,7 +20,7 @@ class ShippingRateQuote extends Model
         'consumed_at' => 'datetime',
     ];
 
-    public function order()
+    public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
     }
