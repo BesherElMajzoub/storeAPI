@@ -67,8 +67,8 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
 
     // --- PUBLIC STORE ---
     Route::post('coupons/validate', [CouponController::class, 'validate']);
-    Route::post('contact-messages', [ContactMessageController::class, 'store']);
-    Route::post('inspired-leads', [InspiredLeadController::class, 'store']);
+    Route::post('contact-messages', [ContactMessageController::class, 'store'])->middleware('throttle:public-form');
+    Route::post('inspired-leads', [InspiredLeadController::class, 'store'])->middleware('throttle:public-form');
     Route::post('analytics/event', [AnalyticsEventController::class, 'track']);
 
     // Shipping

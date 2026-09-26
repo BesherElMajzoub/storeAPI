@@ -53,6 +53,38 @@ class ApiHygieneTest extends TestCase
         ]);
     }
 
+    public function test_contact_message_submissions_are_rate_limited_per_ip(): void
+    {
+        Queue::fake([SendAdminAlert::class]);
+
+        for ($i = 0; $i < 5; $i++) {
+            $this->postJson('/api/v1/contact-messages', [
+                'name' => 'Visitor',
+                'email' => 'visitor@example.com',
+                'message' => "Message {$i}",
+            ])->assertCreated();
+        }
+
+        $this->postJson('/api/v1/contact-messages', [
+            'name' => 'Visitor',
+            'email' => 'visitor@example.com',
+            'message' => 'One too many',
+        ])->assertStatus(429);
+    }
+
+    public function test_inspired_lead_submissions_are_rate_limited_per_ip(): void
+    {
+        for ($i = 0; $i < 5; $i++) {
+            $this->postJson('/api/v1/inspired-leads', [
+                'phone' => "+100000000{$i}",
+            ])->assertStatus(201);
+        }
+
+        $this->postJson('/api/v1/inspired-leads', [
+            'phone' => '+1000000099',
+        ])->assertStatus(429);
+    }
+
     public function test_production_style_500_response_does_not_expose_exception_details(): void
     {
         config(['app.debug' => false]);

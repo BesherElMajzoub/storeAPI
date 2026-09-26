@@ -116,6 +116,14 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(1_000)->by('provider-webhook|'.$request->ip());
         });
 
+        // One-shot public forms (contact us, phone lead capture) have no
+        // legitimate reason to be submitted more than a few times a minute
+        // from one IP; unlike 'api' this isn't shared with normal browsing
+        // traffic, so it can be much tighter without hurting real users.
+        RateLimiter::for('public-form', function (Request $request) {
+            return Limit::perMinute(5)->by('public-form|'.$request->ip());
+        });
+
         RateLimiter::for('order-tracking', function (Request $request) {
             $fingerprint = hash('sha256', Str::lower(
                 trim((string) $request->input('order_number')).'|'.trim((string) $request->input('email'))
