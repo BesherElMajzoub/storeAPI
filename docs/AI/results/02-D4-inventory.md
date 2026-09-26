@@ -26,14 +26,18 @@ Product stock is the aggregate availability gate and variant stock is additional
 - **Severity:** P2
 - **Status:** FIXED
 - **Decision:** Stripe Checkout sessions expire after 30 minutes (configurable and clamped to 30-1440 minutes). `orders:expire-abandoned-checkouts` runs every 10 minutes, expires open sessions, cancels the matching local order, and lets completed sessions remain for the webhook. Provider errors are logged and retried; conditional locking makes repeated runs safe.
-- **Evidence:** `ExpireAbandonedCheckoutsTest` covers open, complete, provider-error, and repeated-run paths. Checkout session construction captures the configured expiry.
+- **Regression test:** `ExpireAbandonedCheckoutsTest::test_open_stale_checkout_is_expired_cancelled_and_released_once`, `test_complete_stale_checkout_is_left_for_webhook_confirmation`, and `test_provider_error_leaves_stale_checkout_untouched_for_retry`.
+- **Fix commit:** `4160d85` (implementation), `ef77a33` (tests).
+- **Evidence:** tests assert cancellation/payment failure, stock restoration exactly once, complete-session untouched, and provider-error retry state.
 
 ### D4-OBS-002 - Restock after refund of shipped goods
 
 - **Severity:** P1
 - **Status:** FIXED
 - **Decision:** automatic restock occurs only when `shipped_at` is null. Shipped/delivered refunds leave stock unchanged for manual administrator adjustment after goods return.
-- **Evidence:** `OrderStockTest::test_refunding_a_shipped_order_does_not_restock_inventory`; late-payment and full-refund webhook tests prove release remains idempotent.
+- **Regression test:** `OrderStockTest::test_refunding_a_shipped_order_does_not_restock_inventory` and `StripeWebhookSecurityTest::test_pending_admin_refund_then_signed_full_refund_releases_stock_once`.
+- **Fix commit:** `3b0b6cb`.
+- **Evidence:** shipped refund asserts stock and release marker unchanged; pre-shipment/full-refund paths assert one release and replay stability.
 
 ## Verified OK
 

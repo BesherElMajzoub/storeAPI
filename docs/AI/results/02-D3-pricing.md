@@ -11,15 +11,21 @@
 
 ### L-PAY-010 - Zero and below-minimum totals
 
+- **Severity:** P1
 - **Status:** FIXED
 - **Decision:** total `0` is a free order; `0 < total < 0.50` is rejected with error code `minimum_charge`.
-- **Evidence:** `PricingBatchTest` covers free-order response/payment/mail/admin alert, minimum rejection with unchanged stock and no order, single-use 100% coupon replay, and 409 admin refund for a free order.
+- **Regression test:** `PricingBatchTest::test_full_discount_creates_a_paid_free_order_without_stripe`, `test_below_minimum_total_is_rejected_before_order_or_stock_changes`, `test_second_use_of_single_use_free_coupon_is_rejected_without_side_effects`, and `test_free_order_cannot_be_refunded_by_admin`.
+- **Fix commit:** `7c88b22`.
+- **Evidence:** tests assert response shape, payment row, queued notifications, unchanged stock/order/coupon usage, and the 409 refund response.
 
 ### D3-FS-01 - Free-shipping threshold basis
 
 - **Status:** FIXED
 - **Decision:** threshold uses discounted subtotal (`subtotal - discount`).
-- **Evidence:** existing below/exact threshold tests plus `PricingBatchTest::test_free_shipping_threshold_is_based_on_discounted_subtotal`.
+- **Severity:** P2
+- **Regression test:** `FreeShippingTest::test_automatic_free_shipping_does_not_apply_below_the_threshold`, `test_threshold_boundary_is_inclusive`, and `PricingBatchTest::test_free_shipping_threshold_is_based_on_discounted_subtotal`.
+- **Fix commit:** `7c88b22`.
+- **Evidence:** existing below/exact threshold tests plus the discounted-subtotal assertion.
 
 ## Verified invariants
 
