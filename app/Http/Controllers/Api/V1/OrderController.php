@@ -12,10 +12,12 @@ use App\Http\Requests\Api\V1\StoreCancellationRequestRequest;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Resources\OrderResource;
 use App\Jobs\SendAdminAlert;
+use App\Mail\OrderPaidMail;
 use App\Models\Coupon;
 use App\Models\CouponUsage;
 use App\Models\Order;
 use App\Models\OrderCancellationRequest;
+use App\Models\Payment;
 use App\Models\ShippingRateQuote;
 use App\Services\CouponService;
 use App\Services\FreeShippingService;
@@ -29,6 +31,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use OpenApi\Attributes as OA;
 
@@ -404,7 +407,7 @@ class OrderController extends Controller
                 // free-shipping eligibility (automatic threshold OR a free_shipping coupon)
                 $carrierShippingCost = (float) $lockedQuote->amount;
                 $freeShippingReason = null;
-                if ($freeShipping->subtotalQualifies($subtotal)) {
+                if ($freeShipping->subtotalQualifies(max(0.0, $subtotal - $discount))) {
                     $freeShippingReason = 'threshold';
                 } elseif ($coupon && $coupon->isFreeShipping()) {
                     $freeShippingReason = 'coupon';
@@ -419,6 +422,10 @@ class OrderController extends Controller
 
                 // final total
                 $total = max(0.0, $subtotal - $discount + $shippingCost + $tax);
+
+                if ($total > 0 && $total < (float) config('services.stripe.minimum_charge', 0.50)) {
+                    throw new ShippingValidationException('The order total is below the minimum charge amount.', 'minimum_charge');
+                }
 
                 $order = Order::create([
                     'order_number' => 'ORD-'.strtoupper(Str::random(10)),
@@ -490,6 +497,20 @@ class OrderController extends Controller
         }
 
         // 2️⃣ Create Stripe Checkout Session
+        if ((float) $order->total === 0.0) {
+            $order->update(['status' => 'processing', 'payment_status' => 'paid', 'paid_at' => now()]);
+            Payment::create(['order_id' => $order->id, 'payment_provider' => 'free', 'status' => 'completed', 'amount' => 0]);
+            SendAdminAlert::dispatch("New free order {$order->order_number}")->onQueue('notifications');
+            Mail::to($order->user()->value('email'))->queue(new OrderPaidMail($order));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Order created without payment.',
+                'data' => ['order' => new OrderResource($order), 'checkout_url' => null, 'payment_required' => false, 'payment' => ['session_id' => null]],
+                'errors' => null,
+            ], 201);
+        }
+
         try {
             $session = $stripe->createCheckoutSession($order);
 
