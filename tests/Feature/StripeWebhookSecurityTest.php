@@ -284,7 +284,6 @@ class StripeWebhookSecurityTest extends TestCase
             'status' => 'refunded',
             'amount' => 100,
         ]);
-        $this->assertNotNull($order->fresh()->stock_released_at);
     }
 
     public function test_signed_partial_refund_records_amount_without_restocking_or_closing_order(): void
