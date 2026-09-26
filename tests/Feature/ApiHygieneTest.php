@@ -102,4 +102,11 @@ class ApiHygieneTest extends TestCase
         $this->assertStringNotContainsString('application.php', $response->getContent());
         $this->assertStringNotContainsString('trace', strtolower($response->getContent()));
     }
+
+    public function test_unauthenticated_api_requests_return_json_401_without_a_web_login_route(): void
+    {
+        $this->get('/api/v1/admin/categories')
+            ->assertUnauthorized()
+            ->assertHeader('Content-Type', 'application/json');
+    }
 }

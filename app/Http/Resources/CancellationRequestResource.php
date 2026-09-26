@@ -2,9 +2,11 @@
 
 namespace App\Http\Resources;
 
+use App\Models\OrderCancellationRequest;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
+/** @mixin OrderCancellationRequest */
 class CancellationRequestResource extends JsonResource
 {
     public function toArray(Request $request): array

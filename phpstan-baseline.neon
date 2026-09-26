@@ -1,16 +1,28 @@
 parameters:
 	ignoreErrors:
 		-
-			message: '#^Access to an undefined property App\\Models\\ProductImage\:\:\$product\.$#'
-			identifier: property.notFound
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:addMedia\(\)\.$#'
+			identifier: method.notFound
 			count: 1
 			path: app/Console/Commands/MigrateImagesToSpatie.php
 
 		-
-			message: '#^Relation ''product'' is not found in App\\Models\\ProductImage model\.$#'
-			identifier: larastan.relationExistence
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:getMedia\(\)\.$#'
+			identifier: method.notFound
 			count: 1
 			path: app/Console/Commands/MigrateImagesToSpatie.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$is_default\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/V1/AddressController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:setAsDefault\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: app/Http/Controllers/Api/V1/AddressController.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$landing_page\.$#'
@@ -37,85 +49,19 @@ parameters:
 			path: app/Http/Controllers/Api/V1/Admin/AdminAnalyticsController.php
 
 		-
-			message: '#^Relation ''causer'' is not found in App\\Models\\AuditLog model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Http/Controllers/Api/V1/Admin/AuditLogController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\OrderCancellationRequest\:\:\$order\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/V1/Admin/CancellationRequestController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\OrderCancellationRequest\:\:\$user\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
 			identifier: property.notFound
 			count: 2
 			path: app/Http/Controllers/Api/V1/Admin/CancellationRequestController.php
 
 		-
-			message: '#^Relation ''order'' is not found in App\\Models\\OrderCancellationRequest model\.$#'
-			identifier: larastan.relationExistence
-			count: 3
-			path: app/Http/Controllers/Api/V1/Admin/CancellationRequestController.php
-
-		-
-			message: '#^Relation ''user'' is not found in App\\Models\\OrderCancellationRequest model\.$#'
-			identifier: larastan.relationExistence
-			count: 3
-			path: app/Http/Controllers/Api/V1/Admin/CancellationRequestController.php
-
-		-
-			message: '#^Relation ''reviews'' is not found in App\\Models\\Product model\.$#'
-			identifier: larastan.relationExistence
+			message: '#^Using nullsafe method call on non\-nullable type Illuminate\\Database\\Eloquent\\Relations\\HasOne\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
 			count: 1
-			path: app/Http/Controllers/Api/V1/Admin/DashboardController.php
-
-		-
-			message: '#^Relation ''items'' is not found in App\\Models\\Order model\.$#'
-			identifier: larastan.relationExistence
-			count: 4
 			path: app/Http/Controllers/Api/V1/Admin/OrderController.php
 
 		-
-			message: '#^Relation ''payment'' is not found in App\\Models\\Order model\.$#'
-			identifier: larastan.relationExistence
-			count: 4
-			path: app/Http/Controllers/Api/V1/Admin/OrderController.php
-
-		-
-			message: '#^Relation ''user'' is not found in App\\Models\\Order model\.$#'
-			identifier: larastan.relationExistence
-			count: 4
-			path: app/Http/Controllers/Api/V1/Admin/OrderController.php
-
-		-
-			message: '#^Relation ''category'' is not found in App\\Models\\Product model\.$#'
-			identifier: larastan.relationExistence
-			count: 5
-			path: app/Http/Controllers/Api/V1/Admin/ProductController.php
-
-		-
-			message: '#^Relation ''variants'' is not found in App\\Models\\Product model\.$#'
-			identifier: larastan.relationExistence
-			count: 5
-			path: app/Http/Controllers/Api/V1/Admin/ProductController.php
-
-		-
-			message: '#^Relation ''product'' is not found in App\\Models\\Review model\.$#'
-			identifier: larastan.relationExistence
-			count: 3
-			path: app/Http/Controllers/Api/V1/Admin/ReviewController.php
-
-		-
-			message: '#^Relation ''user'' is not found in App\\Models\\Review model\.$#'
-			identifier: larastan.relationExistence
-			count: 3
-			path: app/Http/Controllers/Api/V1/Admin/ReviewController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Order\:\:\$user\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/V1/Admin/ShippingController.php
@@ -139,27 +85,9 @@ parameters:
 			path: app/Http/Controllers/Api/V1/Admin/TelescopeApiController.php
 
 		-
-			message: '#^Relation ''orders'' is not found in App\\Models\\User model\.$#'
-			identifier: larastan.relationExistence
-			count: 2
-			path: app/Http/Controllers/Api/V1/Admin/UserController.php
-
-		-
-			message: '#^Relation ''reviews'' is not found in App\\Models\\User model\.$#'
-			identifier: larastan.relationExistence
-			count: 2
-			path: app/Http/Controllers/Api/V1/Admin/UserController.php
-
-		-
 			message: '#^Offset ''phone'' on non\-empty\-array\<string, mixed\> on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
-			path: app/Http/Controllers/Api/V1/Auth/AuthController.php
-
-		-
-			message: '#^Relation ''roles'' is not found in App\\Models\\User model\.$#'
-			identifier: larastan.relationExistence
-			count: 3
 			path: app/Http/Controllers/Api/V1/Auth/AuthController.php
 
 		-
@@ -175,46 +103,70 @@ parameters:
 			path: app/Http/Controllers/Api/V1/Auth/AuthController.php
 
 		-
-			message: '#^Relation ''children'' is not found in App\\Models\\Category model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Http/Controllers/Api/V1/CategoryController.php
-
-		-
-			message: '#^Relation ''items'' is not found in App\\Models\\Order model\.$#'
-			identifier: larastan.relationExistence
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>\|Illuminate\\Database\\Eloquent\\Model\:\:\$created_at\.$#'
+			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/Api/V1/OrderController.php
 
 		-
-			message: '#^Relation ''category'' is not found in App\\Models\\Product model\.$#'
-			identifier: larastan.relationExistence
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>\|Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 6
+			path: app/Http/Controllers/Api/V1/OrderController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>\|Illuminate\\Database\\Eloquent\\Model\:\:\$order_number\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/V1/OrderController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>\|Illuminate\\Database\\Eloquent\\Model\:\:\$payment_status\.$#'
+			identifier: property.notFound
 			count: 2
-			path: app/Http/Controllers/Api/V1/ProductController.php
+			path: app/Http/Controllers/Api/V1/OrderController.php
 
 		-
-			message: '#^Relation ''reviews'' is not found in App\\Models\\Product model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Http/Controllers/Api/V1/ProductController.php
-
-		-
-			message: '#^Relation ''variants'' is not found in App\\Models\\Product model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Http/Controllers/Api/V1/ProductController.php
-
-		-
-			message: '#^Relation ''user'' is not found in App\\Models\\Order model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Http/Controllers/Api/V1/PublicOrderTrackingController.php
-
-		-
-			message: '#^Relation ''user'' is not found in App\\Models\\Review model\.$#'
-			identifier: larastan.relationExistence
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>\|Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
+			identifier: property.notFound
 			count: 3
-			path: app/Http/Controllers/Api/V1/ReviewController.php
+			path: app/Http/Controllers/Api/V1/OrderController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>\|Illuminate\\Database\\Eloquent\\Model\:\:\$stripe_session_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Api/V1/OrderController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$easypost_shipment_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/V1/OrderController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$tracking_number\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/V1/OrderController.php
+
+		-
+			message: '#^Parameter \#1 \$order of method App\\Services\\ShipmentTrackingService\:\:sync\(\) expects App\\Models\\Order, Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/V1/OrderController.php
+
+		-
+			message: '#^Parameter \#1 \$order of method App\\Services\\StripeCheckoutService\:\:createCheckoutSession\(\) expects App\\Models\\Order, Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>\|Illuminate\\Database\\Eloquent\\Model given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Api/V1/OrderController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Relations\\HasMany\:\:approved\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Http/Controllers/Api/V1/ProductController.php
 
 		-
 			message: '#^Constant L5_SWAGGER_CONST_HOST not found\.$#'
@@ -227,96 +179,6 @@ parameters:
 			identifier: instanceof.alwaysTrue
 			count: 1
 			path: app/Http/Middleware/TrackVisitorSession.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AddressResource\:\:\$apartment\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AddressResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AddressResource\:\:\$area\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AddressResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AddressResource\:\:\$building\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AddressResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AddressResource\:\:\$city\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AddressResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AddressResource\:\:\$country\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AddressResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AddressResource\:\:\$created_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AddressResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AddressResource\:\:\$floor\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AddressResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AddressResource\:\:\$full_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AddressResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AddressResource\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AddressResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AddressResource\:\:\$is_default\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AddressResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AddressResource\:\:\$label\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AddressResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AddressResource\:\:\$notes\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AddressResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AddressResource\:\:\$phone\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AddressResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AddressResource\:\:\$postal_code\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AddressResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AddressResource\:\:\$street\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AddressResource.php
 
 		-
 			message: '#^Access to an undefined property App\\Http\\Resources\\AdminOrderResource\:\:\$carrier_shipping_cost\.$#'
@@ -355,69 +217,9 @@ parameters:
 			path: app/Http/Resources/AdminOrderResource.php
 
 		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AdminUserResource\:\:\$avatar_url\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AdminUserResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AdminUserResource\:\:\$created_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AdminUserResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AdminUserResource\:\:\$email\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AdminUserResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AdminUserResource\:\:\$email_verified_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AdminUserResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AdminUserResource\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AdminUserResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AdminUserResource\:\:\$is_active\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AdminUserResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AdminUserResource\:\:\$last_login_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AdminUserResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AdminUserResource\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AdminUserResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AdminUserResource\:\:\$phone\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AdminUserResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AdminUserResource\:\:\$phone_verified_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/AdminUserResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\AdminUserResource\:\:\$updated_at\.$#'
-			identifier: property.notFound
-			count: 1
+			message: '#^Cannot call method toISOString\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 3
 			path: app/Http/Resources/AdminUserResource.php
 
 		-
@@ -455,42 +257,6 @@ parameters:
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Resources/AuditLogResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\CancellationRequestResource\:\:\$admin_note\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/CancellationRequestResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\CancellationRequestResource\:\:\$created_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/CancellationRequestResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\CancellationRequestResource\:\:\$decided_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/CancellationRequestResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\CancellationRequestResource\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/CancellationRequestResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\CancellationRequestResource\:\:\$reason\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/CancellationRequestResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\CancellationRequestResource\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/CancellationRequestResource.php
 
 		-
 			message: '#^Access to an undefined property App\\Http\\Resources\\CategoryBasicResource\:\:\$id\.$#'
@@ -727,37 +493,7 @@ parameters:
 			path: app/Http/Resources/CouponResource.php
 
 		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\CouponUsageResource\:\:\$coupon_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/CouponUsageResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\CouponUsageResource\:\:\$created_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/CouponUsageResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\CouponUsageResource\:\:\$discount_amount\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/CouponUsageResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\CouponUsageResource\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/CouponUsageResource.php
-
-		-
 			message: '#^Access to an undefined property App\\Http\\Resources\\CouponUsageResource\:\:\$order\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/CouponUsageResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\CouponUsageResource\:\:\$order_id\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Resources/CouponUsageResource.php
@@ -769,55 +505,19 @@ parameters:
 			path: app/Http/Resources/CouponUsageResource.php
 
 		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\OrderItemResource\:\:\$id\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Resources/OrderItemResource.php
 
 		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\OrderItemResource\:\:\$price\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Resources/OrderItemResource.php
 
 		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\OrderItemResource\:\:\$product_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/OrderItemResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\OrderItemResource\:\:\$quantity\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/OrderItemResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\OrderItemResource\:\:\$sku\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/OrderItemResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\OrderItemResource\:\:\$total\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/OrderItemResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\OrderItemResource\:\:\$variant\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Http/Resources/OrderItemResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\OrderItemResource\:\:\$variant_attributes\.$#'
-			identifier: property.notFound
-			count: 4
-			path: app/Http/Resources/OrderItemResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\OrderItemResource\:\:\$variant_name\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$sku\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Resources/OrderItemResource.php
@@ -1345,142 +1045,22 @@ parameters:
 			path: app/Http/Resources/ProductResource.php
 
 		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ProductVariantResource\:\:\$attributes\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/ProductVariantResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ProductVariantResource\:\:\$height_in\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/ProductVariantResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ProductVariantResource\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/ProductVariantResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ProductVariantResource\:\:\$length_in\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/ProductVariantResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ProductVariantResource\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/ProductVariantResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ProductVariantResource\:\:\$price\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/ProductVariantResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ProductVariantResource\:\:\$sku\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/ProductVariantResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ProductVariantResource\:\:\$stock_qty\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/ProductVariantResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ProductVariantResource\:\:\$weight_oz\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/ProductVariantResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ProductVariantResource\:\:\$width_in\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/ProductVariantResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ReviewResource\:\:\$admin_note\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$avatar_url\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Resources/ReviewResource.php
 
 		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ReviewResource\:\:\$comment\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Resources/ReviewResource.php
 
 		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ReviewResource\:\:\$created_at\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Resources/ReviewResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ReviewResource\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/ReviewResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ReviewResource\:\:\$is_verified_purchase\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/ReviewResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ReviewResource\:\:\$rating\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/ReviewResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ReviewResource\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Resources/ReviewResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ReviewResource\:\:\$updated_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/ReviewResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ReviewResource\:\:\$user\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Http/Resources/ReviewResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ReviewResource\:\:\$user_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/ReviewResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ShippingRateResource\:\:\$carrier\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/ShippingRateResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ShippingRateResource\:\:\$currency\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/ShippingRateResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ShippingRateResource\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/ShippingRateResource.php
 
 		-
 			message: '#^Access to an undefined property App\\Http\\Resources\\ShippingRateResource\:\:\$rate\.$#'
@@ -1489,40 +1069,10 @@ parameters:
 			path: app/Http/Resources/ShippingRateResource.php
 
 		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\ShippingRateResource\:\:\$service\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$order_number\.$#'
 			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/ShippingRateResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\WishlistItemResource\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/WishlistItemResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Http\\Resources\\WishlistItemResource\:\:\$product_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/WishlistItemResource.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\OrderCancellationRequest\:\:\$order\.$#'
-			identifier: property.notFound
-			count: 1
+			count: 3
 			path: app/Mail/CancellationRequestDecidedMail.php
-
-		-
-			message: '#^Relation ''items'' is not found in App\\Models\\Order model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Mail/OrderPaidMail.php
-
-		-
-			message: '#^Relation ''items'' is not found in App\\Models\\Order model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Mail/OrderShippedMail.php
 
 		-
 			message: '#^Call to an undefined method Spatie\\Image\\Drivers\\ImageDriver\:\:nonQueued\(\)\.$#'
@@ -1567,32 +1117,38 @@ parameters:
 			path: app/Services/EasyPostService.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\SocialAccount\:\:\$user\.$#'
-			identifier: property.notFound
+			message: '#^Method App\\Services\\GoogleAuthService\:\:findOrCreateUser\(\) should return App\\Models\\User but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
+			identifier: return.type
 			count: 1
 			path: app/Services/GoogleAuthService.php
 
 		-
-			message: '#^Relation ''user'' is not found in App\\Models\\SocialAccount model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Services/GoogleAuthService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Order\:\:\$items\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$is_active\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Services/OrderInventoryService.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Product\:\:\$category\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$product_id\.$#'
 			identifier: property.notFound
-			count: 1
+			count: 2
 			path: app/Services/OrderInventoryService.php
 
 		-
-			message: '#^Relation ''category'' is not found in App\\Models\\Product model\.$#'
-			identifier: larastan.relationExistence
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$quantity\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Services/OrderInventoryService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$variant_id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Services/OrderInventoryService.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
 			count: 1
 			path: app/Services/OrderInventoryService.php
 
@@ -1621,26 +1177,20 @@ parameters:
 			path: app/Services/OtpService.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Product\:\:\$category\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/ReviewService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$is_active\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Services/ShippingQuoteService.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Product\:\:\$variants\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$stock_qty\.$#'
 			identifier: property.notFound
-			count: 1
-			path: app/Services/ShippingQuoteService.php
-
-		-
-			message: '#^Relation ''category'' is not found in App\\Models\\Product model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Services/ShippingQuoteService.php
-
-		-
-			message: '#^Relation ''variants'' is not found in App\\Models\\Product model\.$#'
-			identifier: larastan.relationExistence
 			count: 1
 			path: app/Services/ShippingQuoteService.php
 
@@ -1657,16 +1207,34 @@ parameters:
 			path: app/Services/ShippingQuoteService.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Order\:\:\$items\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$price\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Services/StripeCheckoutService.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Product\:\:\$images\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$product_name\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Services/WishlistAnalyticsService.php
+			path: app/Services/StripeCheckoutService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$quantity\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/StripeCheckoutService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$variant_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/StripeCheckoutService.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Services/StripeCheckoutService.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\Product\:\:\$wishlist_count\.$#'
@@ -1675,7 +1243,7 @@ parameters:
 			path: app/Services/WishlistAnalyticsService.php
 
 		-
-			message: '#^Relation ''images'' is not found in App\\Models\\Product model\.$#'
-			identifier: larastan.relationExistence
-			count: 4
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$url\.$#'
+			identifier: property.notFound
+			count: 1
 			path: app/Services/WishlistAnalyticsService.php

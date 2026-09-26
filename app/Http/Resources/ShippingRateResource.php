@@ -2,10 +2,12 @@
 
 namespace App\Http\Resources;
 
+use App\Models\ShippingRateQuote;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
+/** @mixin ShippingRateQuote */
 class ShippingRateResource extends JsonResource
 {
     public function __construct($resource, private readonly ?CarbonInterface $quoteExpiresAt = null)

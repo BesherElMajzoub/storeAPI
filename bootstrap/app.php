@@ -37,6 +37,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // completely untouched — both mechanisms work side by side.
         $middleware->statefulApi();
 
+        // API callers must receive the JSON authentication contract rather than
+        // Laravel attempting to resolve a web `login` route that does not exist.
+        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('api/*') ? null : route('login'));
+
         $middleware->alias([
             'audit.admin' => AuditAdminActions::class,
             'active.user' => EnsureActiveUser::class,
