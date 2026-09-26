@@ -19,6 +19,7 @@ use App\Services\FakeEasyPostService;
 use App\Services\GeoapifyService;
 use App\Services\GooglePlacesService;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
@@ -68,6 +69,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Model::preventLazyLoading(! app()->isProduction());
+
         // ─── Rate Limiters ────────────────────────────────────────────────────────
         RateLimiter::for('login', function (Request $request) {
             $email = Str::lower((string) $request->input('email'));
