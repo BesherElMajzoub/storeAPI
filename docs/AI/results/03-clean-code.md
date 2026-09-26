@@ -6,7 +6,7 @@ Status: COMPLETE FOR B4 (level 5 clean; level 6 attempted and documented below).
 
 | Metric | Before | After |
 |---|---:|---:|
-| `phpstan-baseline.neon` entries (`message:` count) | 280 | 254 |
+| `phpstan-baseline.neon` entries (`message:` count) | 280 | 208 |
 | PHPStan level 5 | baseline contained stale model/resource diagnostics | `[OK] No errors` |
 | Non-production lazy-loading guard | not configured | `Model::preventLazyLoading()` enabled |
 | Root scratch files | 4 | 0 |
@@ -15,7 +15,7 @@ Status: COMPLETE FOR B4 (level 5 clean; level 6 attempted and documented below).
 ## B4 changes
 
 - `c841c82` added explicit Eloquent relationship return types to the models used by controllers and services.
-- `d721648` added resource `@mixin` metadata and regenerated the baseline from current level-5 diagnostics. This removed 26 stale entries while preserving the existing API and database contracts.
+- `d721648` added resource `@mixin` metadata and regenerated the baseline from current level-5 diagnostics. This removed 72 stale entries while preserving the existing API and database contracts.
 - `vendor/bin/phpstan analyse --memory-limit=512M` passes with `[OK] No errors`.
 - Level 6 was attempted and reports 402 legacy missing-type/generic diagnostics across contracts, controllers and services. No speculative public API type changes were made; this is carried as a documented follow-up.
 

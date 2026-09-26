@@ -24,5 +24,5 @@ The route comparison uses the canonical Phase 01 definition: 176 API-path routes
 
 ## B5 follow-up
 
-- Level 6 PHPStan remains a documented non-blocking follow-up (402 legacy missing-type/generic diagnostics); level 5 is clean and has a reduced 254-entry baseline.
+- Level 6 PHPStan remains a documented non-blocking follow-up (402 legacy missing-type/generic diagnostics); level 5 is clean and has a reduced 208-entry baseline.
 - Production-only checks still require the deployment environment: real Stripe/EasyPost credentials, queue worker, TLS, object storage and external provider webhook delivery. No real provider calls were made in tests or Newman.
