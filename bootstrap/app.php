@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\AuditAdminActions;
+use App\Http\Middleware\EnsureActiveUser;
 use App\Http\Middleware\RejectOversizedRequests;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\TrackVisitorSession;
@@ -38,6 +39,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'audit.admin' => AuditAdminActions::class,
+            'active.user' => EnsureActiveUser::class,
         ]);
 
         // Run authorization gates before implicit route-model binding so an

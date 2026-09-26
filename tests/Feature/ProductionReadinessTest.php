@@ -126,6 +126,17 @@ class ProductionReadinessTest extends TestCase
         $this->withToken($token)->getJson('/api/v1/auth/me')->assertUnauthorized();
     }
 
+    public function test_disabled_user_cannot_use_an_existing_sanctum_token(): void
+    {
+        $user = User::factory()->create(['is_active' => true]);
+        $token = $user->createToken('test')->plainTextToken;
+        $user->update(['is_active' => false]);
+
+        $this->withToken($token)->getJson('/api/v1/auth/me')
+            ->assertUnauthorized()
+            ->assertJsonPath('message', 'Unauthenticated.');
+    }
+
     public function test_otp_is_single_use_and_locks_after_five_wrong_attempts(): void
     {
         $service = app(OtpService::class);

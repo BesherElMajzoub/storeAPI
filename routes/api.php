@@ -56,7 +56,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         Route::post('otp/verify', [AuthController::class, 'verifyOtp'])->middleware('throttle:otp');
         Route::post('google', [AuthController::class, 'googleLogin'])->middleware('throttle:login');
 
-        Route::middleware('auth:sanctum')->group(function () {
+        Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
             Route::get('me', [AuthController::class, 'me']);
             Route::put('me', [AuthController::class, 'updateProfile']);
             Route::post('change-password', [AuthController::class, 'changePassword']);
@@ -91,7 +91,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
     Route::get('address/details', [AddressController::class, 'details'])->middleware('throttle:60,1');
 
     // --- USER PROTECTED ---
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
         // Orders
         Route::post('orders', [OrderController::class, 'store']);
         Route::get('orders', [OrderController::class, 'index']);
@@ -126,7 +126,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
     });
 
     // --- ADMIN ---
-    Route::prefix('admin')->middleware(['auth:sanctum', 'can:admin-access', 'audit.admin'])->group(function () {
+    Route::prefix('admin')->middleware(['auth:sanctum', 'active.user', 'can:admin-access', 'audit.admin'])->group(function () {
         Route::get('dashboard', [DashboardController::class, 'index']);
         Route::get('analytics/dashboard', [AdminAnalyticsController::class, 'dashboard']);
         Route::get('audit-logs', [AuditLogController::class, 'index']);
