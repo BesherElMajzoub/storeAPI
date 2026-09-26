@@ -3,7 +3,6 @@
 namespace App\Http\Requests\Api\V1\Auth;
 
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Password;
 
 class UpdateProfileRequest extends BaseAuthRequest
 {
@@ -28,8 +27,6 @@ class UpdateProfileRequest extends BaseAuthRequest
                 'regex:/^\+?[0-9][0-9\s().-]{6,29}$/',
                 Rule::unique('users', 'phone')->ignore($userId),
             ],
-            'avatar' => ['sometimes', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
-            'password' => ['sometimes', 'string', Password::min(8)->letters()->numbers(), 'confirmed'],
         ];
     }
 }

@@ -68,4 +68,56 @@ class AuthTest extends TestCase
 
         $response->assertStatus(401);
     }
+
+    public function test_changing_email_via_profile_update_resets_verification(): void
+    {
+        $user = User::factory()->create(['email' => 'old@example.com']);
+        $this->assertNotNull($user->email_verified_at);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->putJson('/api/v1/auth/me', [
+            'email' => 'new@example.com',
+        ]);
+
+        $response->assertStatus(200);
+
+        $fresh = $user->fresh();
+        $this->assertSame('new@example.com', $fresh->email);
+        $this->assertNull($fresh->email_verified_at);
+    }
+
+    public function test_updating_unrelated_profile_field_keeps_verification(): void
+    {
+        $user = User::factory()->create(['email' => 'same@example.com']);
+        $this->assertNotNull($user->email_verified_at);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->putJson('/api/v1/auth/me', [
+            'name' => 'New Name',
+        ]);
+
+        $response->assertStatus(200);
+
+        $fresh = $user->fresh();
+        $this->assertSame('New Name', $fresh->name);
+        $this->assertNotNull($fresh->email_verified_at);
+    }
+
+    public function test_profile_update_cannot_change_password_without_current_password_check(): void
+    {
+        $user = User::factory()->create(['password' => 'old_password_123']);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->putJson('/api/v1/auth/me', [
+            'password' => 'new_password_abc1',
+            'password_confirmation' => 'new_password_abc1',
+        ]);
+
+        $response->assertStatus(200);
+
+        $this->assertTrue(Hash::check('old_password_123', $user->fresh()->password));
+    }
 }

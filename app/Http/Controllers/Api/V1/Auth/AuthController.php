@@ -256,15 +256,16 @@ class AuthController extends Controller
         if (isset($data['name'])) {
             $user->name = $data['name'];
         }
-        if (isset($data['email'])) {
+        if (isset($data['email']) && $data['email'] !== $user->email) {
             $user->email = $data['email'];
+            // Changing the address means we no longer know the new one is
+            // reachable, so the account must re-verify it (checkout and
+            // other flows gate on email_verified_at).
+            $user->email_verified_at = null;
         }
         if (isset($data['phone'])) {
             $user->phone = $data['phone'] ?? null;
         }
-        if (isset($data['password'])) {
-            $user->password = $data['password'];
-        }  // auto-hashed by cast
 
         $user->save();
 
