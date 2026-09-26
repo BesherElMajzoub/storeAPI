@@ -1,4 +1,4 @@
-# 02 D4 Inventory — results
+# 02 D4 Inventory - results
 
 ## Entry points
 
@@ -8,7 +8,7 @@
 - Admin product stock adjustment calls `adjustStock`, which locks the product and optional variant.
 - Stripe/session expiry, cancellation approval, failed checkout rollback, and admin refunds reach the observer/release path.
 
-## Rules & state table
+## Rules and state table
 
 | State/event | Product stock | Variant stock | Order marker |
 |---|---:|---:|---|
@@ -21,19 +21,19 @@ Product stock is the aggregate availability gate and variant stock is additional
 
 ## Findings
 
-### D4-OBS-001 — Abandoned checkout release policy
+### D4-OBS-001 - Abandoned checkout release policy
 
 - **Severity:** P2
-- **Status:** NEEDS-DECISION
-- **Scenario:** a customer reserves stock and never completes Checkout; local release occurs when Stripe sends `checkout.session.expired` or checkout creation rolls back, but no local scheduler is defined if provider delivery is delayed or lost.
-- **Decision needed:** rely on Stripe expiry delivery, or add a scheduled reconciliation window and policy for abandoned `pending_payment` orders. No behavior is guessed in this phase.
+- **Status:** FIXED
+- **Decision:** Stripe Checkout sessions expire after 30 minutes (configurable and clamped to 30-1440 minutes). `orders:expire-abandoned-checkouts` runs every 10 minutes, expires open sessions, cancels the matching local order, and lets completed sessions remain for the webhook. Provider errors are logged and retried; conditional locking makes repeated runs safe.
+- **Evidence:** `ExpireAbandonedCheckoutsTest` covers open, complete, provider-error, and repeated-run paths. Checkout session construction captures the configured expiry.
 
-### D4-OBS-002 — Restock after refund of shipped goods
+### D4-OBS-002 - Restock after refund of shipped goods
 
 - **Severity:** P1
-- **Status:** NEEDS-DECISION (carried from D5 review)
-- **Scenario:** `OrderObserver` releases product and variant stock for every `refunded` order, including shipped/delivered orders whose goods may still be with the customer.
-- **Decision needed:** restock only before shipment, or require confirmed return before restocking.
+- **Status:** FIXED
+- **Decision:** automatic restock occurs only when `shipped_at` is null. Shipped/delivered refunds leave stock unchanged for manual administrator adjustment after goods return.
+- **Evidence:** `OrderStockTest::test_refunding_a_shipped_order_does_not_restock_inventory`; late-payment and full-refund webhook tests prove release remains idempotent.
 
 ## Verified OK
 
@@ -45,14 +45,15 @@ Product stock is the aggregate availability gate and variant stock is additional
 ## Tests added/strengthened
 
 - D5 condition tests in `StripeWebhookSecurityTest` are the first D4 commit (`1ad1540`), including stock unchanged after late payment and full refund replay.
+- `ExpireAbandonedCheckoutsTest` (commit `ef77a33`) covers the scheduled safety net.
+- `OrderStockTest` (commit `3b0b6cb`) covers no restock after shipment.
 - Existing inventory coverage: `ConcurrentInventoryTest`, `OrderStockTest`, `CancellationRequestInventoryTest`, `AdminProductContractTest`.
 
 ## Current verification
 
 ```text
-Focused D5/D4 boundary run: 12 passed (51 assertions)
+ExpireAbandonedCheckoutsTest + PricingBatchTest: 8 passed (52 assertions)
 Pint: passed
-PHPStan level 5: [OK] No errors
 ```
 
-This domain is `IN-PROGRESS`; no D4 approval is requested yet.
+This domain is `READY-FOR-REVIEW`; the owner decisions in `reviews/B1-instructions.md` are implemented and no D4 decisions remain open.

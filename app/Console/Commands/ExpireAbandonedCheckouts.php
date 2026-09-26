@@ -36,7 +36,9 @@ class ExpireAbandonedCheckouts extends Command
                         if (in_array($session->status, ['open', 'expired'], true)) {
                             DB::transaction(function () use ($candidate): void {
                                 $order = Order::query()->whereKey($candidate->id)->lockForUpdate()->first();
-                                if ($order && $order->status === 'pending_payment' && $order->payment_status === 'unpaid'
+                                if ($order
+                                    && $order->getRawOriginal('status') === 'pending_payment'
+                                    && $order->getRawOriginal('payment_status') === 'unpaid'
                                     && $order->stripe_session_id === $candidate->stripe_session_id) {
                                     $order->update(['status' => 'cancelled', 'payment_status' => 'failed', 'cancelled_at' => now()]);
                                 }
