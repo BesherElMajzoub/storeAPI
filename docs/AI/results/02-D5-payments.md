@@ -143,26 +143,26 @@ R11 restores the expiry regression assertion for `stock_released_at`. R12 streng
 
 R13 is covered by the pending-refund API assertion and the existing signed `charge.refunded` reconciliation path: pending returns 202 without local mutation; a signed refund event is the only path that finalizes the ledger/order. R14 evidence is consolidated below; no production behavior changed in this round.
 
-### L-PAY-007 â€” late payment after cancellation
+### L-PAY-007 - late payment after cancellation
 
 - **Severity:** P0; **Status:** FIXED.
 - **Scenario:** an open Checkout Session is paid after a pending-payment order was cancelled.
 - **Regression:** `test_signed_payment_for_a_cancelled_order_is_recorded_for_manual_refund`.
 - **Fix/evidence:** Session expiry before cancellation and manual-recovery ledger state; product stock remains released once. Commits `e952972`, `89ff7d5`.
 
-### L-PAY-008 / L-PAY-012 / L-PAY-013 â€” webhook and bulk-transition races
+### L-PAY-008 / L-PAY-012 / L-PAY-013 - webhook and bulk-transition races
 
 - **Severity:** P1/P2; **Status:** FIXED.
 - **Regression:** expiry replacement, refunded completion replay, and invalid-bulk-no-expiry tests.
 - **Fix/evidence:** lock/recheck the expiry path; duplicate completed deliveries are no-ops; preflight happens before provider side effects. Commit `0ade22f`.
 
-### L-PAY-009 / L-PAY-011 â€” refund reconciliation and pending response
+### L-PAY-009 / L-PAY-011 - refund reconciliation and pending response
 
 - **Severity:** P2/P1; **Status:** FIXED.
 - **Regression:** partial ledger retains amount 100; pending refund returns 202 with order ID/status and no local transition.
 - **Fix/evidence:** captured amount stays in `payments.amount`; cumulative refund stays on `orders.refunded_amount`; the signed refund webhook finalizes. Commit `0ade22f`.
 
-### L-PAY-010 â€” zero/tiny total
+### L-PAY-010 - zero/tiny total
 
 - **Severity:** P2; **Status:** MOVED-TO-D3.
 - **Evidence:** zero and one-cent checkout parameter tests; existing rollback prevents a stuck reserved order. Commit `ad9c30c`.
