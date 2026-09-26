@@ -154,6 +154,26 @@ class StripeCheckoutTest extends TestCase
         $this->assertSame("refund-order-{$order->id}", $stripe->options['idempotency_key']);
     }
 
+    public function test_zero_total_checkout_is_sent_to_stripe_and_the_order_flow_can_roll_it_back(): void
+    {
+        $order = $this->orderWithSingleItem(0);
+        $stripe = $this->capturingCheckoutService();
+
+        $stripe->createCheckoutSession($order->load('items'));
+
+        $this->assertSame(0, $stripe->params['line_items'][0]['price_data']['unit_amount']);
+    }
+
+    public function test_below_minimum_checkout_is_sent_to_stripe_and_the_order_flow_can_roll_it_back(): void
+    {
+        $order = $this->orderWithSingleItem(0.01);
+        $stripe = $this->capturingCheckoutService();
+
+        $stripe->createCheckoutSession($order->load('items'));
+
+        $this->assertSame(1, $stripe->params['line_items'][0]['price_data']['unit_amount']);
+    }
+
     // ── 3. Webhook: completed marks order paid ────────────────────────────────
 
     public function test_owner_can_resume_an_open_checkout_session_without_creating_another_one(): void
@@ -588,5 +608,37 @@ class StripeCheckoutTest extends TestCase
     {
         Mockery::close();
         parent::tearDown();
+    }
+
+    private function orderWithSingleItem(float $price): Order
+    {
+        $order = Order::factory()->create(['total' => $price]);
+        $order->items()->create([
+            'product_id' => $this->product->id,
+            'product_name' => $this->product->name,
+            'price' => $price,
+            'quantity' => 1,
+            'total' => $price,
+        ]);
+
+        return $order;
+    }
+
+    private function capturingCheckoutService(): CapturingStripeCheckoutService
+    {
+        return new CapturingStripeCheckoutService;
+    }
+}
+
+class CapturingStripeCheckoutService extends StripeCheckoutService
+{
+    /** @var array<string, mixed> */
+    public array $params = [];
+
+    protected function createStripeCheckoutSession(array $sessionParams): StripeSession
+    {
+        $this->params = $sessionParams;
+
+        return StripeSession::constructFrom(['id' => 'cs_captured']);
     }
 }
