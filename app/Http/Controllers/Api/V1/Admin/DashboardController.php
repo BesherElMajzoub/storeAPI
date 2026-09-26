@@ -56,13 +56,13 @@ class DashboardController extends Controller
             'month_sales_total' => Order::where('created_at', '>=', now()->startOfMonth())
                 ->whereNotIn('status', ['cancelled', 'refunded', 'pending_payment'])
                 ->sum('total'),
-            'current_orders_count' => Order::where('status', 'pending')->count(),
+            'current_orders_count' => Order::where('status', 'pending_payment')->count(),
             'users_count' => User::count(),
             'top_products' => Product::withCount('reviews')->orderBy('reviews_count', 'desc')->take(5)->get(), // or sold count
             'latest_orders' => Order::latest()->take(5)->get(),
             'alerts' => [
                 'low_stock' => Product::where('stock_qty', '<', 3)->count(),
-                'pending_orders' => Order::where('status', 'pending')->count(),
+                'pending_orders' => Order::where('status', 'pending_payment')->count(),
             ],
         ]);
     }
