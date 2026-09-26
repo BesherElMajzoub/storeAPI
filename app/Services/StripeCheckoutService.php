@@ -51,6 +51,7 @@ class StripeCheckoutService
 
         $sessionParams = [
             'mode' => 'payment',
+            'expires_at' => now()->addMinutes(max(30, min(1440, (int) config('services.stripe.checkout_expires_minutes', 30))))->timestamp,
             // Keep payment confirmation synchronous: card wallets are still supported by Checkout.
             'payment_method_types' => ['card'],
             'line_items' => $lineItems,

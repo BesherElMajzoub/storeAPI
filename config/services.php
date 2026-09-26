@@ -58,6 +58,8 @@ return [
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
         'publishable' => env('STRIPE_PUBLISHABLE_KEY'),
         'currency' => strtolower(env('STRIPE_CURRENCY', 'usd')),
+        'checkout_expires_minutes' => (int) env('STRIPE_CHECKOUT_EXPIRES_MINUTES', 30),
+        'minimum_charge' => (float) env('STRIPE_MINIMUM_CHARGE', 0.50),
     ],
 
     'telegram' => [
