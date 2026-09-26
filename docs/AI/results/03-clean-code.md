@@ -6,7 +6,7 @@ Status: IN-PROGRESS (B4 started; safe, high-confidence items done this pass — 
 
 | Metric | Before | After |
 |---|---|---|
-| `phpstan-baseline.neon` entries (`message:` count) | 281 | 281 (unchanged — see below) |
+| `phpstan-baseline.neon` entries (`message:` count) | 281 | 280 (unchanged since the J14 fix — see below) |
 | PHPStan level 5 (with baseline) | `[OK] No errors` | `[OK] No errors` |
 | N+1 protection in non-production | not configured | `Model::preventLazyLoading()` enabled; 0 violations across the full suite |
 | Root-level dead scratch files | 4 (`map_routes.php`, `mapping_result.txt`, `pasted-text.txt`, `routes.json`) | 0 |
@@ -24,16 +24,16 @@ Status: IN-PROGRESS (B4 started; safe, high-confidence items done this pass — 
 
 ## Findings not fixed (with reason)
 
-### `phpstan-baseline.neon` reduction (281 entries) — NOT ATTEMPTED THIS PASS
+### `phpstan-baseline.neon` reduction (280 entries) — NOT ATTEMPTED THIS PASS
 The checklist asks to reduce the baseline to zero at level 5, then attempt
-level 6. 281 suppressed errors is a large body of work — each entry needs
+level 6. 280 suppressed errors is a large body of work — each entry needs
 individual inspection (is it a real bug PHPStan caught, or a false positive
 worth an inline `@phpstan-ignore` with a reason, or a genuine baseline-worthy
 framework limitation) and the fix for each needs its own green-test-before-
 and-after treatment per the phase 03 rule ("green test suite before and after
 **every** commit"). Time-boxed this session in favor of the E2E journey work
 in phase 04, which surfaces user-facing bugs rather than static-analysis
-noise. Recommended as its own follow-up pass: bucket the 281 entries by rule
+noise. Recommended as its own follow-up pass: bucket the 280 entries by rule
 name first (`grep -c "identifier:" phpstan-baseline.neon | sort | uniq -c`
 equivalent), fix the buckets that are cheap and mechanical (e.g. missing
 return types) in bulk commits, and leave framework-limitation buckets
