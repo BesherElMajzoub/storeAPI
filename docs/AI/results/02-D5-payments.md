@@ -124,3 +124,11 @@ Duration: 50.88s
 R1--R4 are fixed: `1268ddf` applies card-only Checkout, a dedicated 1,000/minute provider limiter, and a stable Stripe refund idempotency key. `e952972` expires Checkout Sessions before pending-payment cancellations, reconciles a verified late payment as `requires_refund` with an urgent admin alert, locks the expiry handler, records refund ledger states, and handles `refund.failed` without closing the order. Focused verification: **34 passed (109 assertions)**, Pint passed, PHPStan level 5 passed.
 
 L-PAY-010 remains a D3 decision: zero and one-cent totals are sent to Stripe and rejected, but the existing provider-failure rollback releases and soft-deletes the new order so it does not stick. L-PAY-011 remains an owner decision: pending refunds now use the neutral message `Stripe refund is pending confirmation.` while retaining the frozen 502 contract; proposed replacement is 202 Accepted with webhook reconciliation. Stripe sources: [idempotency](https://docs.stripe.com/api/idempotent_requests), [refund creation](https://docs.stripe.com/api/refunds/create), and [event types](https://docs.stripe.com/api/events/types), which include `refund.failed` and `refund.updated`.
+
+## Round 3 response
+
+L-PAY-011 is now owner-approved and implemented: a pending Stripe refund returns `202 Accepted`, `success: true`, `Refund is pending confirmation from Stripe.`, and the order ID plus refund status; local order/payment state remains unchanged until the signed refund webhook arrives. Failed and canceled provider statuses still return 502.
+
+L-PAY-012 is fixed by allowing the `requires_refund` recovery branch only for cancelled orders that never accepted payment (`unpaid`/`failed`). A paid/refunded completion replay is now a no-op with no alert or ledger mutation. L-PAY-013 now preflights every bulk transition before any checkout session is expired. The payment ledger keeps `payments.amount` as the captured amount while `orders.refunded_amount` tracks the cumulative refund.
+
+Evidence: focused Stripe/admin tests **38 passed (117 assertions)**; Pint and PHPStan level 5 passed. Commits: `0ade22f`, `89ff7d5`.

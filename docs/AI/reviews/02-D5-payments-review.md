@@ -186,3 +186,145 @@ also recorded in `PROGRESS.md`.
 
 **Still open (executor proposes, owner decides):** the admin refund response
 for a `pending` Stripe refund (R3 item 2).
+
+---
+
+# 02 D5 Payments — Review (round 2)
+
+**Verdict: CHANGES-REQUESTED** (last round expected). The main fixes are
+correct. I found one new P1 introduced by the `requires_refund` branch, two P2
+items, one missing test, and the report is incomplete.
+
+Reviewed: commits `1268ddf`, `e952972`, `ad9c30c`, `61270e9`.
+
+## Independently verified — OK
+- Suite **197 passed (1074 assertions)**, Pint passed, PHPStan `[OK]`. Matches.
+- **L-PAY-005:** `payment_method_types: ['card']` is sent and asserted
+  (`StripeCheckoutTest.php:128`). ✅
+- **L-PAY-006:** `route:list` shows both webhooks with **only**
+  `throttle:provider-webhook` (1,000/min per IP). `throttle:api` is really
+  removed. The contract doc is updated. ✅
+- **L-PAY-007 part 1:** single and bulk cancel of `pending_payment` retrieve
+  the session, refuse with 409 if it is `complete`, and expire it if `open`. A
+  provider error means 502 and nothing is cancelled. If the customer pays in
+  the gap between retrieve and expire, `expire()` throws, which also becomes
+  502, and the webhook then marks the order paid. Safe. ✅
+- **L-PAY-008:** the expiry handler locks the row, rechecks the session and
+  requires `pending_payment`/`unpaid`. It has its own race test. ✅
+- **R3:** stable idempotency key `refund-order-{id}` (asserted); a cache lock
+  guards double-clicks; the pending message is neutral. ✅
+- **Migration:** a new migration (the old one is untouched). The original
+  `payments.status` enum had no default, so `MODIFY` loses nothing. `down()` is
+  safe. ✅
+
+## Required changes
+
+### R6 — NEW P1 (`L-PAY-012`): a replayed `completed` event after a refund raises a false URGENT alert and corrupts the ledger
+In `handleSessionCompleted`, anything that isn't `isPaid()` and fails the
+conditional update falls into the `requires_refund` branch, and that includes
+orders whose `payment_status` is **`refunded`**.
+
+**Scenario:**
+1. The order is paid, then fully refunded (`payment_status = refunded`).
+2. Stripe re-delivers `checkout.session.completed`. Stripe documents duplicate
+   delivery, and a manual "resend" from the dashboard does the same. The
+   session, amount and currency still match.
+3. `isPaid()` is false and the update hits 0 rows, so the handler runs the
+   `requires_refund` branch.
+4. The payment row flips `refunded` → `requires_refund`, and admins get
+   **"URGENT: … needs a manual refund"** for money that was already returned.
+
+**Required:**
+- Only take the `requires_refund` branch when the order **never had a
+  successful payment**: status `cancelled` and payment status `unpaid` or
+  `failed`.
+- If the order is already `paid` or `refunded`, or the payment row already
+  holds this PaymentIntent with a status other than `requires_refund`, treat it
+  as a duplicate: return 200 with no side effects.
+- Test: pay → full refund → replay the signed `completed` event. The payment
+  status must stay `refunded`, and no alert may be queued.
+
+### R7 — P2 (`L-PAY-013`): bulk cancel expires Stripe sessions before validating the whole batch
+`bulkUpdateStatus` expires the sessions **before** the transaction that checks
+every transition.
+
+**Scenario:** bulk cancel `[A: pending_payment, B: delivered]`.
+1. A's session is expired at Stripe.
+2. B's transition is invalid, so the API answers **409 "no orders changed"**.
+3. Stripe then sends `checkout.session.expired` for A, and the webhook cancels
+   A anyway. The admin was told nothing changed.
+
+**Required:** validate every transition first (no side effects), then expire
+the sessions, then update. Test the scenario above: after the 409, no
+`expire` call is made.
+
+### R8 — P2 (`L-PAY-009` follow-up): `payments.amount` is overwritten with the refunded amount
+`handleChargeRefunded` sets `payments.amount = refundedAmount`. After a
+partial refund of 25.00 on a 100.00 payment, the ledger says the payment was
+25.00, and the original paid amount is lost.
+
+**Required:** keep `payments.amount` as the amount paid, and change only
+`status`. The refunded amount already lives in `orders.refunded_amount`. If you
+think the ledger needs its own column, log it as NEEDS-DECISION instead of
+adding it. Update the partial-refund test to assert that `amount` stays 100.00.
+
+### R9 — Missing test required by the addendum
+"Test the full path: payment on cancelled order → alert → admin refund →
+refunded." The current test (`test_signed_payment_for_a_cancelled_order_is_recorded_for_manual_refund`)
+stops at `requires_refund`. Extend it, or add a test, that calls
+`POST admin/orders/{id}/refund` and asserts:
+- the Stripe refund is requested with the PaymentIntent
+- the order ends `refunded`
+- the payment ends `refunded`
+- stock is not released twice
+
+### R10 — The report is incomplete
+The round 2 response is 6 lines. `00-README.md` requires every finding in the
+`templates/finding.md` format with before/after evidence. Please add:
+1. A full finding block for **L-PAY-007, 008, 009, 010, 011** (and 012, 013
+   from this round): severity, scenario, test name, commit, evidence.
+2. A clear answer to **R3 item 3**: does `charge.amount_refunded` include
+   **pending** refunds, and what happens to it when a refund later fails?
+   Quote the relevant doc sentence, not just the link.
+   - If it does include pending refunds, `charge.refunded` can mark an order
+     refunded (and release stock) for a refund that later fails. Given BR-01
+     (manual admin handling), **an alert-only `refund.failed` is acceptable**
+     as long as this limitation is written down.
+3. One note on the idempotency key: Stripe caches the result for 24h, so a
+   **retry within 24h after a failed refund** returns the cached failure.
+   Document the admin workaround (wait, or refund from the Stripe dashboard).
+
+## Carried to D7 (not blocking D5)
+- BR-01: a test that admins can list orders with status `cancelled` and
+  payment still `paid`, plus the "refund pending" alert on cancellation
+  approval.
+
+## Owner decisions
+- **L-PAY-010** (zero or tiny totals) → moved to D3. Accepted. The rollback
+  keeps it from sticking, but a 100%-coupon order currently can't be placed.
+- **L-PAY-011** (pending refund 202 vs 502) → sent to the owner with a
+  recommendation of 202.
+
+## Next step
+Fix R6–R10, append `## Round 3 response`, set the status to
+`READY-FOR-REVIEW`, and stop.
+
+## Addendum — owner decision L-PAY-011 (2026-09-26)
+
+**A: a pending Stripe refund returns `202 Accepted`.** Implement it in round 3,
+together with R6–R10:
+- When `Refund::create` returns `pending` (or any status other than
+  `succeeded` / `failed` / `canceled`), respond **202** with
+  `success: true`, message `Refund is pending confirmation from Stripe.`, and
+  `data` containing the order id and `refund_status`.
+- The order and payment stay unchanged locally. The `charge.refunded` webhook
+  finalizes them (existing handling).
+- A refund status of `failed` or `canceled` stays **502**
+  `Stripe refund failed.`
+- Update the OpenAPI attributes on `refund` and any admin contract doc that
+  lists this endpoint's responses. This change is owner-approved.
+- Tests: `pending` → 202 with the order unchanged, then a signed
+  `charge.refunded` → order and payment `refunded`, stock released exactly once.
+  Update the existing test
+  `test_admin_does_not_mark_an_order_refunded_until_stripe_confirms_the_refund`
+  to the new 202 behaviour.
