@@ -7,7 +7,7 @@ Statuses: `NOT-STARTED` -> `IN-PROGRESS` -> `READY-FOR-REVIEW` ->
 
 | Phase | Result file(s) | Status | Review | Open P0/P1 |
 |---|---|---|---|---|
-| 01 Baseline | `results/01-baseline.md` | READY-FOR-REVIEW | — | — |
+| 01 Baseline | `results/01-baseline.md` | READY-FOR-REVIEW | `reviews/01-baseline-review.md` (round 1 response submitted) | 0 |
 | 02 Logic — D1 Auth | `results/02-D1-auth.md` | NOT-STARTED | — | — |
 | 02 Logic — D2 Catalog | `results/02-D2-catalog.md` | NOT-STARTED | — | — |
 | 02 Logic — D3 Pricing | `results/02-D3-pricing.md` | NOT-STARTED | — | — |

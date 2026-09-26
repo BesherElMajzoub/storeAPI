@@ -201,8 +201,8 @@ FakeEasyPostService → tests/Feature/FakeShippingDriverTest.php
 FreeShippingService → tests/Feature/FreeShippingTest.php
 GeoapifyService → tests/Feature/GeoapifyAddressControllerTest.php
 GeoLocationService → tests/Feature/GeoapifyAddressControllerTest.php
-GoogleAuthService → NONE
-GooglePlacesService → NONE
+GoogleAuthService → tests/Feature/ProductionReadinessTest.php (Google token audience and verified-email cases)
+GooglePlacesService → tests/Feature/AddressControllerTest.php
 OrderInventoryService → tests/Feature/OrderStockTest.php, tests/Feature/ConcurrentInventoryTest.php, tests/Feature/CancellationRequestInventoryTest.php
 OtpService → tests/Feature/AuthTest.php, tests/Feature/SpaAuthTest.php
 ProductImportService → tests/Feature/ProductImportTest.php
@@ -220,7 +220,7 @@ Api/StripeWebhookController → tests/Feature/StripeWebhookSecurityTest.php
 Api/V1/AddressController → tests/Feature/AddressControllerTest.php, tests/Feature/GeoapifyAddressControllerTest.php
 Api/V1/AnalyticsEventController → tests/Feature/AnalyticsTest.php
 Api/V1/CategoryController → tests/Feature/PublicProductContractTest.php
-Api/V1/ContactMessageController → NONE
+Api/V1/ContactMessageController → tests/Feature/ApiHygieneTest.php, tests/Feature/TelegramNotificationTest.php
 Api/V1/CouponController → tests/Feature/CouponTest.php
 Api/V1/EasyPostWebhookController → tests/Feature/EasyPostShippingTest.php
 Api/V1/HealthController → tests/Feature/HealthEndpointTest.php
@@ -237,7 +237,7 @@ Api/V1/Admin/CancellationRequestController → tests/Feature/CancellationRequest
 Api/V1/Admin/CategoryController → NONE
 Api/V1/Admin/ContactMessageController → tests/Feature/AdminContactMessageContractTest.php
 Api/V1/Admin/CouponController → tests/Feature/AdminCouponTest.php
-Api/V1/Admin/DashboardController → NONE
+Api/V1/Admin/DashboardController → tests/Feature/ProductionReadinessTest.php (authorization only; dashboard metrics remain untested)
 Api/V1/Admin/GeoController → NONE
 Api/V1/Admin/InspiredLeadController → NONE
 Api/V1/Admin/MediaController → tests/Feature/SecureImageUploadTest.php
@@ -277,3 +277,72 @@ Duration: 66.43s
 {"tool":"pint","result":"passed"}
 [OK] No errors
 ```
+
+## Round 2 response
+
+### R1 — UTF-8 route baseline and count definition
+
+Regenerated `routes-baseline.json` as UTF-8 without BOM using the Laravel command output and verified it with PHP.
+
+```text
+Command: php artisan route:list --path=api --json
+ROUTES=176
+First three bytes: 5B-7B-22
+```
+
+`176` is the canonical baseline count for Phase 06: every route returned by `--path=api`, including 133 application routes whose URI starts with `api/` and 43 `telescope/telescope-api/*` routes. The saved JSON is valid UTF-8 and `json_decode(..., JSON_THROW_ON_ERROR)` succeeds.
+
+### R2 — all routes without `auth:sanctum`
+
+There are 71 routes without `auth:sanctum`: 28 non-Telescope routes below and 43 Telescope API routes. This table records the intended public reason, not an approval of its security posture; items flagged for D5, D6, or Phase 05 remain in scope there.
+
+| Route | Reason it is currently public |
+|---|---|
+| `GET api/documentation` | Swagger documentation endpoint; Phase 05 must decide production exposure. |
+| `GET api/oauth2-callback` | Swagger OAuth callback endpoint; Phase 05 must decide production exposure. |
+| `GET api/v1/address/autocomplete` | Guest checkout address lookup; validation plus `60,1` throttle. |
+| `GET api/v1/address/details` | Guest checkout address details; validation plus `60,1` throttle. |
+| `POST api/v1/analytics/event` | Anonymous client telemetry ingestion; Phase 05 validates abuse controls. |
+| `POST api/v1/auth/forgot-password` | Password-recovery entry point; `forgot-password` throttle. |
+| `POST api/v1/auth/google` | Google sign-in entry point; `login` throttle. |
+| `POST api/v1/auth/login` | Sign-in entry point; `login` throttle. |
+| `POST api/v1/auth/otp/send` | OTP delivery entry point; `otp` throttle. |
+| `POST api/v1/auth/otp/verify` | OTP verification entry point; `otp` throttle. |
+| `POST api/v1/auth/register` | Account-registration entry point; generic API throttle. |
+| `POST api/v1/auth/reset-password` | Password-reset completion entry point; `password-reset` throttle. |
+| `GET api/v1/categories` | Public catalog browsing. |
+| `GET api/v1/categories/{slug}` | Public category browsing. |
+| `POST api/v1/contact-messages` | Public contact form; Phase 05 validates throttling and abuse protection. |
+| `POST api/v1/coupons/validate` | Guest checkout coupon preview; no usage is recorded here. |
+| `GET api/v1/health` | Public deployment health probe. |
+| `POST api/v1/inspired-leads` | Public lead form; Phase 05 validates throttling and abuse protection. |
+| `POST api/v1/orders/track` | Public tracking with its dedicated `order-tracking` throttle and request second factor. |
+| `GET api/v1/products` | Public catalog browsing. |
+| `GET api/v1/products/sitemap` | Public SEO sitemap. |
+| `GET api/v1/products/{id}/reviews` | Public product-review browsing. |
+| `GET api/v1/products/{slug}` | Public product detail. |
+| `GET api/v1/shipping/free-shipping` | Public checkout configuration read. |
+| `POST api/v1/shipping/rates` | Guest checkout quote; D6 and Phase 05 assess paid-provider cost abuse. |
+| `POST api/v1/shipping/verify-address` | Guest checkout validation; D6 and Phase 05 assess paid-provider cost abuse. |
+| `POST api/v1/webhooks/easypost` | Provider callback authenticated by webhook verification; D6 checks retries versus throttle. |
+| `POST api/v1/webhooks/stripe` | Provider callback authenticated by signature verification; D5 checks retries versus throttle. |
+| Each `telescope/telescope-api/*` route (43 routes, fully enumerated in `routes-baseline.json`) | Uses Telescope middleware and the `viewTelescope` gate; Phase 05 must verify this with the app's Sanctum/web-session setup and `TELESCOPE_ENABLED`. |
+
+### R3 — coverage-map recheck
+
+Rechecked every prior `NONE` against endpoint URIs in `tests/`. The map now records direct coverage for `GoogleAuthService`, `GooglePlacesService`, the public contact controller, and the admin dashboard authorization path. The remaining `NONE` items have no matching route invocation in `tests/`: `CategoryService`, `SkuGeneratorService`, `Api/V1/InspiredLeadController`, `Api/V1/Admin/CategoryController`, `Api/V1/Admin/GeoController`, `Api/V1/Admin/InspiredLeadController`, `Api/V1/Admin/SkuController`, and `Api/V1/Admin/TelescopeApiController`.
+
+### R4 — coverage driver attempt
+
+```text
+PECL=NOT_FOUND
+Loaded Configuration File: C:\Program Files\php-8.5.2\php.ini
+```
+
+PCOV/Xdebug are not loaded and PECL is not installed in this Windows PHP 8.5.2 environment, so an extension cannot be installed through the available PHP toolchain. Per-file runtime coverage remains unavailable and will be tracked statically until the server owner provides a coverage-enabled PHP runtime.
+
+### R5 — readiness classification and handover items
+
+Expected local/test failures: production environment, debug disabled, Telescope disabled, demo accounts, and demo catalogue.
+
+Server-owner handover items: configure the production HTTPS frontend URL, a live Stripe secret, and warehouse origin; verify the production runtime's PHP version (the local runtime is PHP 8.5.2 and the project requires PHP `^8.2`). These are carried forward to Phase 06.
