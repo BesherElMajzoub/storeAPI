@@ -13,30 +13,6 @@ parameters:
 			path: app/Console/Commands/MigrateImagesToSpatie.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Order\|Illuminate\\Database\\Eloquent\\Collection\<\(int\|string\), App\\Models\\Order\>\:\:\$user\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/StripeWebhookController.php
-
-		-
-			message: '#^Access to an undefined property Stripe\\StripeObject\:\:\$payment_intent\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/StripeWebhookController.php
-
-		-
-			message: '#^Access to protected property Illuminate\\Database\\Eloquent\\Collection\<\(int\|string\), App\\Models\\Order\>\:\:\$items\.$#'
-			identifier: property.protected
-			count: 1
-			path: app/Http/Controllers/Api/StripeWebhookController.php
-
-		-
-			message: '#^Cannot call method sum\(\) on array\<App\\Models\\Order\>\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Http/Controllers/Api/StripeWebhookController.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$landing_page\.$#'
 			identifier: property.notFound
 			count: 1

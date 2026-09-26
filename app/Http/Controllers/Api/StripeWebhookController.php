@@ -76,6 +76,10 @@ class StripeWebhookController extends Controller
     {
         $session = $event->data->object;
         $orderId = $session->metadata->order_id ?? null;
+        $sessionData = $session->toArray();
+        $paymentIntentId = isset($sessionData['payment_intent'])
+            ? (string) $sessionData['payment_intent']
+            : null;
 
         if (! $orderId) {
             Log::warning('Stripe webhook: checkout.session.completed missing order_id metadata');
@@ -106,7 +110,7 @@ class StripeWebhookController extends Controller
             return false;
         }
 
-        $order = DB::transaction(function () use ($order, $session) {
+        $order = DB::transaction(function () use ($order, $paymentIntentId, $session) {
             $lockedOrder = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
 
             $expectedAmount = (int) round((float) $lockedOrder->total * 100);
@@ -123,21 +127,28 @@ class StripeWebhookController extends Controller
                 return null;
             }
 
-            if ($lockedOrder->status !== 'pending_payment' || $lockedOrder->payment_status !== 'unpaid') {
+            $updated = Order::query()
+                ->whereKey($lockedOrder->id)
+                ->where('status', 'pending_payment')
+                ->where('payment_status', 'unpaid')
+                ->update([
+                    'status' => 'processing',
+                    'payment_status' => 'paid',
+                    'stripe_payment_intent_id' => $paymentIntentId,
+                    'paid_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+            if ($updated === 0) {
                 return false;
             }
 
-            $lockedOrder->update([
-                'status' => 'processing',
-                'payment_status' => 'paid',
-                'stripe_payment_intent_id' => $session->payment_intent,
-                'paid_at' => now(),
-            ]);
+            $lockedOrder->refresh();
 
             Payment::updateOrCreate(
                 ['order_id' => $lockedOrder->id],
                 [
-                    'transaction_id' => $session->payment_intent,
+                    'transaction_id' => $paymentIntentId,
                     'payment_provider' => 'stripe',
                     'status' => 'completed',
                     'amount' => $lockedOrder->total,
@@ -155,11 +166,10 @@ class StripeWebhookController extends Controller
             return true;
         }
 
-        $order->load('items');
-        $itemCount = $order->items->sum('quantity');
+        $itemCount = (int) $order->items()->sum('quantity');
         $message = "🛒 New order {$order->order_number} — \${$order->total} — {$itemCount} items";
         SendAdminAlert::dispatch($message)->onQueue('notifications');
-        Mail::to($order->user->email)->queue(new OrderPaidMail($order));
+        Mail::to($order->user()->value('email'))->queue(new OrderPaidMail($order));
 
         Log::info("Order {$order->order_number} marked as paid via Stripe.");
 
