@@ -2,12 +2,12 @@
 
 Executor updates this after every step. Reviewer updates the **Review** column.
 
-Statuses: `NOT-STARTED` → `IN-PROGRESS` → `READY-FOR-REVIEW` →
+Statuses: `NOT-STARTED` -> `IN-PROGRESS` -> `READY-FOR-REVIEW` ->
 `APPROVED` | `CHANGES-REQUESTED`
 
 | Phase | Result file(s) | Status | Review | Open P0/P1 |
 |---|---|---|---|---|
-| 01 Baseline | `results/01-baseline.md` | NOT-STARTED | — | — |
+| 01 Baseline | `results/01-baseline.md` | READY-FOR-REVIEW | — | — |
 | 02 Logic — D1 Auth | `results/02-D1-auth.md` | NOT-STARTED | — | — |
 | 02 Logic — D2 Catalog | `results/02-D2-catalog.md` | NOT-STARTED | — | — |
 | 02 Logic — D3 Pricing | `results/02-D3-pricing.md` | NOT-STARTED | — | — |
@@ -30,3 +30,4 @@ Statuses: `NOT-STARTED` → `IN-PROGRESS` → `READY-FOR-REVIEW` →
 ## Log
 
 <!-- One line per session: date — what was done — last commit sha -->
+2026-09-26 — Phase 01 baseline completed; awaiting reviewer — 835c9ae
