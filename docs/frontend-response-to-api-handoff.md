@@ -98,6 +98,10 @@ Before, the admin order screen treated both as "this order is not ready for a la
 
 ## 5. Still Open for the Backend
 
+### Q25 — Refund and cancellation contract
+
+Admin refund is a separate action from cancellation approval. `POST /api/v1/admin/orders/{order}/refund` returns 200 when Stripe confirms immediately, 202 when confirmation is pending, 409 when ineligible, and 502 when Stripe fails. Admin single/bulk cancellation can return 409 when Checkout already completed or 502 for a provider error; the order is unchanged in either case. A paid cancellation does not auto-refund. The current refund guard permits a paid order (or the `requires_refund` recovery state) with a Stripe PaymentIntent; it does not restrict by order fulfillment status. Admin order payloads can include `payments.status` values `requires_refund`, `partially_refunded`, and `refunded` when the payment relation is loaded.
+
 Your handoff fully answers several questions from the companion document, which are therefore **withdrawn**:
 
 | Question | Answered by | Withdrawn |

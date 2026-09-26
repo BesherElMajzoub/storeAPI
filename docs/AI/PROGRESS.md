@@ -1,6 +1,6 @@
 # Progress Tracker
 
-> Reviewer round 2: D5 is `CHANGES-REQUESTED` (R6–R10 + L-PAY-011 = 202). Only open owner decision: L-PAY-010 (zero/tiny totals, D3).
+> Reviewer round 3: D5 code accepted; tests/docs items R11–R15 remain. Open owner decision: L-PAY-010 (D3).
 
 Executor updates this after every step. Reviewer updates the **Review** column.
 
@@ -14,7 +14,7 @@ Statuses: `NOT-STARTED` -> `IN-PROGRESS` -> `READY-FOR-REVIEW` ->
 | 02 Logic — D2 Catalog | `results/02-D2-catalog.md` | NOT-STARTED | — | — |
 | 02 Logic — D3 Pricing | `results/02-D3-pricing.md` | NOT-STARTED | — | — |
 | 02 Logic — D4 Inventory | `results/02-D4-inventory.md` | NOT-STARTED | — | — |
-| 02 Logic — D5 Payments | `results/02-D5-payments.md` | CHANGES-REQUESTED | `reviews/02-D5-payments-review.md` (round 2) | 1 P1 (L-PAY-012) |
+| 02 Logic — D5 Payments | `results/02-D5-payments.md` | CHANGES-REQUESTED | `reviews/02-D5-payments-review.md` (round 3 — tests/docs only) | 0 |
 | 02 Logic — D6 Shipping | `results/02-D6-shipping.md` | NOT-STARTED | — | — |
 | 02 Logic — D7 Order lifecycle | `results/02-D7-order-lifecycle.md` | NOT-STARTED | — | — |
 | 02 Logic — D8 Misc | `results/02-D8-misc.md` | NOT-STARTED | — | — |

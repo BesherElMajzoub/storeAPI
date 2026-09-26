@@ -132,3 +132,44 @@ L-PAY-011 is now owner-approved and implemented: a pending Stripe refund returns
 L-PAY-012 is fixed by allowing the `requires_refund` recovery branch only for cancelled orders that never accepted payment (`unpaid`/`failed`). A paid/refunded completion replay is now a no-op with no alert or ledger mutation. L-PAY-013 now preflights every bulk transition before any checkout session is expired. The payment ledger keeps `payments.amount` as the captured amount while `orders.refunded_amount` tracks the cumulative refund.
 
 Evidence: focused Stripe/admin tests **38 passed (117 assertions)**; Pint and PHPStan level 5 passed. Commits: `0ade22f`, `89ff7d5`.
+
+## Round 4 response
+
+R11 restores the expiry regression assertion for `stock_released_at`. R12 strengthens the late-payment/manual-refund path with a reserved product line: cancellation releases it once, while the late payment and subsequent refund leave both the product stock and release timestamp unchanged.
+
+R13 is covered by the pending-refund API assertion and the existing signed `charge.refunded` reconciliation path: pending returns 202 without local mutation; a signed refund event is the only path that finalizes the ledger/order. R14 evidence is consolidated below; no production behavior changed in this round.
+
+### L-PAY-007 â€” late payment after cancellation
+
+- **Severity:** P0; **Status:** FIXED.
+- **Scenario:** an open Checkout Session is paid after a pending-payment order was cancelled.
+- **Regression:** `test_signed_payment_for_a_cancelled_order_is_recorded_for_manual_refund`.
+- **Fix/evidence:** Session expiry before cancellation and manual-recovery ledger state; product stock remains released once. Commits `e952972`, `89ff7d5`.
+
+### L-PAY-008 / L-PAY-012 / L-PAY-013 â€” webhook and bulk-transition races
+
+- **Severity:** P1/P2; **Status:** FIXED.
+- **Regression:** expiry replacement, refunded completion replay, and invalid-bulk-no-expiry tests.
+- **Fix/evidence:** lock/recheck the expiry path; duplicate completed deliveries are no-ops; preflight happens before provider side effects. Commit `0ade22f`.
+
+### L-PAY-009 / L-PAY-011 â€” refund reconciliation and pending response
+
+- **Severity:** P2/P1; **Status:** FIXED.
+- **Regression:** partial ledger retains amount 100; pending refund returns 202 with order ID/status and no local transition.
+- **Fix/evidence:** captured amount stays in `payments.amount`; cumulative refund stays on `orders.refunded_amount`; the signed refund webhook finalizes. Commit `0ade22f`.
+
+### L-PAY-010 â€” zero/tiny total
+
+- **Severity:** P2; **Status:** MOVED-TO-D3.
+- **Evidence:** zero and one-cent checkout parameter tests; existing rollback prevents a stuck reserved order. Commit `ad9c30c`.
+
+### Stripe refund limitation and operator note
+
+Stripe defines `amount_refunded` as the amount refunded on the Charge, and its event catalogue states that `charge.refunded` occurs for refunded charges including partial refunds while `refund.failed` occurs when a refund fails. A delayed failure can therefore require manual follow-up after an aggregate charge event; the accepted mitigation is the critical alert from `refund.failed`, with no automatic compensating state change. Stripe keeps idempotency results for 24 hours; after a failed refund, admins must wait for that window or complete the refund from the Stripe dashboard instead of retrying the same order key.
+
+## Frontend impact
+
+- `POST /api/v1/admin/orders/{order}/refund` can return 200, 202 (pending), 409, or 502. The 202 body is successful and carries `order_id` and `refund_status`.
+- Admin single/bulk cancellation can return 409 if Checkout is already complete and 502 for a provider failure; neither cancellation changes the order in those cases.
+- `AdminOrderResource` exposes the loaded payment relation, so admin clients can receive `requires_refund`, `partially_refunded`, and `refunded`; customer order resources do not expose it unless the relation is deliberately loaded.
+- Under BR-01, accepting a paid cancellation does not refund it. An admin refunds separately; the current refund endpoint permits a paid order with a Stripe PaymentIntent and does not impose an order-status-specific restriction.

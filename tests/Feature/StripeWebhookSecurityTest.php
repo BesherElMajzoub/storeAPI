@@ -165,6 +165,7 @@ class StripeWebhookSecurityTest extends TestCase
             'payment_status' => 'failed',
         ]);
         $this->assertSame(1, $product->fresh()->stock_qty);
+        $this->assertNotNull($order->fresh()->stock_released_at);
     }
 
     public function test_an_expired_webhook_for_a_replaced_session_does_not_cancel_the_order(): void
@@ -229,12 +230,23 @@ class StripeWebhookSecurityTest extends TestCase
 
     public function test_signed_payment_for_a_cancelled_order_is_recorded_for_manual_refund(): void
     {
+        $product = Product::factory()->create(['stock_qty' => 0, 'in_stock' => false]);
         $order = Order::factory()->for(User::factory())->create([
-            'status' => 'cancelled',
+            'status' => 'pending_payment',
             'payment_status' => 'unpaid',
             'stripe_session_id' => 'cs_cancelled_paid',
             'total' => 100,
+            'stock_reserved_at' => now(),
         ]);
+        $order->items()->create([
+            'product_id' => $product->id,
+            'product_name' => $product->name,
+            'price' => 100,
+            'quantity' => 1,
+            'total' => 100,
+        ]);
+        $order->update(['status' => 'cancelled']);
+        $releasedAt = $order->fresh()->stock_released_at;
 
         $this->postSigned([
             'id' => 'evt_cancelled_paid', 'object' => 'event', 'type' => 'checkout.session.completed',
@@ -257,6 +269,8 @@ class StripeWebhookSecurityTest extends TestCase
             'status' => 'requires_refund',
             'amount' => 100,
         ]);
+        $this->assertSame(1, $product->fresh()->stock_qty);
+        $this->assertEquals($releasedAt, $order->fresh()->stock_released_at);
         Queue::assertPushed(SendAdminAlert::class, 1);
 
         $admin = User::factory()->create();

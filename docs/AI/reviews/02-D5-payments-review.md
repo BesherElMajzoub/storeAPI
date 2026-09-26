@@ -328,3 +328,89 @@ together with R6–R10:
   Update the existing test
   `test_admin_does_not_mark_an_order_refunded_until_stripe_confirms_the_refund`
   to the new 202 behaviour.
+
+---
+
+# 02 D5 Payments — Review (round 3)
+
+**Verdict: CHANGES-REQUESTED (tests and docs only, no production code).**
+All code fixes are correct. What remains is one weakened test, two missing
+assertions, and the report item R10, which has now been requested twice.
+
+Reviewed: commits `0ade22f`, `89ff7d5`, `c02cf38`.
+
+## Independently verified — OK
+- Full suite **199 passed (1080 assertions)**. You reported only a focused run
+  (38). Always paste the full suite at the end of a round.
+- **L-PAY-012 (R6):** the `requires_refund` branch now only runs for
+  `cancelled` + `unpaid`/`failed`. A replay after a refund is a no-op with no
+  alert, and it is tested. ✅
+- **L-PAY-013 (R7):** every transition, plus missing ids, is checked before
+  any Stripe call. The test asserts `shouldNotReceive` on
+  retrieve/expire. ✅ (The in-transaction check stays as a second guard
+  against races. Good.)
+- **R8:** `payments.amount` stays the captured amount, and it is tested
+  (100 after a 25 partial refund). ✅
+- **L-PAY-011:** the pending refund returns 202 with `order_id` and
+  `refund_status`, and nothing changes locally. `failed`/`canceled` return 502.
+  OpenAPI is updated. ✅
+
+## Required changes
+
+### R11 — Restore the deleted assertion (rule 4: never weaken a test)
+Across `0ade22f` and `89ff7d5`, the line
+`$this->assertNotNull($order->fresh()->stock_released_at);` was **removed**
+from `test_signed_expired_session_cancels_only_the_matching_order`. It moved
+to the R9 test, failed there, and was then deleted. I put it back temporarily
+and ran it: **it passes**, so there was no reason to remove it. Restore it.
+
+### R12 — R9 still doesn't assert stock
+The addendum required "stock is not released twice". The late-payment test
+creates an order with no items and no `stock_reserved_at`, so it proves
+nothing about stock. Give the order a product line and `stock_reserved_at`,
+cancel it through the real cancel path (stock released once), then run the
+late payment and the admin refund. Assert that `stock_qty` is unchanged by the
+payment and by the refund, and that `stock_released_at` doesn't change.
+
+### R13 — Complete the 202 flow test
+The addendum required: `pending` → 202 with the order unchanged → **signed
+`charge.refunded`** → order and payment `refunded`, stock released exactly
+once. The test stops after the 202. Add the webhook step in the same test, or
+in a new one.
+
+### R14 — R10 (third request): the report
+`results/02-D5-payments.md` still has finding blocks only for L-PAY-001…006.
+Add blocks in `templates/finding.md` format for **L-PAY-007 … 013**. The
+evidence is the test names and commit shas. You don't need to recreate
+failing runs for fixes that are already merged; say "regression test added
+after fix".
+
+Also add the two items from R10:
+- **Quote** Stripe's docs on whether `charge.amount_refunded` includes pending
+  refunds, and what happens when a refund fails. Given BR-01, the alert-only
+  `refund.failed` is accepted once the limitation is written down.
+- The note that the idempotency key caches failures for 24h, with the admin
+  workaround.
+
+### R15 — Frontend impact note (new; needed for "ready")
+This round changed what the frontend sees, and
+`docs/backend-requests-and-clarifications (2).md` **Q25** asks exactly the
+refund questions the owner has now answered. Add a
+`## Frontend impact` section to the result file, and a short answer to Q25 in
+the frontend response doc the team uses (`docs/frontend-response-to-api-handoff.md`
+or the open-items register, whichever answers Q-items):
+- `POST admin/orders/{order}/refund` can now return **202** (refund pending),
+  besides 200, 409 and 502.
+- Admin order cancel (single and bulk) can now return **409** "Checkout
+  Session already completed" and **502** provider error.
+- New `payments.status` values: `requires_refund`, `partially_refunded`,
+  `refunded`. State whether they appear in any API response (check
+  `AdminOrderResource` / payment relation).
+- Q25 answer: approving a cancellation of a paid order does **not** refund
+  automatically, and the admin refunds separately (BR-01). The second part
+  (which statuses permit a refund) is answered by the current transition rules.
+  Quote them.
+
+## Next step
+R11–R15 are tests and docs only. Do them, run the **full** suite, append
+`## Round 4 response`, and stop. I expect to approve D5 after this.
