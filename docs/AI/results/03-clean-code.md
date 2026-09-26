@@ -1,6 +1,6 @@
 # 03 Clean code - results
 
-Status: COMPLETE FOR B4 (level 5 clean; level 6 attempted and documented below).
+Status: APPROVED (level 5 clean; level 6 attempted and documented below).
 
 ## Summary
 
@@ -26,3 +26,16 @@ Status: COMPLETE FOR B4 (level 5 clean; level 6 attempted and documented below).
 ## Verification
 
 Pint passes. The full test suite and the newly added B4 journey class pass after these changes.
+
+## Findings not fixed (carried forward)
+
+- Duplicated-logic sweep: `rollbackFailedCheckout` still contains manual
+  coupon/quote release logic overlapping the order observer. It remains
+  behavior-sensitive and was not refactored without a dedicated regression
+  pass.
+- Method-length/nesting sweep, magic-string-to-enum conversion, and naming
+  audit were not completed; no behavior-neutral change was inferred.
+- The legacy `pending` order status is still referenced in the admin
+  transition table and OpenAPI enum. It is retained pending a production-data
+  decision about historical rows, even though new checkout rows use
+  `pending_payment`.
