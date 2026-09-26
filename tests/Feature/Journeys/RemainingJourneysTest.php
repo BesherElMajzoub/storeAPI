@@ -3,8 +3,8 @@
 namespace Tests\Feature\Journeys;
 
 use App\Jobs\SendAdminAlert;
-use App\Models\Order;
 use App\Models\Category;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;

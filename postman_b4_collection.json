@@ -1,0 +1,45 @@
+{
+  "info": {
+    "name": "Store API B4 smoke journeys",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {"key": "base_url", "value": "http://127.0.0.1:8000"},
+    {"key": "email", "value": ""},
+    {"key": "password", "value": "Password123!"},
+    {"key": "token", "value": ""},
+    {"key": "admin_token", "value": ""}
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {"method": "GET", "url": "{{base_url}}/api/v1/health"},
+      "event": [{"listen": "test", "script": {"exec": ["pm.test('health is 200', function () { pm.response.to.have.status(200); });"]}}]
+    },
+    {
+      "name": "J01 Guest catalogue",
+      "item": [
+        {"name": "Categories", "request": {"method": "GET", "url": "{{base_url}}/api/v1/categories"}, "event": [{"listen": "test", "script": {"exec": ["pm.test('categories are public', function () { pm.response.to.have.status(200); });"]}}]},
+        {"name": "Products", "request": {"method": "GET", "url": "{{base_url}}/api/v1/products"}, "event": [{"listen": "test", "script": {"exec": ["pm.test('products are public', function () { pm.response.to.have.status(200); });"]}}]}
+      ]
+    },
+    {
+      "name": "J02 Customer auth",
+      "item": [
+        {"name": "Register", "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"name\": \"Newman User\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"password_confirmation\": \"{{password}}\"\n}"}, "url": "{{base_url}}/api/v1/auth/register"}, "event": [{"listen": "prerequest", "script": {"exec": ["pm.collectionVariables.set('email', 'newman+' + Date.now() + '@example.test');"]}}, {"listen": "test", "script": {"exec": ["pm.test('registered', function () { pm.response.to.have.status(201); });", "var body = pm.response.json();", "pm.collectionVariables.set('token', body.data.access_token);"]}}]},
+        {"name": "Me", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}], "url": "{{base_url}}/api/v1/auth/me"}, "event": [{"listen": "test", "script": {"exec": ["pm.test('me is 200', function () { pm.response.to.have.status(200); });"]}}]},
+        {"name": "Logout", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}], "url": "{{base_url}}/api/v1/auth/logout"}, "event": [{"listen": "test", "script": {"exec": ["pm.test('logout is 200', function () { pm.response.to.have.status(200); });"]}}]}
+      ]
+    },
+    {
+      "name": "Admin and public contracts",
+      "item": [
+        {"name": "Admin login", "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"email\":\"{{admin_email}}\",\"password\":\"{{admin_password}}\"}"}, "url": "{{base_url}}/api/v1/auth/login"}, "event": [{"listen": "test", "script": {"exec": ["pm.test('admin login is 200', function () { pm.response.to.have.status(200); });", "var body = pm.response.json();", "pm.collectionVariables.set('admin_token', body.data.access_token);"]}}]},
+        {"name": "Admin categories", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{admin_token}}"}], "url": "{{base_url}}/api/v1/admin/categories"}, "event": [{"listen": "test", "script": {"exec": ["pm.test('admin categories is 200', function () { pm.response.to.have.status(200); });"]}}]},
+        {"name": "Unauthenticated admin", "request": {"method": "GET", "url": "{{base_url}}/api/v1/admin/categories"}, "event": [{"listen": "test", "script": {"exec": ["pm.test('unauthenticated admin is 401', function () { pm.response.to.have.status(401); });"]}}]},
+        {"name": "Invalid coupon", "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"code\":\"NOT-A-COUPON\",\"subtotal\":100}"}, "url": "{{base_url}}/api/v1/coupons/validate"}, "event": [{"listen": "test", "script": {"exec": ["pm.test('invalid coupon is 422', function () { pm.response.to.have.status(422); });"]}}]},
+        {"name": "Contact", "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"name\":\"Newman\",\"email\":\"newman@example.test\",\"message\":\"B4 smoke\"}"}, "url": "{{base_url}}/api/v1/contact-messages"}, "event": [{"listen": "test", "script": {"exec": ["pm.test('contact is 201', function () { pm.response.to.have.status(201); });"]}}]}
+      ]
+    }
+  ]
+}
