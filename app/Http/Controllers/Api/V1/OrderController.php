@@ -619,7 +619,11 @@ class OrderController extends Controller
     {
         $order = $request->user()->orders()->findOrFail($id);
 
-        if ($order->status !== 'pending') {
+        // Orders created through checkout start in 'pending_payment' (never
+        // 'pending' — that status predates Stripe and nothing sets it
+        // anymore); only an order that hasn't been paid for yet is eligible
+        // for a direct, no-approval customer cancel.
+        if ($order->status !== 'pending_payment' || $order->payment_status !== 'unpaid') {
             return response()->json([
                 'success' => false,
                 'message' => 'Only pending orders can be cancelled directly.',
@@ -638,7 +642,7 @@ class OrderController extends Controller
             ], 400);
         }
 
-        $order->update(['status' => 'cancelled']);
+        $order->update(['status' => 'cancelled', 'payment_status' => 'failed']);
 
         return response()->json([
             'success' => true,
