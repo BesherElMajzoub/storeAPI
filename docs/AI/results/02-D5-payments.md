@@ -118,3 +118,9 @@ Duration: 50.88s
 {"tool":"pint","result":"passed"}
 [OK] No errors
 ```
+
+## Round 2 response
+
+R1--R4 are fixed: `1268ddf` applies card-only Checkout, a dedicated 1,000/minute provider limiter, and a stable Stripe refund idempotency key. `e952972` expires Checkout Sessions before pending-payment cancellations, reconciles a verified late payment as `requires_refund` with an urgent admin alert, locks the expiry handler, records refund ledger states, and handles `refund.failed` without closing the order. Focused verification: **34 passed (109 assertions)**, Pint passed, PHPStan level 5 passed.
+
+L-PAY-010 remains a D3 decision: zero and one-cent totals are sent to Stripe and rejected, but the existing provider-failure rollback releases and soft-deletes the new order so it does not stick. L-PAY-011 remains an owner decision: pending refunds now use the neutral message `Stripe refund is pending confirmation.` while retaining the frozen 502 contract; proposed replacement is 202 Accepted with webhook reconciliation. Stripe sources: [idempotency](https://docs.stripe.com/api/idempotent_requests), [refund creation](https://docs.stripe.com/api/refunds/create), and [event types](https://docs.stripe.com/api/events/types), which include `refund.failed` and `refund.updated`.
