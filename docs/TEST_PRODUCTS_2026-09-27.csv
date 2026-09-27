@@ -1,0 +1,6 @@
+type,sku,name,description,price,stock_qty,status,category_slug,in_stock,is_featured,weight_oz,length_in,width_in,height_in
+product,TEST-TEE-001,Test Standard Tee,Disposable checkout test product,35.00,20,published,clothing,true,false,10,12,9,1.5
+product,TEST-DRESS-OVER100,Test Free Shipping Dress,Disposable product above the default free shipping threshold,129.00,10,published,clothing,true,false,28,14,10,3
+product,TEST-COAT-HEAVY,Test Heavy Coat,Disposable heavy product for package selection,89.00,8,published,clothing,true,false,80,18,12,4
+product,TEST-ACCESSORY-001,Test Accessory,Disposable small parcel product,15.00,20,published,accessories,true,false,4,6,4,1
+product,TEST-MINIMUM-001,Test Minimum Charge Item,Use with free shipping and a full discount scenario to exercise minimum and zero total contracts,0.25,10,published,accessories,true,false,2,4,3,1

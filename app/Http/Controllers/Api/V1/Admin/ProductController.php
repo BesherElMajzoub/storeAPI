@@ -338,19 +338,8 @@ class ProductController extends Controller
         $variants = $data['variants'] ?? null;
         unset($data['images'], $data['variants']);
 
-        $product = DB::transaction(function () use ($product, $data, $uploadedImages, $variants) {
+        $product = DB::transaction(function () use ($product, $data, $variants) {
             $product->update($data);
-
-            if ($uploadedImages !== null) {
-                // Clear existing collection and re-upload via Spatie
-                $product->clearMediaCollection('product_images');
-
-                foreach ($uploadedImages as $file) {
-                    $product->addMedia($file)
-                        ->usingFileName((string) Str::uuid().'.'.$file->guessExtension())
-                        ->toMediaCollection('product_images');
-                }
-            }
 
             if (is_array($variants)) {
                 foreach ($variants as $variant) {
@@ -390,8 +379,24 @@ class ProductController extends Controller
                 }
             }
 
-            return $product->load(['variants', 'media', 'category.media']);
+            return $product;
         });
+
+        if ($uploadedImages !== null) {
+            // Replace the gallery only after the DB changes are committed, and add the new
+            // images before deleting the old ones: file deletion cannot be rolled back.
+            $oldMedia = $product->getMedia('product_images');
+
+            foreach ($uploadedImages as $file) {
+                $product->addMedia($file)
+                    ->usingFileName((string) Str::uuid().'.'.$file->guessExtension())
+                    ->toMediaCollection('product_images');
+            }
+
+            $oldMedia->each->delete();
+        }
+
+        $product->load(['variants', 'media', 'category.media']);
 
         $this->logActivity('update_product', "Updated product {$product->name}", [
             'before' => $oldIndex,

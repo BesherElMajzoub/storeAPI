@@ -25,6 +25,7 @@ On success, the backend reserves inventory, consumes the selected shipping quote
   "data": {
     "order": {},
     "checkout_url": "https://checkout.stripe.com/...",
+    "payment_required": true,
     "payment": {
       "session_id": "cs_..."
     }
@@ -32,6 +33,12 @@ On success, the backend reserves inventory, consumes the selected shipping quote
   "errors": null
 }
 ```
+
+For a zero-total order, the same endpoint returns `checkout_url: null`,
+`payment_required: false`, and a null payment session ID. The order is marked
+paid without calling Stripe. A positive final total below the configured
+minimum charge (default `$0.50`) returns `422` with
+`errors.code: "minimum_charge"`.
 
 If Stripe session creation fails, the backend returns `502` and compensates the committed order work: reserved stock is released, coupon usage is reversed, the shipping quote is made available again, and the failed order is soft-deleted.
 

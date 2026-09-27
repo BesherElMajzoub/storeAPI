@@ -141,6 +141,15 @@ class MediaController extends Controller
      */
     public function replaceCategoryImage(UploadMediaRequest $request, Category $category): JsonResponse
     {
+        if (! $request->hasFile('image')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed.',
+                'data' => null,
+                'errors' => ['image' => ['The image field is required.']],
+            ], 422);
+        }
+
         // singleFile() collection — Spatie auto-clears the old one
         $media = $category->addMediaFromRequest('image')
             ->usingFileName((string) Str::uuid().'.'.$request->file('image')->guessExtension())

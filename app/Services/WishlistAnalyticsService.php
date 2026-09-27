@@ -20,7 +20,7 @@ class WishlistAnalyticsService
             ->whereNull('products.deleted_at')
             ->groupBy('products.id')
             ->orderByDesc('wishlist_count')
-            ->with('images')
+            ->with('media')
             ->paginate($perPage);
     }
 
@@ -40,7 +40,7 @@ class WishlistAnalyticsService
             ->whereNull('products.deleted_at')
             ->groupBy('products.id')
             ->orderByDesc('wishlist_count')
-            ->with('images')
+            ->with('media')
             ->first();
 
         // Week-over-week trend
@@ -60,7 +60,7 @@ class WishlistAnalyticsService
                 'id' => $topProduct->id,
                 'name' => $topProduct->name,
                 'wishlist_count' => (int) $topProduct->wishlist_count,
-                'image' => $topProduct->images->first()?->url,
+                'image' => $topProduct->primaryImageUrl(),
             ] : null,
             'this_week_adds' => $thisWeekAdded,
             'last_week_adds' => $lastWeekAdded,
@@ -87,7 +87,7 @@ class WishlistAnalyticsService
             ->whereNull('products.deleted_at')
             ->groupBy('products.id')
             ->orderByDesc('recent_adds')
-            ->with('images')
+            ->with('media')
             ->paginate($perPage);
     }
 
@@ -116,7 +116,7 @@ class WishlistAnalyticsService
             ->groupBy('products.id')
             ->having('total_wishlisted', '>', 0)
             ->orderByDesc('total_converted')
-            ->with('images')
+            ->with('media')
             ->paginate($perPage);
     }
 }

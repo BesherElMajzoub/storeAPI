@@ -22,7 +22,7 @@ class AdminWishlistItemResource extends JsonResource
             'slug' => $product->slug,
             'price' => (float) $product->price,
             'final_price' => (float) $product->final_price,
-            'image' => $product->images->first()?->url,
+            'image' => $product->primaryImageUrl(),
             'added_at' => $this->created_at?->toISOString(),
         ];
     }

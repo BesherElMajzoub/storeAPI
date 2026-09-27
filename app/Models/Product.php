@@ -75,6 +75,23 @@ class Product extends Model implements HasMedia
             ->nonQueued();
     }
 
+    /**
+     * URL of the cover image (first in gallery order) at the given conversion,
+     * falling back to the original file while the conversion is not generated.
+     */
+    public function primaryImageUrl(string $conversion = 'product_card'): ?string
+    {
+        $media = $this->getFirstMedia('product_images');
+
+        if (! $media) {
+            return null;
+        }
+
+        return $media->hasGeneratedConversion($conversion)
+            ? $media->getUrl($conversion)
+            : $media->getUrl();
+    }
+
     // ──────────────────────────────────────────
     //  Relations
     // ──────────────────────────────────────────

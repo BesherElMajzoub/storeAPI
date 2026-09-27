@@ -925,18 +925,6 @@ parameters:
 			path: app/Http/Resources/ProductGalleryImageResource.php
 
 		-
-			message: '#^Call to an undefined method App\\Http\\Resources\\ProductGalleryImageResource\:\:getUrl\(\)\.$#'
-			identifier: method.notFound
-			count: 4
-			path: app/Http/Resources/ProductGalleryImageResource.php
-
-		-
-			message: '#^Call to an undefined method App\\Http\\Resources\\ProductGalleryImageResource\:\:hasGeneratedConversion\(\)\.$#'
-			identifier: method.notFound
-			count: 4
-			path: app/Http/Resources/ProductGalleryImageResource.php
-
-		-
 			message: '#^Access to an undefined property App\\Http\\Resources\\ProductResource\:\:\$description\.$#'
 			identifier: property.notFound
 			count: 1
@@ -1242,8 +1230,3 @@ parameters:
 			count: 1
 			path: app/Services/WishlistAnalyticsService.php
 
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$url\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/WishlistAnalyticsService.php

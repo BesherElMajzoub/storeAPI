@@ -65,8 +65,9 @@ class StripeCheckoutTest extends TestCase
 
         $response->assertStatus(201)
             ->assertJsonPath('success', true)
+            ->assertJsonPath('data.payment_required', true)
             ->assertJsonPath('data.payment.session_id', 'cs_test_abc123')
-            ->assertJsonStructure(['data' => ['order', 'checkout_url', 'payment']]);
+            ->assertJsonStructure(['data' => ['order', 'checkout_url', 'payment_required', 'payment']]);
 
         $this->assertStringContainsString('checkout.stripe.com', $response->json('data.checkout_url'));
     }

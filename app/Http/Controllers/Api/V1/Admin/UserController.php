@@ -131,7 +131,7 @@ class UserController extends Controller
         $user = User::findOrFail($id);
 
         $wishlist = $user->wishlistItems()
-            ->with(['product.images'])
+            ->with(['product.media'])
             ->whereHas('product')
             ->get()
             ->map(fn ($item) => (new AdminWishlistItemResource($item))->resolve($request))

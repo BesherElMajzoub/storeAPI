@@ -682,6 +682,72 @@
                 ]
             }
         },
+        "/api/v1/admin/audit-logs": {
+            "get": {
+                "tags": [
+                    "Admin Audit Logs"
+                ],
+                "summary": "List admin audit logs",
+                "operationId": "0bc9a301ac12f1d593e46842e8416bf8",
+                "parameters": [
+                    {
+                        "name": "action",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "causer_id",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "date_from",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "date_to",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 50
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Audit logs fetched"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/admin/cancellation-requests": {
             "get": {
                 "tags": [
@@ -1184,6 +1250,27 @@
                         "schema": {
                             "type": "integer",
                             "default": 15
+                        }
+                    },
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "new",
+                                "read",
+                                "replied",
+                                "archived"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "description": "Search name, email, phone, subject, or message",
+                        "schema": {
+                            "type": "string"
                         }
                     }
                 ],
@@ -2658,6 +2745,63 @@
                 ]
             }
         },
+        "/api/v1/admin/orders/bulk-status": {
+            "post": {
+                "tags": [
+                    "Admin Orders"
+                ],
+                "summary": "Atomically update the status of multiple orders",
+                "operationId": "4aa277c6f9b4e8cf580c5ae29d8bb85f",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "ids",
+                                    "status"
+                                ],
+                                "properties": {
+                                    "ids": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "integer"
+                                        },
+                                        "maxItems": 100
+                                    },
+                                    "status": {
+                                        "type": "string",
+                                        "enum": [
+                                            "pending",
+                                            "pending_payment",
+                                            "processing",
+                                            "shipped",
+                                            "delivered",
+                                            "cancelled",
+                                            "refunded"
+                                        ]
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "All order statuses updated"
+                    },
+                    "409": {
+                        "description": "At least one transition is invalid; no orders changed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/admin/orders/{id}/status": {
             "post": {
                 "tags": [
@@ -2749,6 +2893,9 @@
                 "responses": {
                     "200": {
                         "description": "Order refunded"
+                    },
+                    "202": {
+                        "description": "Refund accepted and awaiting Stripe confirmation"
                     },
                     "409": {
                         "description": "Order not eligible for refund"
@@ -3436,6 +3583,62 @@
                 ]
             }
         },
+        "/api/v1/admin/products/{product}/stock/adjust": {
+            "post": {
+                "tags": [
+                    "Admin Products"
+                ],
+                "summary": "Atomically adjust product or variant stock by a delta",
+                "operationId": "f117c9fcd9525e9a3b08af57978f7eb3",
+                "parameters": [
+                    {
+                        "name": "product",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "delta"
+                                ],
+                                "properties": {
+                                    "delta": {
+                                        "type": "integer",
+                                        "example": -2
+                                    },
+                                    "variant_id": {
+                                        "type": "integer",
+                                        "example": 15,
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Stock adjusted"
+                    },
+                    "409": {
+                        "description": "Adjustment would make stock negative"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/admin/products/import": {
             "post": {
                 "tags": [
@@ -3636,6 +3839,72 @@
                 "responses": {
                     "200": {
                         "description": "Review moderated"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationErrorResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/admin/settings/shipping": {
+            "get": {
+                "tags": [
+                    "Admin Settings"
+                ],
+                "summary": "Get shipping settings",
+                "description": "Returns the current automatic free-shipping configuration.",
+                "operationId": "747f065d0ca5fd6593ee3b08d150bc31",
+                "responses": {
+                    "200": {
+                        "description": "Shipping settings"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Admin Settings"
+                ],
+                "summary": "Update shipping settings",
+                "description": "Enable or disable automatic free shipping and set its minimum subtotal threshold.",
+                "operationId": "3c3509238998df3dbfdb9b40a10ff745",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "free_shipping_enabled"
+                                ],
+                                "properties": {
+                                    "free_shipping_enabled": {
+                                        "type": "boolean",
+                                        "example": true
+                                    },
+                                    "free_shipping_threshold": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 100,
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Shipping settings updated"
                     },
                     "422": {
                         "$ref": "#/components/responses/ValidationErrorResponse"
@@ -4390,6 +4659,13 @@
                         "schema": {
                             "type": "integer",
                             "default": 20
+                        }
+                    },
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
                         }
                     }
                 ],
@@ -6006,7 +6282,12 @@
                                                 },
                                                 "checkout_url": {
                                                     "type": "string",
-                                                    "example": "https://checkout.stripe.com/c/pay/cs_test_a1b2c3d4"
+                                                    "example": "https://checkout.stripe.com/c/pay/cs_test_a1b2c3d4",
+                                                    "nullable": true
+                                                },
+                                                "payment_required": {
+                                                    "type": "boolean",
+                                                    "example": true
                                                 },
                                                 "payment": {
                                                     "properties": {
@@ -6035,7 +6316,44 @@
                         "$ref": "#/components/responses/UnauthorizedResponse"
                     },
                     "422": {
-                        "$ref": "#/components/responses/ValidationErrorResponse"
+                        "description": "Validation error, including a positive total below the configured Stripe minimum charge.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "The order total is below the minimum charge amount."
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        },
+                                        "errors": {
+                                            "properties": {
+                                                "shipping_rate_id": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "code": {
+                                                    "type": "string",
+                                                    "example": "minimum_charge"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
                     },
                     "502": {
                         "description": "Payment provider error.",
@@ -6114,6 +6432,92 @@
                     },
                     "404": {
                         "$ref": "#/components/responses/NotFoundResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/orders/{id}/checkout-session": {
+            "post": {
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Resume payment",
+                "description": "Return the still-open Stripe Checkout Session for an unpaid order, or create a replacement after Stripe confirms that the previous session expired.",
+                "operationId": "ea789e1a7202cbc4126b9ded29f923a4",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Checkout session is ready.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Existing checkout session retrieved."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "checkout_url": {
+                                                    "type": "string",
+                                                    "example": "https://checkout.stripe.com/c/pay/cs_test_a1b2c3d4"
+                                                },
+                                                "payment": {
+                                                    "properties": {
+                                                        "session_id": {
+                                                            "type": "string",
+                                                            "example": "cs_test_a1b2c3d4"
+                                                        },
+                                                        "reused": {
+                                                            "type": "boolean",
+                                                            "example": true
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/UnauthorizedResponse"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFoundResponse"
+                    },
+                    "409": {
+                        "description": "The order cannot currently be paid or another resume request is in progress."
+                    },
+                    "502": {
+                        "description": "Payment provider error."
                     }
                 },
                 "security": [
@@ -6411,6 +6815,21 @@
                 ]
             }
         },
+        "/api/v1/products/sitemap": {
+            "get": {
+                "tags": [
+                    "Products"
+                ],
+                "summary": "Product sitemap feed",
+                "description": "Return published product slugs and update timestamps for dynamic sitemap generation.",
+                "operationId": "03795a38da796670b6a005864e046605",
+                "responses": {
+                    "200": {
+                        "description": "Sitemap feed fetched"
+                    }
+                }
+            }
+        },
         "/api/v1/products": {
             "get": {
                 "tags": [
@@ -6460,6 +6879,14 @@
                         "in": "query",
                         "schema": {
                             "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "slugs",
+                        "in": "query",
+                        "description": "Comma-separated product slugs, maximum 100",
+                        "schema": {
+                            "type": "string"
                         }
                     },
                     {
@@ -6825,6 +7252,54 @@
                         "bearerAuth": []
                     }
                 ]
+            }
+        },
+        "/api/v1/shipping/free-shipping": {
+            "get": {
+                "tags": [
+                    "Shipping"
+                ],
+                "summary": "Get the current automatic free-shipping offer",
+                "description": "Public, read-only. Lets the storefront show \"spend $X more for free shipping\" without exposing any other admin settings.",
+                "operationId": "6e5b55c4b1b2a18a60e39f846fe58895",
+                "responses": {
+                    "200": {
+                        "description": "Current free-shipping configuration",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "enabled": {
+                                                    "type": "boolean",
+                                                    "example": true
+                                                },
+                                                "threshold": {
+                                                    "type": "number",
+                                                    "format": "float",
+                                                    "example": 100,
+                                                    "nullable": true
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
             }
         },
         "/api/v1/shipping/verify-address": {
@@ -7279,6 +7754,48 @@
                     },
                     "422": {
                         "$ref": "#/components/responses/ValidationErrorResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/wishlist/merge": {
+            "post": {
+                "tags": [
+                    "Wishlist"
+                ],
+                "summary": "Merge guest wishlist",
+                "description": "Add up to 100 published product IDs from a guest wishlist to the authenticated wishlist without duplicating existing items.",
+                "operationId": "e969572b6b02bcfe9333cf472953c14a",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "product_ids"
+                                ],
+                                "properties": {
+                                    "product_ids": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "integer"
+                                        },
+                                        "maxItems": 100
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Wishlist merged"
                     }
                 },
                 "security": [
@@ -7914,11 +8431,26 @@
                     },
                     "status": {
                         "type": "string",
-                        "example": "pending"
+                        "example": "pending_payment",
+                        "enum": [
+                            "pending",
+                            "pending_payment",
+                            "processing",
+                            "shipped",
+                            "delivered",
+                            "cancelled",
+                            "refunded"
+                        ]
                     },
                     "payment_status": {
                         "type": "string",
-                        "example": "paid"
+                        "example": "unpaid",
+                        "enum": [
+                            "unpaid",
+                            "paid",
+                            "failed",
+                            "refunded"
+                        ]
                     },
                     "subtotal": {
                         "type": "number",
@@ -7935,7 +8467,21 @@
                         "format": "float",
                         "example": 15
                     },
+                    "free_shipping_reason": {
+                        "type": "string",
+                        "example": "threshold",
+                        "nullable": true,
+                        "enum": [
+                            "threshold",
+                            "coupon"
+                        ]
+                    },
                     "discount": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 0
+                    },
+                    "refunded_amount": {
                         "type": "number",
                         "format": "float",
                         "example": 0
@@ -7984,6 +8530,25 @@
                     "stripe_payment_intent_id": {
                         "type": "string",
                         "example": "pi_123456789",
+                        "nullable": true
+                    },
+                    "payment": {
+                        "description": "Admin-only when the payment relation is loaded.",
+                        "properties": {
+                            "status": {
+                                "type": "string",
+                                "example": "completed",
+                                "enum": [
+                                    "pending",
+                                    "completed",
+                                    "failed",
+                                    "requires_refund",
+                                    "partially_refunded",
+                                    "refunded"
+                                ]
+                            }
+                        },
+                        "type": "object",
                         "nullable": true
                     },
                     "paid_at": {
@@ -8579,6 +9144,10 @@
             "description": "Admin Analytics"
         },
         {
+            "name": "Admin Audit Logs",
+            "description": "Admin Audit Logs"
+        },
+        {
             "name": "Admin Cancellation Requests",
             "description": "Admin Cancellation Requests"
         },
@@ -8617,6 +9186,10 @@
         {
             "name": "Admin Reviews",
             "description": "Admin Reviews"
+        },
+        {
+            "name": "Admin Settings",
+            "description": "Admin Settings"
         },
         {
             "name": "Admin Shipping",

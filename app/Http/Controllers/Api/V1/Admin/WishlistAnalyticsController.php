@@ -35,7 +35,7 @@ class WishlistAnalyticsController extends Controller
             'slug' => $product->slug,
             'price' => (float) $product->price,
             'final_price' => (float) $product->final_price,
-            'image' => $product->images->first()?->url,
+            'image' => $product->primaryImageUrl(),
             'wishlist_count' => (int) $product->wishlist_count,
         ]);
 
@@ -81,7 +81,7 @@ class WishlistAnalyticsController extends Controller
             'slug' => $product->slug,
             'price' => (float) $product->price,
             'final_price' => (float) $product->final_price,
-            'image' => $product->images->first()?->url,
+            'image' => $product->primaryImageUrl(),
             'recent_adds' => (int) $product->recent_adds,
         ]);
 
@@ -111,7 +111,7 @@ class WishlistAnalyticsController extends Controller
                 'name' => $product->name,
                 'slug' => $product->slug,
                 'price' => (float) $product->price,
-                'image' => $product->images->first()?->url,
+                'image' => $product->primaryImageUrl(),
                 'total_wishlisted' => $wishlisted,
                 'total_converted' => $converted,
                 'conversion_rate' => $wishlisted > 0

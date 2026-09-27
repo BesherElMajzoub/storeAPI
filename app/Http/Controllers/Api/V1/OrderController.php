@@ -321,7 +321,8 @@ class OrderController extends Controller
                     type: 'object',
                     properties: [
                         new OA\Property(property: 'order', ref: '#/components/schemas/Order'),
-                        new OA\Property(property: 'checkout_url', type: 'string', example: 'https://checkout.stripe.com/c/pay/cs_test_a1b2c3d4'),
+                        new OA\Property(property: 'checkout_url', type: 'string', nullable: true, example: 'https://checkout.stripe.com/c/pay/cs_test_a1b2c3d4'),
+                        new OA\Property(property: 'payment_required', type: 'boolean', example: true),
                         new OA\Property(
                             property: 'payment',
                             type: 'object',
@@ -336,7 +337,26 @@ class OrderController extends Controller
         )
     )]
     #[OA\Response(response: 401, ref: '#/components/responses/UnauthorizedResponse')]
-    #[OA\Response(response: 422, ref: '#/components/responses/ValidationErrorResponse')]
+    #[OA\Response(
+        response: 422,
+        description: 'Validation error, including a positive total below the configured Stripe minimum charge.',
+        content: new OA\JsonContent(
+            type: 'object',
+            properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: false),
+                new OA\Property(property: 'message', type: 'string', example: 'The order total is below the minimum charge amount.'),
+                new OA\Property(property: 'data', type: 'object', nullable: true, example: null),
+                new OA\Property(
+                    property: 'errors',
+                    type: 'object',
+                    properties: [
+                        new OA\Property(property: 'shipping_rate_id', type: 'array', items: new OA\Items(type: 'string')),
+                        new OA\Property(property: 'code', type: 'string', example: 'minimum_charge'),
+                    ]
+                ),
+            ]
+        )
+    )]
     #[OA\Response(
         response: 502,
         description: 'Payment provider error.',
@@ -542,6 +562,7 @@ class OrderController extends Controller
             'data' => [
                 'order' => new OrderResource($order),
                 'checkout_url' => $session->url,
+                'payment_required' => true,
                 'payment' => [
                     'session_id' => $session->id,
                 ],

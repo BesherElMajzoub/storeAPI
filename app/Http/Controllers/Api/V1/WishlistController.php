@@ -44,7 +44,7 @@ class WishlistController extends Controller
     {
         $items = $request->user()
             ->wishlistItems()
-            ->with(['product.images', 'product.category'])
+            ->with(['product.media', 'product.category'])
             ->whereHas('product') // Only return products that still exist
             ->latest()
             ->get();

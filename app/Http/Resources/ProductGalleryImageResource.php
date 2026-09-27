@@ -18,10 +18,10 @@ class ProductGalleryImageResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'thumb' => $this->hasGeneratedConversion('product_thumb') ? $this->getUrl('product_thumb') : null,
-            'card' => $this->hasGeneratedConversion('product_card') ? $this->getUrl('product_card') : null,
-            'detail' => $this->hasGeneratedConversion('product_detail') ? $this->getUrl('product_detail') : null,
-            'zoom' => $this->hasGeneratedConversion('product_zoom') ? $this->getUrl('product_zoom') : null,
+            'thumb' => $this->conversionUrl($this->resource, 'product_thumb'),
+            'card' => $this->conversionUrl($this->resource, 'product_card'),
+            'detail' => $this->conversionUrl($this->resource, 'product_detail'),
+            'zoom' => $this->conversionUrl($this->resource, 'product_zoom'),
             'order' => $this->order_column,
         ];
     }

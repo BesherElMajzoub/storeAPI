@@ -4,7 +4,6 @@ namespace Database\Seeders\Concerns;
 
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
@@ -19,27 +18,35 @@ trait CreatesDemoMedia
 
         for ($index = $existing + 1; $index <= $count; $index++) {
             $path = $this->makeDemoPng($label, $index);
-            $fileName = sprintf('demo-%d-%d.png', $model->getKey(), $index);
-            $media = Media::create([
-                'model_type' => $model->getMorphClass(),
-                'model_id' => $model->getKey(),
-                'uuid' => (string) Str::uuid(),
-                'collection_name' => $collection,
-                'name' => $label.' '.$index,
-                'file_name' => $fileName,
-                'mime_type' => 'image/png',
-                'disk' => 'public',
-                'conversions_disk' => 'public',
-                'size' => File::size($path),
-                'manipulations' => [],
-                'custom_properties' => ['demo' => true],
-                'generated_conversions' => [],
-                'responsive_images' => [],
-                'order_column' => $index,
-            ]);
 
-            Storage::disk('public')->put($media->id.'/'.$fileName, File::get($path));
-            File::delete($path);
+            // Go through Spatie (not Media::create) so the registered conversions are generated.
+            // addMedia() moves the temp file into the media directory.
+            $media = $model->addMedia($path)
+                ->usingName($label.' '.$index)
+                ->usingFileName(sprintf('demo-%d-%d.png', $model->getKey(), $index))
+                ->withCustomProperties(['demo' => true])
+                ->toMediaCollection($collection, 'public');
+
+            $this->removeStaleMediaFiles($media);
+        }
+    }
+
+    /**
+     * A re-seed after migrate:fresh reuses media IDs, but the old files stay on disk in the
+     * same {id}/ directory. Delete anything there that does not belong to this media item.
+     */
+    private function removeStaleMediaFiles(Media $media): void
+    {
+        $keep = [$media->getPathRelativeToRoot()];
+        foreach (array_keys($media->generated_conversions ?? []) as $conversion) {
+            $keep[] = $media->getPathRelativeToRoot($conversion);
+        }
+
+        $disk = Storage::disk('public');
+        foreach ($disk->allFiles((string) $media->id) as $file) {
+            if (! in_array($file, $keep, true)) {
+                $disk->delete($file);
+            }
         }
     }
 
