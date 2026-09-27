@@ -19,6 +19,7 @@ Never paste secret values into this file, terminal captures, tickets, or chat. R
 
 - [ ] Deployment Owner: create a production database backup and complete or reference a successful restore drill.
 - [ ] Deployment Owner: rotate/delete any shared or demo admin accounts; revoke their Sanctum tokens.
+- [ ] Deployment Owner: create one named account per staff member/tester with `php artisan app:create-admin <email> "<full name>" [--role=Admin|Owner|Manager|Support]`. The password is prompted interactively (never passed as an argument) and the creation is recorded in the audit log.
 - [ ] Deployment Owner: rotate any exposed external-service credentials, including the previously exposed Telegram credential.
 - [ ] Catalog Owner: provide approved `weight_oz`, `length_in`, `width_in`, and `height_in` for every published product.
 - [ ] Backend/Catalog: backfill those values without fabricated universal defaults.
