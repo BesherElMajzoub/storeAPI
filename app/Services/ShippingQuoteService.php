@@ -19,14 +19,16 @@ class ShippingQuoteService
         $normalizedAddress = $this->normalizeAddress($address);
         $normalizedItems = $this->normalizeItems($items);
         $parcel = $this->buildParcel($normalizedItems);
+        $carrierAccounts = $this->domesticCarrierAccounts();
 
         try {
-            $shipment = $this->easyPost->getShippingRates($normalizedAddress, $parcel);
+            $shipment = $this->easyPost->getShippingRates($normalizedAddress, $parcel, $carrierAccounts);
         } catch (\Throwable $e) {
             throw new ShippingProviderException('Shipping rates are temporarily unavailable.', previous: $e);
         }
 
-        if (collect($shipment->rates ?? [])->isEmpty()) {
+        $rates = collect($shipment->rates ?? []);
+        if ($rates->isEmpty()) {
             throw new ShippingValidationException('No shipping options are available for this address.', 'unserviceable_address');
         }
 
@@ -36,7 +38,7 @@ class ShippingQuoteService
         $expiresAt = now()->addMinutes((int) config('services.easypost.quote_ttl_minutes', 15));
         $result = [];
 
-        foreach ($shipment->rates as $rate) {
+        foreach ($this->selectStandardAndExpress($rates) as $method => $rate) {
             $quote = ShippingRateQuote::updateOrCreate(
                 ['rate_id' => $rate->id],
                 [
@@ -56,6 +58,7 @@ class ShippingQuoteService
             );
 
             $result[] = [
+                'method' => $method,
                 'rate_id' => $quote->rate_id,
                 'carrier' => $quote->carrier,
                 'service' => $quote->service,
@@ -66,6 +69,61 @@ class ShippingQuoteService
         }
 
         return $result;
+    }
+
+    /**
+     * Carrier accounts allowed for domestic checkout, keeping the storefront
+     * to two named tiers (Standard via USPS, Express via UPS) and the rate
+     * request fast instead of waiting on every carrier on the EasyPost account.
+     */
+    private function domesticCarrierAccounts(): array
+    {
+        return array_values(array_filter([
+            config('services.easypost.usps_carrier_account_id'),
+            config('services.easypost.ups_carrier_account_id'),
+        ]));
+    }
+
+    /**
+     * Collapse raw carrier rates into at most two named tiers: the cheapest
+     * USPS rate as "standard" and the fastest UPS rate as "express" (falling
+     * back to whatever else is available if one of those carriers is absent
+     * from the response, e.g. a temporary carrier outage).
+     *
+     * @param  Collection<int, object>  $rates
+     * @return array<string, object>
+     */
+    private function selectStandardAndExpress(Collection $rates): array
+    {
+        $byCarrier = fn (string $carrier) => $rates->filter(
+            fn ($rate) => strtoupper((string) $rate->carrier) === $carrier
+        );
+
+        $standard = $byCarrier('USPS')->sortBy(fn ($rate) => (float) $rate->rate)->first()
+            ?? $rates->sortBy(fn ($rate) => (float) $rate->rate)->first();
+
+        $expressPool = $byCarrier('UPS');
+        if ($expressPool->isEmpty()) {
+            $expressPool = $rates->reject(fn ($rate) => $standard && $rate->id === $standard->id);
+        }
+
+        $express = $expressPool->sortBy($this->fastestThenCheapest())->first();
+
+        if ($express && $standard && $express->id === $standard->id) {
+            $express = $rates->reject(fn ($rate) => $rate->id === $standard->id)
+                ->sortBy($this->fastestThenCheapest())
+                ->first();
+        }
+
+        return array_filter(['standard' => $standard, 'express' => $express]);
+    }
+
+    /**
+     * Sort key that ranks the fewest delivery days first, breaking ties on price.
+     */
+    private function fastestThenCheapest(): \Closure
+    {
+        return fn ($rate) => sprintf('%05d-%012.2f', (int) ($rate->delivery_days ?? 99999), (float) $rate->rate);
     }
 
     public function storeLegacyQuotes(object $shipment, array $address, array $parcel): CarbonInterface

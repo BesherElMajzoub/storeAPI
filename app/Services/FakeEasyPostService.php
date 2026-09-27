@@ -25,7 +25,7 @@ class FakeEasyPostService implements EasyPostServiceInterface
         ];
     }
 
-    public function getShippingRates(array $toAddress, array $parcel = []): object
+    public function getShippingRates(array $toAddress, array $parcel = [], array $carrierAccounts = []): object
     {
         $shipmentId = 'shp_mock_'.Str::lower(Str::random(24));
         $rates = collect(config('services.easypost.fake_rates', []))

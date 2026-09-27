@@ -87,7 +87,7 @@ class EasyPostService implements EasyPostServiceInterface
      *
      * @throws Exception
      */
-    public function getShippingRates(array $toAddress, array $parcel = [])
+    public function getShippingRates(array $toAddress, array $parcel = [], array $carrierAccounts = [])
     {
         if (! $this->client) {
             throw new Exception('EasyPost client is not configured.');
@@ -106,7 +106,7 @@ class EasyPostService implements EasyPostServiceInterface
                 ];
             }
 
-            $shipment = $this->client->shipment->create([
+            $shipmentParams = [
                 'to_address' => [
                     'name' => $toAddress['name'] ?? null,
                     'street1' => $toAddress['street1'] ?? null,
@@ -119,7 +119,15 @@ class EasyPostService implements EasyPostServiceInterface
                 ],
                 'from_address' => $fromAddress,
                 'parcel' => $parcel,
-            ]);
+            ];
+
+            // Restricting to specific carrier accounts keeps the rate request fast
+            // and predictable (only the carriers we actually offer at checkout).
+            if (! empty($carrierAccounts)) {
+                $shipmentParams['carrier_accounts'] = array_values($carrierAccounts);
+            }
+
+            $shipment = $this->client->shipment->create($shipmentParams);
 
             return $shipment;
 

@@ -6,7 +6,7 @@ interface EasyPostServiceInterface
 {
     public function verifyAddress(array $address);
 
-    public function getShippingRates(array $toAddress, array $parcel = []);
+    public function getShippingRates(array $toAddress, array $parcel = [], array $carrierAccounts = []);
 
     public function purchaseLabel(string $shipmentId, string $rateId);
 

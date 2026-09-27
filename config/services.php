@@ -80,6 +80,10 @@ return [
         'webhook_secret' => env('EASYPOST_WEBHOOK_SECRET'),
         'quote_ttl_minutes' => (int) env('EASYPOST_QUOTE_TTL_MINUTES', 15),
         'supported_countries' => ['US'],
+        // Domestic checkout is limited to these two carrier accounts so rate requests
+        // stay fast and the storefront only ever needs to show "Standard"/"Express".
+        'usps_carrier_account_id' => env('EASYPOST_USPS_CARRIER_ACCOUNT_ID'),
+        'ups_carrier_account_id' => env('EASYPOST_UPS_CARRIER_ACCOUNT_ID'),
         // Dimensions converted from the warehouse's actual packaging supplier quote (cm -> in).
         // max_weight is engineering judgment (typical folded-garment load per package size),
         // not a supplier spec -- revisit once real fulfillment data is available.
