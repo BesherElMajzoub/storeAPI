@@ -12,6 +12,10 @@ class DemoCatalogSeeder extends DemoSeeder
 
     public const PRODUCT_COUNT = 96;
 
+    private const COLORS = ['Black', 'Ivory', 'Rose', 'Emerald', 'Navy'];
+
+    private const SIZES = ['S', 'M', 'L', 'XL', 'One Size'];
+
     public function run(): void
     {
         $this->guardAgainstProduction();
@@ -120,7 +124,10 @@ class DemoCatalogSeeder extends DemoSeeder
                     'status' => $status,
                     'category_id' => $status === 'draft' && $index % 2 === 0 ? null : $category->id,
                     'options' => $variantCount > 0
-                        ? ['Color' => ['Black', 'Ivory', 'Rose'], 'Size' => ['S', 'M', 'L', 'XL']]
+                        ? [
+                            'Color' => $this->usedValues(self::COLORS, $variantCount),
+                            'Size' => $this->usedValues(self::SIZES, $variantCount),
+                        ]
                         : null,
                     'in_stock' => $stock > 0,
                     'is_featured' => $status === 'published' && ($index <= 8 || $index % 19 === 0),
@@ -138,8 +145,8 @@ class DemoCatalogSeeder extends DemoSeeder
 
     private function seedVariants(Product $product, int $productIndex, array $stocks, float $price): void
     {
-        $colors = ['Black', 'Ivory', 'Rose', 'Emerald', 'Navy'];
-        $sizes = ['S', 'M', 'L', 'XL', 'One Size'];
+        $colors = self::COLORS;
+        $sizes = self::SIZES;
         $keptSkus = [];
 
         foreach ($stocks as $variantIndex => $stock) {
@@ -188,6 +195,16 @@ class DemoCatalogSeeder extends DemoSeeder
             default => 1,
         };
         $this->attachDemoImages($product, 'product_images', $count, $product->name);
+    }
+
+    private function usedValues(array $values, int $count): array
+    {
+        $used = [];
+        for ($i = 0; $i < $count; $i++) {
+            $used[] = $values[$i % count($values)];
+        }
+
+        return array_values(array_unique($used));
     }
 
     private function variantStocks(int $index, int $count): array
