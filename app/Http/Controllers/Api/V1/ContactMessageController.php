@@ -47,8 +47,18 @@ class ContactMessageController extends Controller
     {
         $contactMessage = ContactMessage::create($request->validated());
 
-        $message = "📩 New message from {$contactMessage->name} ({$contactMessage->email}): \"{$contactMessage->subject}\"";
-        SendAdminAlert::dispatch($message)->onQueue('notifications');
+        // Notify admins via Telegram.  Wrapped in try-catch because on hosts
+        // where QUEUE_CONNECTION=sync, a Telegram API failure would otherwise
+        // bubble up as a 500 to the user even though the message was saved.
+        try {
+            $message = "📩 New message from {$contactMessage->name} ({$contactMessage->email}): \"{$contactMessage->subject}\"";
+            SendAdminAlert::dispatch($message)->onQueue('notifications');
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Contact form: admin alert failed, message was still saved.', [
+                'contact_message_id' => $contactMessage->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return response()->json([
             'success' => true,

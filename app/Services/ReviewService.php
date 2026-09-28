@@ -18,8 +18,16 @@ class ReviewService
     public function create(User $user, Product $product, array $data, string $ipAddress = ''): Review
     {
         // Check: one review per user per product
-        if ($this->hasReviewed($user->id, $product->id)) {
-            throw new \Exception('You have already reviewed this product.');
+        $existingReview = Review::where('user_id', $user->id)
+            ->where('product_id', $product->id)
+            ->first();
+
+        if ($existingReview) {
+            throw new \Exception(match ($existingReview->status) {
+                'pending' => 'You already have a review for this product awaiting moderation.',
+                'rejected' => 'Your previous review for this product was rejected. You cannot submit another one.',
+                default => 'You have already reviewed this product.',
+            });
         }
 
         // Check: daily rate limit (max 5 reviews per day)

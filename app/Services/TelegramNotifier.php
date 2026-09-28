@@ -9,6 +9,9 @@ class TelegramNotifier
 {
     /**
      * Send an HTTPS POST alert to the Telegram admin chat.
+     *
+     * Uses HTML parse_mode (safer than Markdown for user-generated content)
+     * and falls back to plain text if formatting still fails.
      */
     public function sendAdminAlert(string $message): void
     {
@@ -24,15 +27,28 @@ class TelegramNotifier
             return;
         }
 
-        try {
-            $url = "https://api.telegram.org/bot{$botToken}/sendMessage";
+        $url = "https://api.telegram.org/bot{$botToken}/sendMessage";
 
-            $response = Http::timeout(10)
-                ->post($url, [
+        try {
+            // First attempt: send with HTML parse_mode (more forgiving than Markdown)
+            $escapedMessage = $this->escapeHtml($message);
+            $response = Http::timeout(10)->post($url, [
+                'chat_id' => $chatId,
+                'text' => $escapedMessage,
+                'parse_mode' => 'HTML',
+            ]);
+
+            // If HTML parsing failed (400), retry without any parse_mode (plain text)
+            if ($response->status() === 400) {
+                Log::warning('TelegramNotifier: HTML parse failed, retrying as plain text.', [
+                    'body' => $response->body(),
+                ]);
+
+                $response = Http::timeout(10)->post($url, [
                     'chat_id' => $chatId,
                     'text' => $message,
-                    'parse_mode' => 'Markdown',
                 ]);
+            }
 
             if ($response->failed()) {
                 Log::error('TelegramNotifier: API request failed.', [
@@ -50,5 +66,13 @@ class TelegramNotifier
             ]);
             throw $e;
         }
+    }
+
+    /**
+     * Escape special HTML characters so Telegram's HTML parser does not choke.
+     */
+    private function escapeHtml(string $text): string
+    {
+        return htmlspecialchars($text, ENT_NOQUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 }

@@ -8,6 +8,7 @@ use EasyPost\Event;
 use EasyPost\Exception\Api\ApiException;
 use EasyPost\Shipment;
 use EasyPost\Tracker;
+use EasyPost\Util\Util;
 use Exception;
 use Illuminate\Support\Facades\Log;
 
@@ -235,10 +236,6 @@ class EasyPostService implements EasyPostServiceInterface
      */
     public function validateWebhook(string $payload, array $headers)
     {
-        if (! $this->client) {
-            throw new Exception('EasyPost client is not configured.');
-        }
-
         $secret = config('services.easypost.webhook_secret');
         if (empty($secret)) {
             Log::critical('EasyPost webhook secret is not configured.');
@@ -246,10 +243,14 @@ class EasyPostService implements EasyPostServiceInterface
         }
 
         try {
-            // Flat map headers to ensure easy resolution
-            $flatHeaders = collect($headers)->map(fn ($item) => is_array($item) ? reset($item) : $item)->toArray();
+            // Flat map headers to ensure easy resolution. Header names arrive
+            // lowercased (Symfony's HeaderBag normalizes them), but the SDK
+            // looks up the signature by its canonical, mixed-case name.
+            $flatHeaders = collect($headers)->map(fn ($item) => is_array($item) ? reset($item) : $item)
+                ->keyBy(fn ($value, $key) => strtolower($key) === 'x-hmac-signature' ? 'X-Hmac-Signature' : $key)
+                ->toArray();
 
-            $event = $this->client->webhook->validateWebhook($payload, $flatHeaders, $secret);
+            $event = Util::validateWebhook($payload, $flatHeaders, $secret);
 
             return $event;
         } catch (Exception $e) {
