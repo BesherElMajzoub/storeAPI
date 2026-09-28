@@ -44,6 +44,11 @@ class HappyCheckoutJourneyTest extends TestCase
         $this->assertNotEmpty($token);
 
         // Step 2: save a shipping address.
+        $easyPost = $this->mock(EasyPostServiceInterface::class);
+        $easyPost->shouldReceive('verifyAddress')
+            ->once()
+            ->andReturnUsing(fn (array $address): array => $address);
+
         $addressResponse = $this->withToken($token)->postJson('/api/v1/profile/addresses', [
             'label' => 'home',
             'full_name' => 'Jane Buyer',
@@ -67,7 +72,6 @@ class HappyCheckoutJourneyTest extends TestCase
             'currency' => 'USD',
             'delivery_days' => 3,
         ];
-        $easyPost = $this->mock(EasyPostServiceInterface::class);
         $easyPost->shouldReceive('getShippingRates')->once()->andReturn(
             (object) ['id' => $shipmentId, 'rates' => [$easyPostRate]]
         );

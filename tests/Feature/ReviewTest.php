@@ -51,10 +51,13 @@ class ReviewTest extends TestCase
                 'comment' => 'This dress looks absolutely beautiful!',
             ]);
 
-        $response->assertStatus(409)
+        $response->assertStatus(403)
             ->assertJson([
                 'success' => false,
-                'message' => 'You can only review products you have purchased.',
+                'message' => 'You can only review this product after it has been delivered to you.',
+                'errors' => [
+                    'code' => 'REVIEW_PURCHASE_REQUIRED',
+                ],
             ]);
 
         $this->assertDatabaseCount('reviews', 0);
@@ -91,6 +94,34 @@ class ReviewTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.rating', 5)
             ->assertJsonPath('data.comment', 'Excellent fabric, fits perfectly!');
+
+        $this->assertDatabaseCount('reviews', 1);
+    }
+
+    public function test_duplicate_review_is_the_only_submission_conflict(): void
+    {
+        Review::create([
+            'user_id' => $this->user->id,
+            'product_id' => $this->product->id,
+            'rating' => 4,
+            'comment' => 'My existing review.',
+            'status' => 'approved',
+        ]);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/products/{$this->product->id}/reviews", [
+                'rating' => 5,
+                'comment' => 'Trying to review this product again.',
+            ]);
+
+        $response->assertStatus(409)
+            ->assertJson([
+                'success' => false,
+                'message' => 'You have already reviewed this product.',
+                'errors' => [
+                    'code' => 'REVIEW_ALREADY_EXISTS',
+                ],
+            ]);
 
         $this->assertDatabaseCount('reviews', 1);
     }

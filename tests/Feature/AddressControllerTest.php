@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Contracts\EasyPostServiceInterface;
 use App\Models\Address;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -21,6 +22,12 @@ class AddressControllerTest extends TestCase
 
         $this->session = Str::uuid()->toString();
         config(['services.google.places_api_key' => 'test_api_key']);
+
+        $this->mock(EasyPostServiceInterface::class, function ($mock): void {
+            $mock->shouldReceive('verifyAddress')
+                ->byDefault()
+                ->andReturnUsing(fn (array $address): array => $address);
+        });
     }
 
     public function test_autocomplete_success()
@@ -153,6 +160,80 @@ class AddressControllerTest extends TestCase
             ->assertJsonPath('data.is_default', true); // Automatically default if first address
     }
 
+    public function test_address_is_verified_and_normalized_before_it_is_saved(): void
+    {
+        $user = User::factory()->create();
+
+        $this->mock(EasyPostServiceInterface::class, function ($mock): void {
+            $mock->shouldReceive('verifyAddress')
+                ->once()
+                ->withArgs(fn (array $address): bool => $address['street1'] === '179 N Harbor Dr'
+                    && $address['state'] === 'ca'
+                    && $address['zip'] === '90277')
+                ->andReturn([
+                    'name' => 'Jane Smith',
+                    'street1' => '179 N HARBOR DR',
+                    'street2' => null,
+                    'city' => 'REDONDO BEACH',
+                    'state' => 'CA',
+                    'zip' => '90277-2510',
+                    'country' => 'US',
+                    'phone' => '123456789',
+                ]);
+        });
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/profile/addresses', [
+                'label' => 'home',
+                'full_name' => 'Jane Smith',
+                'phone' => '123456789',
+                'country' => 'US',
+                'city' => 'Redondo Beach',
+                'state' => 'ca',
+                'street' => '179 N Harbor Dr',
+                'postal_code' => '90277',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.street', '179 N HARBOR DR')
+            ->assertJsonPath('data.state', 'CA')
+            ->assertJsonPath('data.postal_code', '90277-2510');
+
+        $this->assertDatabaseHas('addresses', [
+            'user_id' => $user->id,
+            'line1' => '179 N HARBOR DR',
+            'street' => '179 N HARBOR DR',
+            'state' => 'CA',
+            'postal_code' => '90277-2510',
+        ]);
+    }
+
+    public function test_unverified_address_is_not_saved(): void
+    {
+        $user = User::factory()->create();
+
+        $this->mock(EasyPostServiceInterface::class, function ($mock): void {
+            $mock->shouldReceive('verifyAddress')
+                ->once()
+                ->andThrow(new \Exception('Street could not be found.'));
+        });
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/profile/addresses', [
+                'label' => 'home',
+                'full_name' => 'Jane Smith',
+                'phone' => '123456789',
+                'country' => 'US',
+                'city' => 'Nowhere',
+                'street' => 'Not a real street',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Address verification failed.')
+            ->assertJsonPath('errors.address.0', 'Street could not be found.');
+
+        $this->assertDatabaseCount('addresses', 0);
+    }
+
     public function test_user_can_update_address()
     {
         $user = User::factory()->create();
@@ -177,6 +258,35 @@ class AddressControllerTest extends TestCase
         $response->assertStatus(200)
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.full_name', 'New Name');
+    }
+
+    public function test_failed_verification_does_not_modify_an_existing_address(): void
+    {
+        $user = User::factory()->create();
+        $address = Address::create([
+            'user_id' => $user->id,
+            'label' => 'home',
+            'full_name' => 'Jane Smith',
+            'phone' => '123456789',
+            'country' => 'US',
+            'city' => 'New York',
+            'street' => '123 Main St',
+            'name' => 'Jane Smith',
+            'type' => 'shipping',
+            'line1' => '123 Main St',
+        ]);
+
+        $this->mock(EasyPostServiceInterface::class, function ($mock): void {
+            $mock->shouldReceive('verifyAddress')
+                ->once()
+                ->andThrow(new \Exception('City and postal code do not match.'));
+        });
+
+        $this->actingAs($user, 'sanctum')
+            ->putJson("/api/v1/profile/addresses/{$address->id}", ['city' => 'Boston'])
+            ->assertUnprocessable();
+
+        $this->assertSame('New York', $address->fresh()->city);
     }
 
     public function test_user_can_delete_address()

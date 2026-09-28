@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\ReviewSubmissionException;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Review;
@@ -23,21 +24,33 @@ class ReviewService
             ->first();
 
         if ($existingReview) {
-            throw new \Exception(match ($existingReview->status) {
-                'pending' => 'You already have a review for this product awaiting moderation.',
-                'rejected' => 'Your previous review for this product was rejected. You cannot submit another one.',
-                default => 'You have already reviewed this product.',
-            });
+            throw new ReviewSubmissionException(
+                message: match ($existingReview->status) {
+                    'pending' => 'You already have a review for this product awaiting moderation.',
+                    'rejected' => 'Your previous review for this product was rejected. You cannot submit another one.',
+                    default => 'You have already reviewed this product.',
+                },
+                httpStatus: 409,
+                errorCode: 'REVIEW_ALREADY_EXISTS',
+            );
         }
 
         // Check: daily rate limit (max 5 reviews per day)
         if ($this->exceedsDailyLimit($user->id)) {
-            throw new \Exception('You have reached the daily review limit. Please try again tomorrow.');
+            throw new ReviewSubmissionException(
+                message: 'You have reached the daily review limit. Please try again tomorrow.',
+                httpStatus: 429,
+                errorCode: 'REVIEW_DAILY_LIMIT_REACHED',
+            );
         }
 
         // Check: user must have purchased the product before (verified purchase)
         if (! $this->isVerifiedPurchase($user, $product->id)) {
-            throw new \Exception('You can only review products you have purchased.');
+            throw new ReviewSubmissionException(
+                message: 'You can only review this product after it has been delivered to you.',
+                httpStatus: 403,
+                errorCode: 'REVIEW_PURCHASE_REQUIRED',
+            );
         }
 
         $review = Review::create([

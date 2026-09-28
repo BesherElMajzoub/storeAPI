@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Contracts\EasyPostServiceInterface;
 use App\Contracts\LocationServiceInterface;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\AddressAutocompleteRequest;
@@ -10,18 +11,29 @@ use App\Http\Requests\Api\V1\StoreAddressRequest;
 use App\Http\Requests\Api\V1\UpdateAddressRequest;
 use App\Http\Resources\AddressResource;
 use App\Models\Address;
+use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 
 class AddressController extends Controller
 {
-    private LocationServiceInterface $locationService;
+    private const VERIFIABLE_FIELDS = [
+        'country',
+        'city',
+        'state',
+        'area',
+        'street',
+        'building',
+        'floor',
+        'apartment',
+        'postal_code',
+    ];
 
-    public function __construct(LocationServiceInterface $locationService)
-    {
-        $this->locationService = $locationService;
-    }
+    public function __construct(
+        private readonly LocationServiceInterface $locationService,
+        private readonly EasyPostServiceInterface $easyPostService,
+    ) {}
 
     #[OA\Get(
         path: '/api/v1/profile/addresses',
@@ -77,6 +89,7 @@ class AddressController extends Controller
                     new OA\Property(property: 'phone', type: 'string', example: '+1234567890'),
                     new OA\Property(property: 'country', type: 'string', example: 'US'),
                     new OA\Property(property: 'city', type: 'string', example: 'New York'),
+                    new OA\Property(property: 'state', type: 'string', nullable: true, example: 'NY'),
                     new OA\Property(property: 'area', type: 'string', nullable: true, example: 'Manhattan'),
                     new OA\Property(property: 'street', type: 'string', example: '5th Avenue'),
                     new OA\Property(property: 'building', type: 'string', nullable: true, example: 'Flatiron Building'),
@@ -109,6 +122,12 @@ class AddressController extends Controller
     {
         $data = $request->validated();
         $user = $request->user();
+
+        try {
+            $data = $this->verifyAndNormalizeAddress($data);
+        } catch (Exception $exception) {
+            return $this->addressVerificationFailed($exception);
+        }
 
         // Populate legacy fields for database compatibility
         $data['name'] = $data['full_name'];
@@ -153,6 +172,7 @@ class AddressController extends Controller
                     new OA\Property(property: 'phone', type: 'string'),
                     new OA\Property(property: 'country', type: 'string'),
                     new OA\Property(property: 'city', type: 'string'),
+                    new OA\Property(property: 'state', type: 'string', nullable: true),
                     new OA\Property(property: 'area', type: 'string', nullable: true),
                     new OA\Property(property: 'street', type: 'string'),
                     new OA\Property(property: 'building', type: 'string', nullable: true),
@@ -196,6 +216,15 @@ class AddressController extends Controller
         }
 
         $data = $request->validated();
+
+        if (array_intersect(array_keys($data), self::VERIFIABLE_FIELDS) !== []) {
+            try {
+                $data = $this->verifyAndNormalizeAddress(array_merge($address->toArray(), $data), $data);
+            } catch (Exception $exception) {
+                return $this->addressVerificationFailed($exception);
+            }
+        }
+
         if (isset($data['full_name'])) {
             $data['name'] = $data['full_name'];
         }
@@ -215,6 +244,61 @@ class AddressController extends Controller
             'data' => new AddressResource($address),
             'errors' => null,
         ]);
+    }
+
+    /**
+     * Verify an address with EasyPost and copy its normalized shipping fields
+     * into the values that will be persisted.
+     */
+    private function verifyAndNormalizeAddress(array $address, ?array $changes = null): array
+    {
+        $street2 = collect([
+            filled($address['building'] ?? null) ? 'Building '.$address['building'] : null,
+            filled($address['floor'] ?? null) ? 'Floor '.$address['floor'] : null,
+            filled($address['apartment'] ?? null) ? 'Apartment '.$address['apartment'] : null,
+        ])->filter()->implode(', ');
+
+        $verified = $this->easyPostService->verifyAddress([
+            'name' => $address['full_name'] ?? $address['name'] ?? null,
+            'street1' => $address['street'] ?? $address['line1'] ?? null,
+            'street2' => $street2 !== '' ? $street2 : ($address['line2'] ?? null),
+            'city' => $address['city'] ?? null,
+            'state' => $address['state'] ?? null,
+            'zip' => $address['postal_code'] ?? null,
+            'country' => $address['country'] ?? null,
+            'phone' => $address['phone'] ?? null,
+        ]);
+
+        $data = $changes ?? $address;
+        $normalizedFields = [
+            'street' => $verified['street1'] ?? null,
+            'line1' => $verified['street1'] ?? null,
+            'line2' => $verified['street2'] ?? null,
+            'city' => $verified['city'] ?? null,
+            'state' => $verified['state'] ?? null,
+            'postal_code' => $verified['zip'] ?? null,
+            'country' => $verified['country'] ?? null,
+        ];
+
+        foreach ($normalizedFields as $field => $value) {
+            if ($value !== null) {
+                $data[$field] = $value;
+            }
+        }
+
+        return $data;
+    }
+
+    private function addressVerificationFailed(Exception $exception): JsonResponse
+    {
+        return response()->json([
+            'success' => false,
+            'message' => 'Address verification failed.',
+            'data' => null,
+            'errors' => [
+                'address' => [$exception->getMessage()],
+            ],
+        ], 422);
     }
 
     #[OA\Delete(

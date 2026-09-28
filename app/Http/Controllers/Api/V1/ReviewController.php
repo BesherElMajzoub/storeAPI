@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Exceptions\ReviewSubmissionException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\StoreReviewRequest;
 use App\Http\Requests\Api\V1\UpdateReviewRequest;
@@ -39,7 +40,9 @@ class ReviewController extends Controller
         )
     )]
     #[OA\Response(response: 201, description: 'Review submitted successfully')]
+    #[OA\Response(response: 403, description: 'A delivered purchase is required')]
     #[OA\Response(response: 409, description: 'Already reviewed this product')]
+    #[OA\Response(response: 429, description: 'Daily review limit reached')]
     #[OA\Response(response: 422, ref: '#/components/responses/ValidationErrorResponse')]
     public function store(StoreReviewRequest $request, Product $product): JsonResponse
     {
@@ -61,8 +64,12 @@ class ReviewController extends Controller
                 'Review submitted. It will be visible after moderation.',
                 201
             );
-        } catch (\Exception $e) {
-            return $this->error($e->getMessage(), 409);
+        } catch (ReviewSubmissionException $e) {
+            return $this->error(
+                $e->getMessage(),
+                $e->httpStatus,
+                ['code' => $e->errorCode],
+            );
         }
     }
 

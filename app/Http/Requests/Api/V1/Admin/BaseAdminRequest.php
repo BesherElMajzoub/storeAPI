@@ -27,7 +27,7 @@ abstract class BaseAdminRequest extends FormRequest
                 $data[$key] = true;
             } elseif ($value === 'false') {
                 $data[$key] = false;
-            } elseif ($value === 'null' || $value === 'undefined') {
+            } elseif ($value === 'null' || $value === 'undefined' || $value === '') {
                 $data[$key] = null;
             }
         }
