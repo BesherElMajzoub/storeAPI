@@ -22,6 +22,7 @@ Statuses: `NOT-STARTED` -> `IN-PROGRESS` -> `READY-FOR-REVIEW` ->
 | 04 E2E journeys | `results/04-e2e-journeys.md` | APPROVED | `reviews/B5-final-review.md` | 0 |
 | 05 Security | `results/05-security.md` | APPROVED | `reviews/B3full-B4-review.md` | 0 |
 | 06 Final verification | `results/06-final-verification.md` | APPROVED | `reviews/B5-final-review.md` | 0 |
+| 08 Post-approval audit | `results/08-post-approval-audit.md` | READY-FOR-REVIEW (audit) | — | 8 |
 
 ## Open decisions (NEEDS-DECISION)
 
