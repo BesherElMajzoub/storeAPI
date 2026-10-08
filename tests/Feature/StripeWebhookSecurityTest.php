@@ -14,6 +14,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Mockery;
+use Stripe\PaymentIntent;
 use Stripe\Refund;
 use Tests\TestCase;
 
@@ -228,7 +229,7 @@ class StripeWebhookSecurityTest extends TestCase
         ]);
     }
 
-    public function test_signed_payment_for_a_cancelled_order_is_recorded_for_manual_refund(): void
+    public function test_signed_payment_for_a_cancelled_order_is_returned_automatically(): void
     {
         $product = Product::factory()->create(['stock_qty' => 0, 'in_stock' => false]);
         $order = Order::factory()->for(User::factory())->create([
@@ -248,58 +249,52 @@ class StripeWebhookSecurityTest extends TestCase
         $order->update(['status' => 'cancelled']);
         $releasedAt = $order->fresh()->stock_released_at;
 
-        $this->postSigned([
+        $this->mock(StripeCheckoutService::class, function ($mock): void {
+            $mock->shouldReceive('retrievePaymentIntent')->once()->with(Mockery::on(
+                fn (Order $candidate) => $candidate->stripe_payment_intent_id === 'pi_cancelled_paid'
+            ))->andReturn(PaymentIntent::constructFrom(['id' => 'pi_cancelled_paid', 'status' => 'succeeded']));
+            $mock->shouldReceive('refundOrder')->once()->andReturn(Refund::constructFrom([
+                'id' => 're_auto_refund',
+                'status' => 'succeeded',
+            ]));
+        });
+
+        $event = [
             'id' => 'evt_cancelled_paid', 'object' => 'event', 'type' => 'checkout.session.completed',
             'data' => ['object' => [
                 'object' => 'checkout.session', 'id' => 'cs_cancelled_paid',
                 'payment_intent' => 'pi_cancelled_paid', 'amount_total' => 10000, 'currency' => 'usd',
                 'metadata' => ['order_id' => (string) $order->id],
             ]],
-        ])->assertOk();
+        ];
+        $this->postSigned($event)->assertOk();
 
         $this->assertDatabaseHas('orders', [
             'id' => $order->id,
             'status' => 'cancelled',
-            'payment_status' => 'unpaid',
+            'payment_status' => 'refunded',
+            'refund_status' => 'succeeded',
             'stripe_payment_intent_id' => 'pi_cancelled_paid',
         ]);
         $this->assertDatabaseHas('payments', [
             'order_id' => $order->id,
             'transaction_id' => 'pi_cancelled_paid',
-            'status' => 'requires_refund',
+            'status' => 'refunded',
             'amount' => 100,
         ]);
         $this->assertSame(1, $product->fresh()->stock_qty);
         $this->assertEquals($releasedAt, $order->fresh()->stock_released_at);
         Queue::assertPushed(SendAdminAlert::class, 1);
 
+        // A replay neither refunds again nor re-alerts.
+        $this->postSigned($event)->assertOk();
+        Queue::assertPushed(SendAdminAlert::class, 1);
+
         $admin = User::factory()->create();
         $admin->roles()->attach(Role::create(['name' => 'Admin']));
-        $this->mock(StripeCheckoutService::class, function ($mock): void {
-            $mock->shouldReceive('refundOrder')->once()->with(Mockery::on(
-                fn (Order $candidate) => $candidate->stripe_payment_intent_id === 'pi_cancelled_paid'
-            ))->andReturn(Refund::constructFrom([
-                'id' => 're_manual_refund',
-                'status' => 'succeeded',
-            ]));
-        });
-
         $this->actingAs($admin, 'sanctum')
             ->postJson("/api/v1/admin/orders/{$order->id}/refund")
-            ->assertOk();
-
-        $this->assertDatabaseHas('orders', [
-            'id' => $order->id,
-            'status' => 'refunded',
-            'payment_status' => 'refunded',
-        ]);
-        $this->assertDatabaseHas('payments', [
-            'order_id' => $order->id,
-            'status' => 'refunded',
-            'amount' => 100,
-        ]);
-        $this->assertSame(1, $product->fresh()->stock_qty);
-        $this->assertEquals($releasedAt, $order->fresh()->stock_released_at);
+            ->assertStatus(409);
     }
 
     public function test_signed_partial_refund_records_amount_without_restocking_or_closing_order(): void

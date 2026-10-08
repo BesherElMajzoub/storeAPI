@@ -8,7 +8,9 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\ShippingRateQuote;
 use App\Models\User;
+use App\Services\StripeCheckoutService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Stripe\Checkout\Session as StripeSession;
 use Tests\TestCase;
 
 class OrderCancelTest extends TestCase
@@ -28,7 +30,15 @@ class OrderCancelTest extends TestCase
         ])->assertCreated();
 
         $orderId = $created->json('data.order.id');
-        $this->assertSame('pending_payment', Order::find($orderId)->status);
+        $order = Order::find($orderId);
+        $this->assertSame('pending_payment', $order->status);
+
+        // The open Checkout is expired first so another tab cannot pay for it.
+        $this->mock(StripeCheckoutService::class, function ($mock) use ($order): void {
+            $open = StripeSession::constructFrom(['id' => $order->stripe_session_id, 'status' => 'open']);
+            $mock->shouldReceive('retrieveCheckoutSession')->once()->with($order->stripe_session_id)->andReturn($open);
+            $mock->shouldReceive('expireCheckoutSession')->once()->with($order->stripe_session_id)->andReturn($open);
+        });
 
         $this->actingAs($user, 'sanctum')
             ->postJson("/api/v1/orders/{$orderId}/cancel")
@@ -39,6 +49,28 @@ class OrderCancelTest extends TestCase
             'id' => $orderId,
             'status' => 'cancelled',
         ]);
+    }
+
+    public function test_customer_cannot_cancel_while_a_completed_checkout_awaits_its_webhook(): void
+    {
+        $user = User::factory()->create();
+        $order = Order::factory()->create([
+            'user_id' => $user->id,
+            'status' => 'pending_payment',
+            'payment_status' => 'unpaid',
+            'stripe_session_id' => 'cs_paid_in_other_tab',
+        ]);
+        $this->mock(StripeCheckoutService::class, function ($mock): void {
+            $mock->shouldReceive('retrieveCheckoutSession')->once()
+                ->andReturn(StripeSession::constructFrom(['id' => 'cs_paid_in_other_tab', 'status' => 'complete']));
+            $mock->shouldNotReceive('expireCheckoutSession');
+        });
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson("/api/v1/orders/{$order->id}/cancel")
+            ->assertStatus(409);
+
+        $this->assertSame('pending_payment', $order->fresh()->status);
     }
 
     public function test_customer_cannot_directly_cancel_after_the_three_hour_window(): void

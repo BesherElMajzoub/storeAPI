@@ -6,6 +6,7 @@ use App\Jobs\SendAdminAlert;
 use App\Mail\OrderPaidMail;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Services\OrderPaymentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -111,7 +112,11 @@ class StripeWebhookController extends Controller
             return false;
         }
 
-        $result = DB::transaction(function () use ($order, $paymentIntentId, $session): array|bool|null {
+        // Sessions created with manual capture only hold the card; the money
+        // is captured later by OrderPaymentService::capture().
+        $isAuthorization = ($session->metadata->capture_method ?? null) === 'manual';
+
+        $result = DB::transaction(function () use ($order, $paymentIntentId, $session, $isAuthorization): array|bool|null {
             $lockedOrder = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
 
             $expectedAmount = (int) round((float) $lockedOrder->total * 100);
@@ -124,7 +129,7 @@ class StripeWebhookController extends Controller
             }
 
             // Idempotency: only the transaction that moves the order to paid sends side effects.
-            if ($lockedOrder->isPaid()) {
+            if ($lockedOrder->isPaid() || $lockedOrder->isAuthorized()) {
                 return null;
             }
 
@@ -134,9 +139,10 @@ class StripeWebhookController extends Controller
                 ->where('payment_status', 'unpaid')
                 ->update([
                     'status' => 'processing',
-                    'payment_status' => 'paid',
+                    'payment_status' => $isAuthorization ? 'authorized' : 'paid',
                     'stripe_payment_intent_id' => $paymentIntentId,
-                    'paid_at' => now(),
+                    'authorized_at' => now(),
+                    'paid_at' => $isAuthorization ? null : now(),
                     'updated_at' => now(),
                 ]);
 
@@ -144,7 +150,9 @@ class StripeWebhookController extends Controller
                 $isLateCancelledPayment = (string) $lockedOrder->getRawOriginal('status') === 'cancelled'
                     && in_array((string) $lockedOrder->getRawOriginal('payment_status'), ['unpaid', 'failed'], true);
 
-                if (! $isLateCancelledPayment) {
+                // refund_status other than 'none' means the money is already
+                // being (or has been) returned, so this is a replay.
+                if (! $isLateCancelledPayment || $lockedOrder->refund_status !== 'none') {
                     return null;
                 }
 
@@ -160,6 +168,8 @@ class StripeWebhookController extends Controller
                     'amount' => $lockedOrder->total,
                 ])->save();
 
+                app(OrderPaymentService::class)->queueSettlement($lockedOrder);
+
                 return ['state' => 'requires_refund', 'notify' => ! $alreadyRequiresRefund, 'order' => $lockedOrder->fresh()];
             }
 
@@ -170,7 +180,7 @@ class StripeWebhookController extends Controller
                 [
                     'transaction_id' => $paymentIntentId,
                     'payment_provider' => 'stripe',
-                    'status' => 'completed',
+                    'status' => $isAuthorization ? 'pending' : 'completed',
                     'amount' => $lockedOrder->total,
                 ]
             );
@@ -195,7 +205,7 @@ class StripeWebhookController extends Controller
                     'order_status' => $resultOrder->getRawOriginal('status'),
                     'payment_intent_id' => $paymentIntentId,
                 ]);
-                SendAdminAlert::dispatch("URGENT: Stripe payment {$paymentIntentId} needs a manual refund for cancelled order {$resultOrder->order_number}.")
+                SendAdminAlert::dispatch("Stripe payment {$paymentIntentId} arrived for cancelled order {$resultOrder->order_number}; it is being released/refunded automatically.")
                     ->onQueue('notifications');
             }
 
@@ -278,10 +288,12 @@ class StripeWebhookController extends Controller
 
             $isFullRefund = $refundedAmount >= (float) $order->total;
 
+            // A cancelled order stays cancelled; refund_status carries the money state.
             $order->update(array_filter([
                 'refunded_amount' => $refundedAmount,
-                'status' => $isFullRefund ? 'refunded' : null,
+                'status' => $isFullRefund && $order->status !== 'cancelled' ? 'refunded' : null,
                 'payment_status' => $isFullRefund ? 'refunded' : null,
+                'refund_status' => $isFullRefund ? 'succeeded' : null,
                 'refunded_at' => $isFullRefund ? now() : null,
             ], fn ($value) => $value !== null));
 
@@ -310,6 +322,8 @@ class StripeWebhookController extends Controller
         if (! $order) {
             return;
         }
+
+        $order->update(['refund_status' => 'failed']);
 
         Log::critical('Stripe refund failed after it was created.', [
             'order_id' => $order->id,

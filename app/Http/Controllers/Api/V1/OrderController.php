@@ -22,6 +22,7 @@ use App\Models\ShippingRateQuote;
 use App\Services\CouponService;
 use App\Services\FreeShippingService;
 use App\Services\OrderInventoryService;
+use App\Services\OrderPaymentService;
 use App\Services\ShipmentTrackingService;
 use App\Services\ShippingQuoteService;
 use App\Services\StripeCheckoutService;
@@ -603,7 +604,7 @@ class OrderController extends Controller
     #[OA\Post(
         path: '/api/v1/orders/{id}/cancel',
         summary: 'Cancel Order (Direct)',
-        description: 'Immediately cancel a **pending** order. Only allowed within **3 hours** of creation.',
+        description: 'Immediately cancel an order within **3 hours**: an unpaid order counts from creation, a paid order from checkout and only until its shipping label is bought. Show the button only when the order `cancellation.mode` is `direct` (countdown to `cancellation.direct_until`). An open Stripe Checkout is expired first. For a paid order the card hold is released (or the charge refunded) in the background; follow `refund.status`.',
         security: [['bearerAuth' => []]],
         tags: ['Orders']
     )]
@@ -616,61 +617,104 @@ class OrderController extends Controller
             properties: [
                 new OA\Property(property: 'success', type: 'boolean', example: true),
                 new OA\Property(property: 'message', type: 'string', example: 'Order cancelled successfully.'),
-                new OA\Property(property: 'data', type: 'object', nullable: true, example: null),
+                new OA\Property(property: 'data', type: 'object', properties: [
+                    new OA\Property(property: 'order', ref: '#/components/schemas/Order'),
+                ]),
                 new OA\Property(property: 'errors', type: 'object', nullable: true, example: null),
             ]
         )
     )]
     #[OA\Response(
         response: 400,
-        description: 'Cannot cancel order (wrong status or window expired).',
+        description: 'Cannot cancel directly. `errors.reason` matches `cancellation.reason` on the order (e.g. window_expired, label_purchased, fulfillment_in_progress, shipped).',
         content: new OA\JsonContent(
             type: 'object',
             properties: [
                 new OA\Property(property: 'success', type: 'boolean', example: false),
-                new OA\Property(property: 'message', type: 'string', example: 'Only pending orders can be cancelled directly.'),
+                new OA\Property(property: 'message', type: 'string', example: 'The 3-hour direct cancellation window has passed. Please submit a cancellation request instead.'),
                 new OA\Property(property: 'data', type: 'object', nullable: true, example: null),
                 new OA\Property(property: 'errors', type: 'object', nullable: true, example: null),
             ]
         )
     )]
+    #[OA\Response(response: 409, description: 'The Stripe Checkout was just completed; the payment is being confirmed.')]
     #[OA\Response(response: 401, ref: '#/components/responses/UnauthorizedResponse')]
     #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
-    public function cancel(Request $request, $id): JsonResponse
+    public function cancel(Request $request, $id, OrderPaymentService $payments): JsonResponse
     {
         $order = $request->user()->orders()->findOrFail($id);
 
-        // Orders created through checkout start in 'pending_payment' (never
-        // 'pending' — that status predates Stripe and nothing sets it
-        // anymore); only an order that hasn't been paid for yet is eligible
-        // for a direct, no-approval customer cancel.
-        if ($order->status !== 'pending_payment' || $order->payment_status !== 'unpaid') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only pending orders can be cancelled directly.',
-                'data' => null,
-                'errors' => null,
-            ], 400);
+        if (! $order->canBeCancelledByCustomer()) {
+            return $this->directCancelRefused($order);
         }
 
-        // Enforce 3-hour direct-cancel window
-        if ($order->created_at->diffInHours(now()) >= 3) {
-            return response()->json([
-                'success' => false,
-                'message' => 'The 3-hour direct cancellation window has passed. Please submit a cancellation request instead.',
-                'data' => null,
-                'errors' => null,
-            ], 400);
+        // Close the Stripe Checkout first so a tab left open cannot pay for
+        // the order after it is cancelled.
+        if ($order->status === 'pending_payment') {
+            try {
+                if (! $payments->expireOpenCheckout($order)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Your payment is being confirmed. Please refresh the order in a moment.',
+                        'data' => null,
+                        'errors' => null,
+                    ], 409);
+                }
+            } catch (\Throwable $e) {
+                // Cancel anyway: a payment that still arrives for a cancelled
+                // order is returned automatically by the Stripe webhook.
+                Log::warning('Could not expire Checkout Session before customer cancel.', [
+                    'order_id' => $order->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
-        $order->update(['status' => 'cancelled', 'payment_status' => 'failed']);
+        $cancelled = DB::transaction(function () use ($order): ?Order {
+            $locked = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
+
+            if (! $locked->canBeCancelledByCustomer()) {
+                return null;
+            }
+
+            // An unpaid order just closes. A paid/authorized one is picked up
+            // by OrderObserver, which queues the hold release or refund.
+            $locked->update(array_merge(
+                ['status' => 'cancelled', 'cancelled_at' => now()],
+                $locked->payment_status === 'unpaid' ? ['payment_status' => 'failed'] : [],
+            ));
+
+            return $locked;
+        });
+
+        if (! $cancelled) {
+            return $this->directCancelRefused($order->fresh());
+        }
+
+        $cancelled = $cancelled->fresh(['items.product.media', 'items.variant']);
 
         return response()->json([
             'success' => true,
-            'message' => 'Order cancelled successfully.',
-            'data' => null,
+            'message' => $cancelled->refund_status === 'none'
+                ? 'Order cancelled successfully.'
+                : 'Order cancelled successfully. Your payment is being returned to your card.',
+            'data' => ['order' => new OrderResource($cancelled)],
             'errors' => null,
         ]);
+    }
+
+    private function directCancelRefused(Order $order): JsonResponse
+    {
+        $reason = $order->customerCancellation()['reason'];
+
+        return response()->json([
+            'success' => false,
+            'message' => $reason === 'window_expired'
+                ? 'The 3-hour direct cancellation window has passed. Please submit a cancellation request instead.'
+                : 'This order can no longer be cancelled directly.',
+            'data' => null,
+            'errors' => ['reason' => [$reason]],
+        ], 400);
     }
 
     #[OA\Post(

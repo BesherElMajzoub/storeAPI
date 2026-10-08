@@ -8,6 +8,7 @@ use App\Http\Requests\Api\V1\Admin\UpdateOrderStatusRequest;
 use App\Http\Resources\AdminOrderResource;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Services\OrderPaymentService;
 use App\Services\StripeCheckoutService;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\JsonResponse;
@@ -59,7 +60,7 @@ class OrderController extends Controller
         $perPage = min(max((int) $request->get('per_page', 20), 1), 100);
 
         $orders = Order::query()
-            ->with(['user', 'items.product.media', 'items.variant', 'payment'])
+            ->with(['user', 'items.product.media', 'items.variant', 'payment', 'cancellationRequest'])
             ->when($request->filled('status'), fn ($q) => $q->status($request->input('status')))
             ->when($request->filled('payment_status'), fn ($q) => $q->paymentStatus($request->input('payment_status')))
             ->when($request->filled('user_id'), fn ($q) => $q->where('user_id', (int) $request->input('user_id')))
@@ -95,7 +96,7 @@ class OrderController extends Controller
     #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
     public function show($id)
     {
-        $order = Order::with(['items', 'user', 'payment'])->findOrFail($id);
+        $order = Order::with(['items', 'user', 'payment', 'cancellationRequest'])->findOrFail($id);
 
         return $this->success(new AdminOrderResource($order), 'Order fetched.');
     }
@@ -198,7 +199,7 @@ class OrderController extends Controller
                 'errors' => [],
                 'orders' => Order::query()
                     ->whereKey($validated['ids'])
-                    ->with(['items.product.media', 'items.variant', 'user', 'payment'])
+                    ->with(['items.product.media', 'items.variant', 'user', 'payment', 'cancellationRequest'])
                     ->get(),
             ];
         }, 3);
@@ -313,6 +314,7 @@ class OrderController extends Controller
     {
         return [
             'unpaid' => ['paid', 'failed'],
+            'authorized' => [],
             'paid' => ['refunded'],
             'failed' => ['paid'],
             'refunded' => [],
@@ -331,7 +333,7 @@ class OrderController extends Controller
     #[OA\Post(
         path: '/api/v1/admin/orders/{order}/refund',
         summary: 'Admin Refund Order',
-        description: 'Issue a full Stripe refund for a paid order and mark it as refunded.',
+        description: 'Issue a full Stripe refund for a paid order and mark it as refunded. For a **cancelled** order this returns its money instead (releases the card hold or refunds the charge) and keeps the order cancelled; use it to retry when `refund_status` is `failed`. An authorized-but-uncaptured order must be cancelled instead.',
         security: [['bearerAuth' => []]],
         tags: ['Admin Orders']
     )]
@@ -340,9 +342,17 @@ class OrderController extends Controller
     #[OA\Response(response: 202, description: 'Refund accepted and awaiting Stripe confirmation')]
     #[OA\Response(response: 409, description: 'Order not eligible for refund')]
     #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
-    public function refund(int $order, StripeCheckoutService $stripe): JsonResponse
+    public function refund(int $order, StripeCheckoutService $stripe, OrderPaymentService $payments): JsonResponse
     {
         $order = Order::findOrFail($order);
+
+        if ($order->status === 'cancelled' && $order->stripe_payment_intent_id) {
+            return $this->settleCancelledOrder($order, $payments);
+        }
+
+        if ($order->isAuthorized()) {
+            return $this->error('This payment is only authorized, not captured. Cancel the order to release it.', 409);
+        }
 
         try {
             return Cache::lock("order:{$order->id}:refund", 60)->block(5, function () use ($order, $stripe): JsonResponse {
@@ -373,6 +383,8 @@ class OrderController extends Controller
                                 'refund_status' => $refund->status,
                             ]);
 
+                            $order->update(['refund_status' => 'pending']);
+
                             return $this->success([
                                 'order_id' => $order->id,
                                 'refund_status' => $refund->status,
@@ -398,6 +410,7 @@ class OrderController extends Controller
                 $order->update([
                     'status' => 'refunded',
                     'payment_status' => 'refunded',
+                    'refund_status' => 'succeeded',
                     'refunded_amount' => $order->total,
                     'refunded_at' => now(),
                 ]);
@@ -414,6 +427,38 @@ class OrderController extends Controller
         } catch (LockTimeoutException) {
             return $this->error('A refund request is already in progress. Please try again.', 409);
         }
+    }
+
+    private function settleCancelledOrder(Order $order, OrderPaymentService $payments): JsonResponse
+    {
+        if (in_array($order->refund_status, ['released', 'succeeded'], true)) {
+            return $this->error('The payment for this cancelled order has already been returned.', 409);
+        }
+
+        if ($order->refund_status === 'none') {
+            // e.g. an order cancelled before automatic settlement existed.
+            $order->update(['refund_status' => 'pending']);
+        }
+
+        try {
+            $refundStatus = $payments->settleCancellation($order);
+        } catch (LockTimeoutException) {
+            return $this->error('A refund request is already in progress. Please try again.', 409);
+        } catch (\Throwable $e) {
+            Log::error('Returning payment for a cancelled order failed.', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+            $order->update(['refund_status' => 'failed']);
+
+            return $this->error('Stripe refund failed.', 502);
+        }
+
+        $data = ['order_id' => $order->id, 'refund_status' => $refundStatus];
+
+        return $refundStatus === 'pending'
+            ? $this->success($data, 'Refund is pending confirmation from Stripe.', 202)
+            : $this->success($data, $refundStatus === 'released' ? 'Card hold released.' : 'Order refunded.');
     }
 
     private function expirePendingPaymentSession(Order $order, StripeCheckoutService $stripe): bool

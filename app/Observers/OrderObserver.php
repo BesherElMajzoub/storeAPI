@@ -7,6 +7,7 @@ use App\Models\CouponUsage;
 use App\Models\Order;
 use App\Models\ShippingRateQuote;
 use App\Services\OrderInventoryService;
+use App\Services\OrderPaymentService;
 use Illuminate\Support\Facades\DB;
 
 class OrderObserver
@@ -31,14 +32,23 @@ class OrderObserver
         if (in_array($order->status, $this->releaseStates, true)) {
             $previousStatus = $order->getRawOriginal('status');
 
-            // An order that never completed payment got no value from its
-            // coupon or its held shipping quote, so cancelling it must give
-            // both back. An order that WAS paid (payment_status === 'paid')
-            // and is later cancelled/refunded already delivered that value —
-            // whether to also release the coupon there is a refund-policy
-            // call, not something to infer here (see D7-F1 NEEDS-DECISION).
-            if ($order->status === 'cancelled' && $order->payment_status !== 'paid') {
+            // A cancelled order never shipped (shipped orders cannot be
+            // cancelled), so the customer got nothing for the coupon or the
+            // held shipping quote: give both back, paid or not. A refund
+            // after delivery (status 'refunded') keeps the coupon used, so
+            // returns cannot be used to recycle one-time coupons (D7-F1).
+            if ($order->status === 'cancelled') {
                 $this->releaseCouponAndQuote($order);
+            }
+
+            // Every cancellation path (customer, request approval, admin,
+            // bulk) lands here, so this is where held or captured money is
+            // queued to go back to the customer.
+            if ($order->status === 'cancelled'
+                && in_array($order->payment_status, ['authorized', 'paid'], true)
+                && $order->stripe_payment_intent_id
+                && $order->refund_status === 'none') {
+                app(OrderPaymentService::class)->queueSettlement($order);
             }
 
             if ($order->shipped_at !== null || in_array($previousStatus, ['shipped', 'delivered'], true)) {

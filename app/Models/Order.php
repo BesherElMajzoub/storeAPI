@@ -8,19 +8,27 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 
 class Order extends Model
 {
     use HasFactory, SoftDeletes;
 
+    /** Hours after checkout during which a customer may cancel without admin approval. */
+    public const CUSTOMER_CANCEL_WINDOW_HOURS = 3;
+
+    protected $attributes = [
+        'refund_status' => 'none',
+    ];
+
     protected $fillable = [
         'order_number', 'user_id', 'coupon_id', 'status', 'payment_status',
-        'subtotal', 'tax', 'shipping_cost', 'carrier_shipping_cost', 'free_shipping_reason', 'discount', 'refunded_amount', 'total',
+        'subtotal', 'tax', 'shipping_cost', 'carrier_shipping_cost', 'free_shipping_reason', 'discount', 'refunded_amount', 'refund_status', 'total',
         'coupon_code', 'shipping_address', 'billing_address', 'notes',
-        'stripe_session_id', 'stripe_payment_intent_id',
+        'stripe_session_id', 'stripe_payment_intent_id', 'authorized_at',
         'paid_at', 'cancelled_at', 'refunded_at', 'stock_reserved_at', 'stock_released_at',
         'easypost_shipment_id', 'shipping_rate_id', 'shipping_carrier', 'shipping_service',
-        'tracking_number', 'shipment_status', 'tracking_url', 'label_url', 'shipped_at',
+        'tracking_number', 'shipment_status', 'tracking_url', 'label_url', 'shipped_at', 'fulfillment_started_at',
         'estimated_delivery', 'tracking_events',
     ];
 
@@ -34,12 +42,14 @@ class Order extends Model
         'discount' => 'decimal:2',
         'refunded_amount' => 'decimal:2',
         'total' => 'decimal:2',
+        'authorized_at' => 'datetime',
         'paid_at' => 'datetime',
         'cancelled_at' => 'datetime',
         'refunded_at' => 'datetime',
         'stock_reserved_at' => 'datetime',
         'stock_released_at' => 'datetime',
         'shipped_at' => 'datetime',
+        'fulfillment_started_at' => 'datetime',
         'estimated_delivery' => 'date:Y-m-d',
         'tracking_events' => 'array',
     ];
@@ -51,9 +61,76 @@ class Order extends Model
         return $this->payment_status === 'paid';
     }
 
+    public function isAuthorized(): bool
+    {
+        return $this->payment_status === 'authorized';
+    }
+
     public function isRefunded(): bool
     {
         return $this->payment_status === 'refunded';
+    }
+
+    /**
+     * When the customer's direct (no-approval) cancellation window closes, or
+     * null when the order is not directly cancellable at all. Unpaid orders
+     * count from creation; paid/authorized orders count from checkout and
+     * stop being cancellable once a label purchase has started.
+     */
+    public function customerCancelDeadline(): ?Carbon
+    {
+        if ($this->status === 'pending_payment' && $this->payment_status === 'unpaid') {
+            return $this->created_at?->copy()->addHours(self::CUSTOMER_CANCEL_WINDOW_HOURS);
+        }
+
+        if ($this->status === 'processing'
+            && in_array($this->payment_status, ['authorized', 'paid'], true)
+            && ! $this->tracking_number
+            && ! $this->fulfillment_started_at) {
+            return ($this->authorized_at ?? $this->paid_at)?->copy()->addHours(self::CUSTOMER_CANCEL_WINDOW_HOURS);
+        }
+
+        return null;
+    }
+
+    public function canBeCancelledByCustomer(): bool
+    {
+        $deadline = $this->customerCancelDeadline();
+
+        return $deadline !== null && now()->lt($deadline);
+    }
+
+    /**
+     * How the customer can cancel right now, so the frontend never computes
+     * the window itself. mode: direct (POST /cancel), request (submit a
+     * cancellation request) or none.
+     *
+     * @return array{mode: string, reason: string, direct_until: ?Carbon}
+     */
+    public function customerCancellation(bool $hasPendingRequest = false): array
+    {
+        if (in_array($this->status, ['shipped', 'delivered', 'cancelled', 'refunded'], true)) {
+            return ['mode' => 'none', 'reason' => $this->status, 'direct_until' => null];
+        }
+
+        $deadline = $this->customerCancelDeadline();
+
+        if ($deadline !== null && now()->lt($deadline)) {
+            return ['mode' => 'direct', 'reason' => 'within_window', 'direct_until' => $deadline];
+        }
+
+        if ($hasPendingRequest) {
+            return ['mode' => 'none', 'reason' => 'request_pending', 'direct_until' => null];
+        }
+
+        $reason = match (true) {
+            (bool) $this->tracking_number => 'label_purchased',
+            $this->fulfillment_started_at !== null => 'fulfillment_in_progress',
+            $deadline !== null => 'window_expired',
+            default => 'not_directly_cancellable',
+        };
+
+        return ['mode' => 'request', 'reason' => $reason, 'direct_until' => null];
     }
 
     // ── Relations ─────────────────────────────────────────────────────────────
@@ -80,7 +157,7 @@ class Order extends Model
 
     public function cancellationRequest(): HasOne
     {
-        return $this->hasOne(OrderCancellationRequest::class);
+        return $this->hasOne(OrderCancellationRequest::class)->latestOfMany();
     }
 
     // ── Scopes ────────────────────────────────────────────────────────────────

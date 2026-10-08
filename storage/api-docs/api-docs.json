@@ -139,6 +139,11 @@
                                         "type": "string",
                                         "example": "New York"
                                     },
+                                    "state": {
+                                        "type": "string",
+                                        "example": "NY",
+                                        "nullable": true
+                                    },
                                     "area": {
                                         "type": "string",
                                         "example": "Manhattan",
@@ -269,6 +274,10 @@
                                     },
                                     "city": {
                                         "type": "string"
+                                    },
+                                    "state": {
+                                        "type": "string",
+                                        "nullable": true
                                     },
                                     "area": {
                                         "type": "string",
@@ -811,7 +820,7 @@
                     "Admin Cancellation Requests"
                 ],
                 "summary": "Admin – Accept Cancellation Request",
-                "description": "Accept the request: cancel the order, restock variants, and email the user.",
+                "description": "Accept the request: cancel the order, restock variants, release/refund the payment in the background (see the order `refund_status`), and email the user.",
                 "operationId": "70c297217d4fbcd6e949e55375d19d65",
                 "parameters": [
                     {
@@ -828,7 +837,7 @@
                         "description": "Request accepted, order cancelled"
                     },
                     "409": {
-                        "description": "Request already decided"
+                        "description": "Request already decided, or the order already shipped"
                     },
                     "404": {
                         "$ref": "#/components/responses/NotFoundResponse"
@@ -2878,7 +2887,7 @@
                     "Admin Orders"
                 ],
                 "summary": "Admin Refund Order",
-                "description": "Issue a full Stripe refund for a paid order and mark it as refunded.",
+                "description": "Issue a full Stripe refund for a paid order and mark it as refunded. For a **cancelled** order this returns its money instead (releases the card hold or refunds the charge) and keeps the order cancelled; use it to retry when `refund_status` is `failed`. An authorized-but-uncaptured order must be cancelled instead.",
                 "operationId": "c0abfd1268155e28733e289facc942bb",
                 "parameters": [
                     {
@@ -6533,7 +6542,7 @@
                     "Orders"
                 ],
                 "summary": "Cancel Order (Direct)",
-                "description": "Immediately cancel a **pending** order. Only allowed within **3 hours** of creation.",
+                "description": "Immediately cancel an order within **3 hours**: an unpaid order counts from creation, a paid order from checkout and only until its shipping label is bought. Show the button only when the order `cancellation.mode` is `direct` (countdown to `cancellation.direct_until`). An open Stripe Checkout is expired first. For a paid order the card hold is released (or the charge refunded) in the background; follow `refund.status`.",
                 "operationId": "7fb5c5cde4a48c07f8f7551e1abfac97",
                 "parameters": [
                     {
@@ -6561,9 +6570,12 @@
                                             "example": "Order cancelled successfully."
                                         },
                                         "data": {
-                                            "type": "object",
-                                            "example": null,
-                                            "nullable": true
+                                            "properties": {
+                                                "order": {
+                                                    "$ref": "#/components/schemas/Order"
+                                                }
+                                            },
+                                            "type": "object"
                                         },
                                         "errors": {
                                             "type": "object",
@@ -6577,7 +6589,7 @@
                         }
                     },
                     "400": {
-                        "description": "Cannot cancel order (wrong status or window expired).",
+                        "description": "Cannot cancel directly. `errors.reason` matches `cancellation.reason` on the order (e.g. window_expired, label_purchased, fulfillment_in_progress, shipped).",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -6588,7 +6600,7 @@
                                         },
                                         "message": {
                                             "type": "string",
-                                            "example": "Only pending orders can be cancelled directly."
+                                            "example": "The 3-hour direct cancellation window has passed. Please submit a cancellation request instead."
                                         },
                                         "data": {
                                             "type": "object",
@@ -6605,6 +6617,9 @@
                                 }
                             }
                         }
+                    },
+                    "409": {
+                        "description": "The Stripe Checkout was just completed; the payment is being confirmed."
                     },
                     "401": {
                         "$ref": "#/components/responses/UnauthorizedResponse"
@@ -7107,8 +7122,14 @@
                     "201": {
                         "description": "Review submitted successfully"
                     },
+                    "403": {
+                        "description": "A delivered purchase is required"
+                    },
                     "409": {
                         "description": "Already reviewed this product"
+                    },
+                    "429": {
+                        "description": "Daily review limit reached"
                     },
                     "422": {
                         "$ref": "#/components/responses/ValidationErrorResponse"
@@ -8443,10 +8464,12 @@
                         ]
                     },
                     "payment_status": {
+                        "description": "`authorized` = card held at checkout, captured after the cancel window closes or when the label is bought.",
                         "type": "string",
                         "example": "unpaid",
                         "enum": [
                             "unpaid",
+                            "authorized",
                             "paid",
                             "failed",
                             "refunded"
@@ -8485,6 +8508,82 @@
                         "type": "number",
                         "format": "float",
                         "example": 0
+                    },
+                    "refund": {
+                        "description": "Money return for a cancelled order, independent of `status`.",
+                        "properties": {
+                            "status": {
+                                "description": "`released` = card hold cancelled (never charged), `succeeded` = charge refunded, `failed` = needs admin follow-up.",
+                                "type": "string",
+                                "example": "none",
+                                "enum": [
+                                    "none",
+                                    "pending",
+                                    "released",
+                                    "succeeded",
+                                    "failed"
+                                ]
+                            },
+                            "amount": {
+                                "description": "Amount returned or being returned.",
+                                "type": "number",
+                                "format": "float",
+                                "example": 0
+                            },
+                            "currency": {
+                                "type": "string",
+                                "example": "usd"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "cancellation": {
+                        "description": "What the customer can do about cancelling right now. The frontend must not compute the window itself.",
+                        "properties": {
+                            "mode": {
+                                "description": "`direct` = POST /orders/{id}/cancel, `request` = POST /orders/{id}/cancellation-request, `none` = not cancellable.",
+                                "type": "string",
+                                "example": "direct",
+                                "enum": [
+                                    "direct",
+                                    "request",
+                                    "none"
+                                ]
+                            },
+                            "reason": {
+                                "type": "string",
+                                "example": "within_window",
+                                "enum": [
+                                    "within_window",
+                                    "window_expired",
+                                    "label_purchased",
+                                    "fulfillment_in_progress",
+                                    "not_directly_cancellable",
+                                    "request_pending",
+                                    "shipped",
+                                    "delivered",
+                                    "cancelled",
+                                    "refunded"
+                                ]
+                            },
+                            "direct_until": {
+                                "description": "Server time at which direct cancellation closes (for a countdown).",
+                                "type": "string",
+                                "format": "date-time",
+                                "nullable": true
+                            },
+                            "pending_request": {
+                                "description": "The pending cancellation request, when loaded.",
+                                "type": "object",
+                                "nullable": true
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "authorized_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
                     },
                     "total": {
                         "type": "number",

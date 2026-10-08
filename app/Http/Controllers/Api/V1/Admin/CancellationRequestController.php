@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Admin\RejectCancellationRequestRequest;
 use App\Http\Resources\CancellationRequestResource;
 use App\Mail\CancellationRequestDecidedMail;
+use App\Models\Order;
 use App\Models\OrderCancellationRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -58,13 +59,13 @@ class CancellationRequestController extends Controller
     #[OA\Post(
         path: '/api/v1/admin/cancellation-requests/{id}/accept',
         summary: 'Admin – Accept Cancellation Request',
-        description: 'Accept the request: cancel the order, restock variants, and email the user.',
+        description: 'Accept the request: cancel the order, restock variants, release/refund the payment in the background (see the order `refund_status`), and email the user.',
         security: [['bearerAuth' => []]],
         tags: ['Admin Cancellation Requests']
     )]
     #[OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))]
     #[OA\Response(response: 200, description: 'Request accepted, order cancelled')]
-    #[OA\Response(response: 409, description: 'Request already decided')]
+    #[OA\Response(response: 409, description: 'Request already decided, or the order already shipped')]
     #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
     public function accept(Request $request, int $id): JsonResponse
     {
@@ -74,11 +75,22 @@ class CancellationRequestController extends Controller
             return $this->error("This request has already been {$cancellation->status}.", 409);
         }
 
-        DB::transaction(function () use ($cancellation, $request) {
-            $order = $cancellation->order;
+        $blockedStatus = DB::transaction(function () use ($cancellation, $request): ?string {
+            $order = Order::query()->whereKey($cancellation->order_id)->lockForUpdate()->firstOrFail();
 
-            // Cancel the order
-            $order->update(['status' => 'cancelled']);
+            if (in_array($order->status, ['shipped', 'delivered', 'refunded'], true)) {
+                return $order->status;
+            }
+
+            if ($order->fulfillment_started_at?->gt(now()->subMinutes(10))) {
+                return 'being shipped';
+            }
+
+            // Cancel the order. OrderObserver restocks it and, when it was
+            // paid or authorized, queues returning the money to the card.
+            if ($order->status !== 'cancelled') {
+                $order->update(['status' => 'cancelled', 'cancelled_at' => now()]);
+            }
 
             // Mark the cancellation request as accepted
             $cancellation->update([
@@ -86,7 +98,13 @@ class CancellationRequestController extends Controller
                 'admin_id' => $request->user()->id,
                 'decided_at' => now(),
             ]);
+
+            return null;
         });
+
+        if ($blockedStatus !== null) {
+            return $this->error("The order is already {$blockedStatus} and can no longer be cancelled.", 409);
+        }
 
         // Notify user
         Mail::to($cancellation->user->email)

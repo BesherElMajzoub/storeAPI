@@ -302,6 +302,51 @@ class EasyPostShippingTest extends TestCase
         Queue::assertNotPushed(SendAdminAlert::class);
     }
 
+    public function test_easypost_webhook_ignores_an_older_tracker_snapshot_arriving_late(): void
+    {
+        Queue::fake();
+
+        $deliveredEvents = [
+            ['status' => 'delivered', 'description' => 'Delivered', 'location' => null, 'occurred_at' => '2026-10-05T12:00:00+00:00'],
+            ['status' => 'in_transit', 'description' => 'In transit', 'location' => null, 'occurred_at' => '2026-10-04T09:00:00+00:00'],
+        ];
+        $order = Order::create([
+            'order_number' => 'ORD-OUTOFORDER',
+            'user_id' => $this->user->id,
+            'status' => 'delivered',
+            'payment_status' => 'paid',
+            'subtotal' => 100.00,
+            'total' => 105.50,
+            'tracking_number' => 'EZ1000000001',
+            'shipment_status' => 'delivered',
+            'tracking_events' => $deliveredEvents,
+            'shipping_address' => ['name' => 'John', 'street' => '1 Main St', 'city' => 'NYC', 'country' => 'US'],
+        ]);
+
+        // A retried webhook from before delivery, carrying the older history.
+        $mockEvent = (object) [
+            'description' => 'tracker.updated',
+            'result' => (object) [
+                'tracking_code' => 'EZ1000000001',
+                'status' => 'failure',
+                'tracking_details' => [
+                    (object) ['status' => 'failure', 'message' => 'Exception', 'datetime' => '2026-10-04T10:00:00Z'],
+                ],
+            ],
+        ];
+        $this->mock(EasyPostServiceInterface::class, function ($mock) use ($mockEvent) {
+            $mock->shouldReceive('validateWebhook')->once()->andReturn($mockEvent);
+        });
+        config(['services.easypost.webhook_secret' => 'whsec_test']);
+
+        $this->postJson('/api/v1/webhooks/easypost', ['description' => 'tracker.updated'])->assertOk();
+
+        $order->refresh();
+        $this->assertSame('delivered', $order->shipment_status);
+        $this->assertEquals($deliveredEvents, $order->tracking_events);
+        Queue::assertNotPushed(SendAdminAlert::class);
+    }
+
     public function test_easypost_webhook_fails_closed_when_secret_is_missing(): void
     {
         config(['services.easypost.webhook_secret' => null]);

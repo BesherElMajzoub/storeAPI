@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Order;
 use Stripe\Checkout\Session as StripeSession;
 use Stripe\Coupon;
+use Stripe\PaymentIntent;
 use Stripe\Refund;
 use Stripe\Stripe;
 
@@ -64,6 +65,18 @@ class StripeCheckoutService
             'cancel_url' => "{$frontendUrl}/checkout?stripe_status=cancelled",
         ];
 
+        // Hold the card at checkout and capture only after the customer's
+        // cancellation window closes (or a label is bought), so an early
+        // cancel releases the hold instead of paying for a refund. The
+        // metadata flag tells the webhook which flow the session used.
+        if ($this->usesManualCapture()) {
+            $sessionParams['payment_intent_data'] = [
+                'capture_method' => 'manual',
+                'metadata' => ['order_id' => (string) $order->id],
+            ];
+            $sessionParams['metadata']['capture_method'] = 'manual';
+        }
+
         if ($order->discount > 0) {
             $stripeCoupon = Coupon::create([
                 'amount_off' => (int) round($order->discount * 100),
@@ -93,6 +106,36 @@ class StripeCheckoutService
     public function expireCheckoutSession(string $sessionId): StripeSession
     {
         return StripeSession::retrieve($sessionId)->expire();
+    }
+
+    public function usesManualCapture(): bool
+    {
+        return config('services.stripe.capture_method', 'manual') === 'manual';
+    }
+
+    public function retrievePaymentIntent(Order $order): PaymentIntent
+    {
+        return PaymentIntent::retrieve($order->stripe_payment_intent_id);
+    }
+
+    /**
+     * Capture an authorized (held) payment in full.
+     */
+    public function capturePayment(Order $order): PaymentIntent
+    {
+        return PaymentIntent::retrieve($order->stripe_payment_intent_id)->capture(null, [
+            'idempotency_key' => "capture-order-{$order->id}",
+        ]);
+    }
+
+    /**
+     * Release an authorized payment that was never captured.
+     */
+    public function releaseAuthorization(Order $order): PaymentIntent
+    {
+        return PaymentIntent::retrieve($order->stripe_payment_intent_id)->cancel(null, [
+            'idempotency_key' => "release-order-{$order->id}",
+        ]);
     }
 
     /**

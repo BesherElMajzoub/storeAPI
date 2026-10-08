@@ -60,6 +60,8 @@ return [
         'currency' => strtolower(env('STRIPE_CURRENCY', 'usd')),
         'checkout_expires_minutes' => (int) env('STRIPE_CHECKOUT_EXPIRES_MINUTES', 30),
         'minimum_charge' => (float) env('STRIPE_MINIMUM_CHARGE', 0.50),
+        // manual = authorize at checkout, capture after the cancel window; automatic = charge immediately.
+        'capture_method' => env('STRIPE_CAPTURE_METHOD', 'manual'),
     ],
 
     'telegram' => [

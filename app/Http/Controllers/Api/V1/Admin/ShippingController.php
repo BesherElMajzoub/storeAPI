@@ -6,6 +6,8 @@ use App\Contracts\EasyPostServiceInterface;
 use App\Http\Controllers\Controller;
 use App\Mail\OrderShippedMail;
 use App\Models\Order;
+use App\Models\OrderCancellationRequest;
+use App\Services\OrderPaymentService;
 use App\Services\ShipmentTrackingService;
 use Carbon\Carbon;
 use Exception;
@@ -20,8 +22,11 @@ class ShippingController extends Controller
 {
     protected EasyPostServiceInterface $easyPostService;
 
-    public function __construct(EasyPostServiceInterface $easyPostService, private readonly ShipmentTrackingService $tracking)
-    {
+    public function __construct(
+        EasyPostServiceInterface $easyPostService,
+        private readonly ShipmentTrackingService $tracking,
+        private readonly OrderPaymentService $payments,
+    ) {
         $this->easyPostService = $easyPostService;
     }
 
@@ -103,7 +108,7 @@ class ShippingController extends Controller
         }
 
         // Check if order is eligible for shipping
-        if ($order->status !== 'processing' || ! $order->isPaid()) {
+        if ($order->status !== 'processing' || ! ($order->isPaid() || $order->isAuthorized())) {
             return $this->error('Only paid processing orders can be shipped.', 409, [
                 'status' => ['Order must be paid and in processing status.'],
             ]);
@@ -126,7 +131,40 @@ class ShippingController extends Controller
             return $this->error('The selected rate does not belong to this order.', 422);
         }
 
+        // Claim the order before any slow provider call. The claim commits
+        // under a row lock, so a customer cancel racing this purchase either
+        // wins first (and the claim is refused) or sees the claim and is
+        // refused itself. No DB lock is held during the Stripe/EasyPost calls.
+        $refusal = $this->claimForFulfillment($order);
+        if ($refusal !== null) {
+            return $this->error($refusal, 409, ['status' => [$refusal]]);
+        }
+        $order->refresh();
+
+        $shipped = false;
+
         try {
+            // Buying a label ends the customer's cancel window, so a held payment
+            // must be captured first; no label is bought for money we don't have.
+            if ($order->isAuthorized()) {
+                try {
+                    $captured = $this->payments->capture($order);
+                } catch (\Throwable $e) {
+                    Log::error('Payment capture before label purchase failed.', [
+                        'order_id' => $order->id,
+                        'error' => $e->getMessage(),
+                    ]);
+
+                    return $this->error('The payment could not be captured, so no label was purchased.', 502);
+                }
+
+                if (! $captured) {
+                    return $this->error('The payment could not be captured, so no label was purchased.', 409, [
+                        'status' => ['The payment hold is no longer valid.'],
+                    ]);
+                }
+            }
+
             if (! $order->shipping_rate_id) {
                 $rate = $this->easyPostService->retrieveRate($rateId);
                 if (($rate->shipment_id ?? null) !== $shipmentId) {
@@ -154,6 +192,7 @@ class ShippingController extends Controller
 
                 return $order->refresh();
             });
+            $shipped = true;
 
             if (isset($boughtShipment->tracker)) {
                 $updatedOrder = $this->tracking->sync($updatedOrder, $boughtShipment->tracker);
@@ -176,7 +215,41 @@ class ShippingController extends Controller
             return $this->error('Shipping label could not be purchased.', 422, [
                 'shipping' => ['Check the carrier balance, address, and selected rate.'],
             ]);
+        } finally {
+            if (! $shipped) {
+                // Nothing was bought: let the customer cancel again.
+                Order::query()->whereKey($order->id)->update(['fulfillment_started_at' => null]);
+            }
         }
+    }
+
+    /**
+     * Mark the order as "label purchase in progress" under a row lock, or
+     * return why it cannot be shipped. A pending cancellation request is a
+     * fulfilment hold: the admin must decide it before shipping.
+     */
+    private function claimForFulfillment(Order $order): ?string
+    {
+        return DB::transaction(function () use ($order): ?string {
+            $locked = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
+
+            if ($locked->status !== 'processing' || ! ($locked->isPaid() || $locked->isAuthorized())) {
+                return 'Only paid processing orders can be shipped.';
+            }
+
+            if (OrderCancellationRequest::query()->where('order_id', $locked->id)->where('status', 'pending')->exists()) {
+                return 'This order has a pending cancellation request. Accept or reject it before shipping.';
+            }
+
+            // A claim older than 10 minutes belongs to a request that died midway.
+            if ($locked->fulfillment_started_at?->gt(now()->subMinutes(10))) {
+                return 'A label purchase for this order is already in progress.';
+            }
+
+            $locked->update(['fulfillment_started_at' => now()]);
+
+            return null;
+        });
     }
 
     #[OA\Get(

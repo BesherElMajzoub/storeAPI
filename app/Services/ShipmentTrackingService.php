@@ -15,25 +15,15 @@ class ShipmentTrackingService
 
     public function sync(Order $order, object $tracker): Order
     {
+        if ($this->isStale($order, $tracker)) {
+            return $order;
+        }
+
         $status = in_array($tracker->status ?? null, self::STATUSES, true)
             ? $tracker->status
             : 'unknown';
 
-        $events = collect($tracker->tracking_details ?? [])->map(function ($detail) {
-            $location = $detail->tracking_location ?? null;
-            $parts = array_filter([
-                $location->city ?? null,
-                $location->state ?? null,
-                $location->country ?? null,
-            ]);
-
-            return [
-                'status' => in_array($detail->status ?? null, self::STATUSES, true) ? $detail->status : 'unknown',
-                'description' => $detail->message ?? '',
-                'location' => $parts ? implode(', ', $parts) : null,
-                'occurred_at' => isset($detail->datetime) ? Carbon::parse($detail->datetime)->toIso8601String() : null,
-            ];
-        })->sortByDesc('occurred_at')->values()->all();
+        $events = $this->events($tracker);
 
         $order->forceFill([
             'shipment_status' => $status,
@@ -55,5 +45,45 @@ class ShipmentTrackingService
         $order->save();
 
         return $order->refresh();
+    }
+
+    /**
+     * True when the tracker snapshot is older than the one the order holds.
+     * EasyPost webhooks can arrive out of order and each carries the whole
+     * history, so an older snapshot must not roll status or timeline back.
+     */
+    public function isStale(Order $order, object $tracker): bool
+    {
+        $incoming = $this->latestEventAt($this->events($tracker));
+        $stored = $this->latestEventAt($order->tracking_events ?? []);
+
+        return $incoming !== null && $stored !== null && $incoming->lt($stored);
+    }
+
+    /** @return list<array{status: string, description: string, location: ?string, occurred_at: ?string}> */
+    private function events(object $tracker): array
+    {
+        return collect($tracker->tracking_details ?? [])->map(function ($detail) {
+            $location = $detail->tracking_location ?? null;
+            $parts = array_filter([
+                $location->city ?? null,
+                $location->state ?? null,
+                $location->country ?? null,
+            ]);
+
+            return [
+                'status' => in_array($detail->status ?? null, self::STATUSES, true) ? $detail->status : 'unknown',
+                'description' => $detail->message ?? '',
+                'location' => $parts ? implode(', ', $parts) : null,
+                'occurred_at' => isset($detail->datetime) ? Carbon::parse($detail->datetime)->toIso8601String() : null,
+            ];
+        })->sortByDesc('occurred_at')->values()->all();
+    }
+
+    private function latestEventAt(array $events): ?Carbon
+    {
+        $times = collect($events)->pluck('occurred_at')->filter();
+
+        return $times->isEmpty() ? null : $times->map(fn ($time) => Carbon::parse($time))->max();
     }
 }
