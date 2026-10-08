@@ -4,7 +4,7 @@ namespace Tests\Feature\Journeys;
 
 use App\Contracts\EasyPostServiceInterface;
 use App\Mail\CancellationRequestDecidedMail;
-use App\Mail\OrderPaidMail;
+use App\Mail\OrderConfirmedMail;
 use App\Mail\OrderShippedMail;
 use App\Mail\ResetPasswordMail;
 use App\Models\Category;
@@ -145,7 +145,7 @@ class RemainingJourneysTest extends TestCase
         ])->assertOk();
 
         $this->assertSame('cancelled', $order->fresh()->status);
-        $this->assertSame('failed', $order->fresh()->payment_status);
+        $this->assertSame('voided', $order->fresh()->payment_status);
         $this->assertSame(5, (int) $product->fresh()->stock_qty);
         $this->assertSame(0, CouponUsage::where('coupon_id', $coupon->id)->count());
     }
@@ -175,7 +175,7 @@ class RemainingJourneysTest extends TestCase
         $this->assertSame('processing', $order->fresh()->status);
         $this->assertSame('paid', $order->fresh()->payment_status);
         $this->assertSame(1, Payment::where('order_id', $order->id)->count());
-        Mail::assertQueued(OrderPaidMail::class, 1);
+        Mail::assertQueued(OrderConfirmedMail::class, 1);
     }
 
     public function test_j09_admin_shipping_webhook_and_public_tracking_chain(): void
@@ -319,7 +319,7 @@ class RemainingJourneysTest extends TestCase
             'data' => ['object' => ['id' => 'cs_j13', 'payment_intent' => 'pi_j13', 'amount_total' => (int) round($order->total * 100), 'currency' => 'usd', 'metadata' => ['order_id' => (string) $order->id]]],
         ])->assertOk();
         $adminToken = $this->login($admin->email);
-        $this->withToken($adminToken)->postJson("/api/v1/admin/orders/{$order->id}/status", ['status' => 'shipped'])->assertOk();
+        $this->withToken($adminToken)->postJson("/api/v1/admin/orders/{$order->id}/status", ['status' => 'shipped', 'shipping_carrier' => 'USPS', 'tracking_number' => 'J13TRACK'])->assertOk();
         $this->withToken($adminToken)->postJson("/api/v1/admin/orders/{$order->id}/status", ['status' => 'delivered'])->assertOk();
 
         $this->flushSession();

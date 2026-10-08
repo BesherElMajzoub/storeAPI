@@ -6,7 +6,6 @@ use App\Models\Order;
 use App\Models\OrderCancellationRequest;
 use App\Services\OrderPaymentService;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Log;
 
 class CaptureAuthorizedPayments extends Command
 {
@@ -17,7 +16,7 @@ class CaptureAuthorizedPayments extends Command
     public function handle(OrderPaymentService $payments): int
     {
         Order::query()->where('status', 'processing')->where('payment_status', 'authorized')
-            ->where('authorized_at', '<=', now()->subHours(Order::CUSTOMER_CANCEL_WINDOW_HOURS))
+            ->where('authorized_at', '<=', now()->subMinutes(Order::directCancelWindowMinutes()))
             // While a cancellation request awaits the admin, keep the hold so
             // accepting it releases the card instead of paying for a refund.
             // Card holds expire after ~7 days, so capture anyway after 5.
@@ -29,7 +28,7 @@ class CaptureAuthorizedPayments extends Command
                     try {
                         $payments->capture($order);
                     } catch (\Throwable $e) {
-                        Log::warning('Unable to capture authorized payment; will retry.', ['order_id' => $order->id, 'error' => $e->getMessage()]);
+                        $payments->recordCaptureError($order, $e);
                     }
                 }
             });

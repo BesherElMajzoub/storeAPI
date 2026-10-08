@@ -12,7 +12,8 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'carrier', type: 'string', nullable: true),
         new OA\Property(property: 'service', type: 'string', nullable: true),
         new OA\Property(property: 'tracking_url', type: 'string', format: 'uri', nullable: true),
-        new OA\Property(property: 'label_url', type: 'string', format: 'uri', nullable: true, description: 'Admin responses only'),
+        new OA\Property(property: 'label_url', type: 'string', format: 'uri', nullable: true, description: 'Admin responses only. EasyPost link; may expire.'),
+        new OA\Property(property: 'label_download_url', type: 'string', format: 'uri', nullable: true, description: 'Admin responses only. Signed link to our stored 4x6 PDF, valid 15 minutes, no bearer token needed.'),
         new OA\Property(property: 'shipped_at', type: 'string', format: 'date-time', nullable: true),
         new OA\Property(property: 'estimated_delivery', type: 'string', format: 'date', nullable: true),
         new OA\Property(

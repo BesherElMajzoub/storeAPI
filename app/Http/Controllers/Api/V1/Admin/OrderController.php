@@ -118,7 +118,7 @@ class OrderController extends Controller
         )
     )]
     #[OA\Response(response: 200, description: 'All order statuses updated')]
-    #[OA\Response(response: 409, description: 'At least one transition is invalid; no orders changed')]
+    #[OA\Response(response: 409, description: 'At least one transition is invalid; no orders changed. Bulk cannot cancel authorized/paid orders, and bulk shipped requires a captured payment and a tracking number on every order.')]
     public function bulkUpdateStatus(BulkUpdateOrderStatusRequest $request, StripeCheckoutService $stripe): JsonResponse
     {
         $validated = $request->validated();
@@ -133,6 +133,8 @@ class OrderController extends Controller
                 $preflightErrors[(string) $order->id] = [
                     "Cannot transition order from {$order->status} to {$validated['status']}.",
                 ];
+            } elseif ($refusal = $this->bulkRefusal($order, $validated['status'])) {
+                $preflightErrors[(string) $order->id] = [$refusal];
             }
         }
         if ($preflightErrors !== []) {
@@ -180,6 +182,8 @@ class OrderController extends Controller
                     $errors[(string) $order->id] = [
                         "Cannot transition order from {$order->status} to {$validated['status']}.",
                     ];
+                } elseif ($refusal = $this->bulkRefusal($order, $validated['status'])) {
+                    $errors[(string) $order->id] = [$refusal];
                 }
             }
 
@@ -191,6 +195,9 @@ class OrderController extends Controller
                 $attributes = ['status' => $validated['status']];
                 if ($validated['status'] === 'shipped' && $order->shipped_at === null) {
                     $attributes['shipped_at'] = now();
+                }
+                if ($validated['status'] === 'cancelled' && $order->payment_status === 'unpaid') {
+                    $attributes['payment_status'] = 'voided';
                 }
                 $order->update($attributes);
             }
@@ -233,12 +240,14 @@ class OrderController extends Controller
             properties: [
                 new OA\Property(property: 'status', type: 'string', description: 'pending, processing, shipped, delivered, cancelled', nullable: true),
                 new OA\Property(property: 'payment_status', type: 'string', description: 'unpaid or failed. Paid/refunded are controlled by verified payment flows.', nullable: true),
+                new OA\Property(property: 'tracking_number', type: 'string', nullable: true, description: 'Only with status=shipped, for a parcel shipped without a purchased label. Requires shipping_carrier.'),
+                new OA\Property(property: 'shipping_carrier', type: 'string', nullable: true, example: 'USPS'),
             ]
         )
     )]
     #[OA\Response(
         response: 200,
-        description: 'Order status updated',
+        description: 'Order status updated. Returns the same order resource as GET /admin/orders/{id}.',
         content: new OA\JsonContent(
             type: 'object',
             properties: [
@@ -246,9 +255,10 @@ class OrderController extends Controller
             ]
         )
     )]
+    #[OA\Response(response: 422, description: 'Marked shipped without a purchased label or a manual carrier + tracking number, or without a successful payment')]
     #[OA\Response(response: 409, description: 'Status transition not allowed')]
     #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
-    public function updateStatus(UpdateOrderStatusRequest $request, $id, StripeCheckoutService $stripe)
+    public function updateStatus(UpdateOrderStatusRequest $request, $id, StripeCheckoutService $stripe, OrderPaymentService $payments)
     {
         $order = Order::findOrFail($id);
         $data = $request->validated();
@@ -268,6 +278,33 @@ class OrderController extends Controller
 
         if ($errors) {
             return $this->error('Status transition not allowed.', 409, $errors);
+        }
+
+        if (($data['status'] ?? null) === 'shipped') {
+            if ($refusal = $this->shipRefusal($order, filled($data['tracking_number'] ?? null))) {
+                return $this->error($refusal, 422, ['status' => [$refusal]]);
+            }
+
+            // Shipping ends the cancel window: take the held money first, as a label purchase does.
+            if ($order->isAuthorized()) {
+                try {
+                    $captured = $payments->capture($order);
+                } catch (\Throwable $e) {
+                    Log::error('Payment capture before manual shipping failed.', ['order_id' => $order->id, 'error' => $e->getMessage()]);
+
+                    return $this->error('The payment could not be captured, so the order was not marked shipped.', 502);
+                }
+
+                if (! $captured) {
+                    return $this->error('The payment could not be captured, so the order was not marked shipped.', 409, [
+                        'status' => ['The payment hold is no longer valid.'],
+                    ]);
+                }
+            }
+        }
+
+        if (($data['status'] ?? null) === 'cancelled' && $order->payment_status === 'unpaid') {
+            $data['payment_status'] = 'voided';
         }
 
         if (($data['status'] ?? null) === 'cancelled' && (string) $order->getRawOriginal('status') === 'pending_payment') {
@@ -291,10 +328,53 @@ class OrderController extends Controller
             }
             $order->update($data);
 
-            return $order->refresh()->load(['items', 'user', 'payment']);
+            return $order->refresh()->load(['items', 'user', 'payment', 'cancellationRequest']);
         });
 
-        return $this->success($order, 'Order status updated.');
+        return $this->success(new AdminOrderResource($order), 'Order status updated.');
+    }
+
+    /**
+     * Why an order cannot be marked shipped yet, or null. The customer must
+     * be able to track it, and its money must be captured (or capturable).
+     */
+    private function shipRefusal(Order $order, bool $hasManualTracking): ?string
+    {
+        if ($order->fulfillment_hold) {
+            return 'This order is on hold because its payment could not be captured.';
+        }
+
+        if (! $order->tracking_number && ! $hasManualTracking) {
+            return 'Buy a shipping label, or enter the carrier and tracking number, before marking the order shipped.';
+        }
+
+        if (! in_array($order->payment_status, ['paid', 'authorized'], true)) {
+            return 'Only orders with a successful payment can be shipped.';
+        }
+
+        return null;
+    }
+
+    /**
+     * Extra rules for bulk changes. Bulk cancel never touches money (each
+     * paid order needs its own confirmed refund), and bulk ship cannot
+     * capture payments or take tracking numbers.
+     */
+    private function bulkRefusal(Order $order, string $status): ?string
+    {
+        if ($status === 'cancelled' && in_array($order->payment_status, ['authorized', 'paid'], true)) {
+            return 'Paid orders must be cancelled one at a time from the order page.';
+        }
+
+        if ($status === 'shipped') {
+            if ($order->payment_status === 'authorized') {
+                return 'The payment is not captured yet; ship this order from the order page.';
+            }
+
+            return $this->shipRefusal($order, false);
+        }
+
+        return null;
     }
 
     private function statusTransitions(): array

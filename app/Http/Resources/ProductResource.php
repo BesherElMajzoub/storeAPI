@@ -29,6 +29,7 @@ class ProductResource extends JsonResource
             'is_featured' => $this->is_featured,
             'rating' => (float) $this->rating,
             'reviews_count' => (int) $this->reviews_count,
+            'category_id' => $this->category_id,
             'category' => new CategoryResource($this->whenLoaded('category')),
             'variants' => $this->whenLoaded('variants', function () {
                 return $this->variants->map(fn ($variant) => [
@@ -36,6 +37,7 @@ class ProductResource extends JsonResource
                     'name' => $variant->name,
                     'sku' => $variant->sku,
                     'price' => (float) $variant->price,
+                    'final_price' => $variant->finalPriceFor($this->resource),
                     'stock_qty' => $variant->stock_qty,
                     'attributes' => $variant->attributes,
                 ]);

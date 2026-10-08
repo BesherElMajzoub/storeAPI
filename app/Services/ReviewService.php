@@ -18,6 +18,16 @@ class ReviewService
      */
     public function create(User $user, Product $product, array $data, string $ipAddress = ''): Review
     {
+        // Check first: user must have purchased the product (verified purchase),
+        // so a customer who never bought it is told that, not "already reviewed".
+        if (! $this->isVerifiedPurchase($user, $product->id)) {
+            throw new ReviewSubmissionException(
+                message: 'You can only review this product after it has been delivered to you.',
+                httpStatus: 403,
+                errorCode: 'REVIEW_PURCHASE_REQUIRED',
+            );
+        }
+
         // Check: one review per user per product
         $existingReview = Review::where('user_id', $user->id)
             ->where('product_id', $product->id)
@@ -41,15 +51,6 @@ class ReviewService
                 message: 'You have reached the daily review limit. Please try again tomorrow.',
                 httpStatus: 429,
                 errorCode: 'REVIEW_DAILY_LIMIT_REACHED',
-            );
-        }
-
-        // Check: user must have purchased the product before (verified purchase)
-        if (! $this->isVerifiedPurchase($user, $product->id)) {
-            throw new ReviewSubmissionException(
-                message: 'You can only review this product after it has been delivered to you.',
-                httpStatus: 403,
-                errorCode: 'REVIEW_PURCHASE_REQUIRED',
             );
         }
 

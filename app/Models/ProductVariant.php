@@ -25,4 +25,22 @@ class ProductVariant extends Model
     {
         return $this->belongsTo(Product::class);
     }
+
+    /**
+     * What a customer pays for this variant. A variant without its own price
+     * costs what the product costs; a discounted product gives the same
+     * percentage off the variant's price. Orders, carts and coupons use this.
+     */
+    public function finalPriceFor(Product $product): float
+    {
+        if ($this->price === null) {
+            return (float) $product->final_price;
+        }
+
+        $price = (float) $this->price;
+        $base = (float) $product->price;
+        $final = (float) $product->final_price;
+
+        return $base > 0 && $final < $base ? round($price * ($final / $base), 2) : $price;
+    }
 }

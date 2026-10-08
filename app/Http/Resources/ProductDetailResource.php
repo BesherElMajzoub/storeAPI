@@ -40,8 +40,11 @@ class ProductDetailResource extends JsonResource
             'meta_description' => $this->meta_description,
             'rating' => (float) $this->rating,
             'reviews_count' => (int) $this->reviews_count,
+            'category_id' => $this->category_id,
             'category' => new CategoryCardResource($this->whenLoaded('category')),
-            'variants' => ProductVariantResource::collection($this->whenLoaded('variants')),
+            'variants' => $this->whenLoaded('variants', fn () => $this->variants->map(
+                fn ($variant) => (new ProductVariantResource($variant->setRelation('product', $this->resource)))->resolve()
+            )->all()),
             'attributes' => $this->options,
             'image' => $this->buildImageBlock(
                 $this->getFirstMedia('product_images'),

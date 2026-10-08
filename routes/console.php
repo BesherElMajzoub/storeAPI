@@ -16,8 +16,10 @@ Schedule::command('telescope:prune --hours=48')->daily();
 // ─── EasyPost: تحديث حالة الشحنات تلقائياً كل 4 ساعات ─────────────────────────
 Schedule::command('shipping:track')->everyFourHours();
 Schedule::command('orders:expire-abandoned-checkouts')->everyTenMinutes()->withoutOverlapping();
-// Card holds are captured once the customer's 3-hour cancel window closes.
+// Card holds are captured once the customer's direct-cancel window (ORDER_DIRECT_CANCEL_WINDOW_MINUTES) closes.
 Schedule::command('orders:capture-authorized-payments')->everyFiveMinutes()->withoutOverlapping();
+// A hold still uncaptured long after the window means the scheduler or Stripe needs attention.
+Schedule::command('orders:alert-stale-authorizations')->hourly()->withoutOverlapping();
 Schedule::call(fn () => ShippingRateQuote::where('expires_at', '<', now()->subDay())->delete())
     ->daily()
     ->name('shipping-quotes:prune');

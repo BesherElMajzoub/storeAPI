@@ -115,4 +115,11 @@ return [
         'name' => env('MAIL_FROM_NAME', 'Example'),
     ],
 
+    // Branding for every customer email (header, footer, links).
+    'brand' => [
+        'name' => env('MAIL_BRAND_NAME', 'Otantik Queen'),
+        'logo_url' => env('MAIL_LOGO_URL'),
+        'support_email' => env('MAIL_SUPPORT_ADDRESS', env('MAIL_FROM_ADDRESS')),
+    ],
+
 ];

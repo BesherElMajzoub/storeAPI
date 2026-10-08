@@ -120,6 +120,10 @@ class EasyPostService implements EasyPostServiceInterface
                 ],
                 'from_address' => $fromAddress,
                 'parcel' => $parcel,
+                'options' => [
+                    'label_format' => config('services.easypost.label_format', 'PDF'),
+                    'label_size' => config('services.easypost.label_size', '4x6'),
+                ],
             ];
 
             // Restricting to specific carrier accounts keeps the rate request fast
@@ -199,6 +203,38 @@ class EasyPostService implements EasyPostServiceInterface
         } catch (ApiException $e) {
             Log::error('EasyPost Shipment Retrieve API error: '.$e->getMessage());
             throw new Exception('Failed to retrieve shipment: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * URL of the label as a PDF. Labels bought before PDF became the default
+     * (PNG/ZPL) are converted by EasyPost first.
+     *
+     * @throws Exception
+     */
+    public function pdfLabelUrl(string $shipmentId): string
+    {
+        if (! $this->client) {
+            throw new Exception('EasyPost client is not configured.');
+        }
+
+        try {
+            $shipment = $this->client->shipment->retrieve($shipmentId);
+            $url = $shipment->postage_label->label_pdf_url ?? null;
+
+            if (! $url) {
+                $shipment = $this->client->shipment->label($shipmentId, ['file_format' => 'PDF']);
+                $url = $shipment->postage_label->label_pdf_url ?? null;
+            }
+
+            if (! $url) {
+                throw new Exception('EasyPost did not return a PDF label.');
+            }
+
+            return $url;
+        } catch (ApiException $e) {
+            Log::error('EasyPost label conversion error: '.$e->getMessage());
+            throw new Exception('Failed to get a PDF label: '.$e->getMessage());
         }
     }
 

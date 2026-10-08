@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Services\GoogleAuthService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
@@ -11,6 +12,19 @@ use Tests\TestCase;
 class AuthTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_linking_google_to_an_unverified_account_verifies_its_email(): void
+    {
+        $user = User::factory()->create(['email' => 'shopper@example.com', 'email_verified_at' => null]);
+
+        $linked = app(GoogleAuthService::class)->findOrCreateUser([
+            'google_id' => 'g-123', 'email' => 'shopper@example.com', 'name' => 'Shopper',
+            'avatar_url' => null, 'raw' => [],
+        ]);
+
+        $this->assertTrue($linked->is($user));
+        $this->assertNotNull($user->fresh()->email_verified_at);
+    }
 
     public function test_user_can_change_password_when_logged_in(): void
     {

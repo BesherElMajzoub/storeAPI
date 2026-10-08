@@ -105,8 +105,8 @@ class CouponController extends Controller
 
             if (! empty($item['variant_id'])) {
                 $variant = ProductVariant::find($item['variant_id']);
-                if ($variant && $variant->price !== null) {
-                    $price = (float) $variant->price;
+                if ($variant) {
+                    $price = $variant->finalPriceFor($product);
                 }
             }
 

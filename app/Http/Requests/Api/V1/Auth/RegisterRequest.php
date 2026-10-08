@@ -29,4 +29,11 @@ class RegisterRequest extends BaseAuthRequest
             'device_name' => ['sometimes', 'string', 'max:255'],
         ];
     }
+
+    public function messages(): array
+    {
+        return [
+            'email.unique' => 'This email can\'t be used to register. Try signing in or resetting your password.',
+        ];
+    }
 }

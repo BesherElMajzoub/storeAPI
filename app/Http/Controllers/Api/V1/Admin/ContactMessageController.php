@@ -3,10 +3,15 @@
 namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\Admin\StoreContactMessageReplyRequest;
 use App\Http\Requests\Api\V1\Admin\UpdateContactMessageStatusRequest;
+use App\Http\Resources\ContactMessageReplyResource;
+use App\Mail\ContactMessageReplyMail;
 use App\Models\ContactMessage;
+use App\Models\ContactMessageReply;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use OpenApi\Attributes as OA;
 
@@ -84,7 +89,7 @@ class ContactMessageController extends Controller
     )]
     public function show($id): JsonResponse
     {
-        $message = ContactMessage::findOrFail($id);
+        $message = ContactMessage::with('replies.admin')->findOrFail($id);
 
         // Optionally mark as read if it's new when an admin views it
         if ($message->status === 'new') {
@@ -97,6 +102,41 @@ class ContactMessageController extends Controller
             'data' => $message,
             'errors' => null,
         ]);
+    }
+
+    #[OA\Post(
+        path: '/api/v1/admin/contact-messages/{id}/replies',
+        summary: 'Admin Reply To Contact Message',
+        description: 'Saves the reply, emails it to the customer, and marks the message as replied.',
+        security: [['bearerAuth' => []]],
+        tags: ['Admin Contact Messages']
+    )]
+    #[OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))]
+    #[OA\RequestBody(required: true, content: new OA\JsonContent(required: ['body'], properties: [
+        new OA\Property(property: 'body', type: 'string', maxLength: 5000),
+    ]))]
+    #[OA\Response(response: 201, description: 'Reply created: {id, admin_name, body, created_at}')]
+    #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
+    #[OA\Response(response: 422, ref: '#/components/responses/ValidationErrorResponse')]
+    public function reply(StoreContactMessageReplyRequest $request, $id): JsonResponse
+    {
+        $message = ContactMessage::findOrFail($id);
+
+        /** @var ContactMessageReply $reply */
+        $reply = $message->replies()->create([
+            'admin_id' => $request->user()->id,
+            'body' => $request->validated('body'),
+        ]);
+        $message->update(['status' => 'replied']);
+
+        Mail::to($message->email)->queue(new ContactMessageReplyMail($reply));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Reply sent.',
+            'data' => new ContactMessageReplyResource($reply->load('admin')),
+            'errors' => null,
+        ], 201);
     }
 
     #[OA\Patch(

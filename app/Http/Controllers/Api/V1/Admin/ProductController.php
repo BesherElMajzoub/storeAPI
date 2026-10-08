@@ -12,6 +12,7 @@ use App\Http\Requests\Api\V1\Admin\StoreProductRequest;
 use App\Http\Requests\Api\V1\Admin\UpdateProductRequest;
 use App\Http\Resources\ProductDetailResource;
 use App\Models\Product;
+use App\Services\ImageSanitizer;
 use App\Services\OrderInventoryService;
 use App\Services\ProductImportService;
 use App\Services\ProductService;
@@ -37,6 +38,7 @@ class ProductController extends Controller
     #[OA\Parameter(name: 'category_id', in: 'query', schema: new OA\Schema(type: 'integer'))]
     #[OA\Parameter(name: 'status', in: 'query', schema: new OA\Schema(type: 'string', enum: ['draft', 'published', 'archived']))]
     #[OA\Parameter(name: 'is_featured', in: 'query', schema: new OA\Schema(type: 'boolean'))]
+    #[OA\Parameter(name: 'low_stock', in: 'query', description: 'Only products with stock_qty below 3 (the dashboard low-stock alert)', schema: new OA\Schema(type: 'boolean'))]
     #[OA\Parameter(
         name: 'sort',
         in: 'query',
@@ -84,6 +86,7 @@ class ProductController extends Controller
             ->when(isset($filters['category_id']), fn ($query) => $query->where('category_id', $filters['category_id']))
             ->when(isset($filters['status']), fn ($query) => $query->where('status', $filters['status']))
             ->when(array_key_exists('is_featured', $filters), fn ($query) => $query->where('is_featured', $filters['is_featured']))
+            ->when((bool) ($filters['low_stock'] ?? false), fn ($query) => $query->where('stock_qty', '<', Product::LOW_STOCK_THRESHOLD))
             ->when($sort === 'price_asc', fn ($query) => $query->orderBy('price'))
             ->when($sort === 'price_desc', fn ($query) => $query->orderByDesc('price'))
             ->when($sort === 'stock_asc', fn ($query) => $query->orderBy('stock_qty'))
@@ -216,7 +219,7 @@ class ProductController extends Controller
 
             // Add images to Spatie media collection
             foreach ($uploadedImages as $file) {
-                $product->addMedia($file)
+                $product->addMedia(app(ImageSanitizer::class)->clean($file))
                     ->usingFileName((string) Str::uuid().'.'.$file->guessExtension())
                     ->toMediaCollection('product_images');
             }
@@ -388,7 +391,7 @@ class ProductController extends Controller
             $oldMedia = $product->getMedia('product_images');
 
             foreach ($uploadedImages as $file) {
-                $product->addMedia($file)
+                $product->addMedia(app(ImageSanitizer::class)->clean($file))
                     ->usingFileName((string) Str::uuid().'.'.$file->guessExtension())
                     ->toMediaCollection('product_images');
             }

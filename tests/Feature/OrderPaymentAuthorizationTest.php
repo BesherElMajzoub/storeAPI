@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use App\Contracts\EasyPostServiceInterface;
 use App\Jobs\SendAdminAlert;
 use App\Jobs\SettleCancelledOrderPayment;
-use App\Mail\OrderPaidMail;
+use App\Mail\OrderConfirmedMail;
 use App\Models\Coupon;
 use App\Models\CouponUsage;
 use App\Models\Order;
@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use RuntimeException;
 use Stripe\Checkout\Session as StripeSession;
+use Stripe\Exception\CardException;
 use Stripe\PaymentIntent;
 use Stripe\Refund;
 use Tests\TestCase;
@@ -87,7 +88,7 @@ class OrderPaymentAuthorizationTest extends TestCase
         $this->assertNotNull($order->authorized_at);
         $this->assertNull($order->paid_at);
         $this->assertDatabaseHas('payments', ['order_id' => $order->id, 'status' => 'pending']);
-        Mail::assertQueued(OrderPaidMail::class, 1);
+        Mail::assertQueued(OrderConfirmedMail::class, 1);
 
         $this->actingAs($this->customer, 'sanctum')
             ->getJson("/api/v1/orders/{$order->id}")
@@ -152,7 +153,8 @@ class OrderPaymentAuthorizationTest extends TestCase
         $order->refresh();
         $this->assertSame('cancelled', $order->status);
         $this->assertSame('released', $order->refund_status);
-        $this->assertSame('failed', $order->payment_status);
+        // Never charged: 'voided', so reports don't count it as a failed payment.
+        $this->assertSame('voided', $order->payment_status);
         $this->assertNotNull($order->cancelled_at);
         $this->assertSame(10, $product->fresh()->stock_qty);
         // Nothing was charged, so the coupon goes back too.
@@ -382,8 +384,123 @@ class OrderPaymentAuthorizationTest extends TestCase
 
         $this->artisan('orders:capture-authorized-payments')->assertSuccessful();
 
-        $this->assertSame('failed', $order->fresh()->payment_status);
+        $order->refresh();
+        $this->assertSame('failed', $order->payment_status);
+        $this->assertSame('processing', $order->status);
+        $this->assertTrue($order->fulfillment_hold);
+        $this->assertNotNull($order->capture_failed_at);
+        Queue::assertPushed(SendAdminAlert::class, fn (SendAdminAlert $job) => $job->email);
+        // The customer is told the shop will be in touch, not offered a cancel.
+        $this->assertSame(['none', 'payment_failed'], $this->cancellationOf($order));
+    }
+
+    public function test_a_declined_capture_puts_the_order_on_hold_and_blocks_the_label(): void
+    {
+        $order = $this->authorizedOrder([
+            'authorized_at' => now()->subHours(4),
+            'easypost_shipment_id' => 'shp_1', 'shipping_rate_id' => 'rate_1',
+        ]);
+
+        $this->mock(StripeCheckoutService::class, function ($mock): void {
+            $mock->shouldReceive('retrievePaymentIntent')->twice()->andReturn(
+                $this->intent('requires_capture'),
+                $this->intent('requires_payment_method'),
+            );
+            $mock->shouldReceive('capturePayment')->once()->andThrow(CardException::factory('Your card was declined.'));
+        });
+        $this->mock(EasyPostServiceInterface::class, fn ($mock) => $mock->shouldNotReceive('purchaseLabel'));
+
+        $this->artisan('orders:capture-authorized-payments')->assertSuccessful();
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id, 'status' => 'processing', 'payment_status' => 'failed', 'fulfillment_hold' => true,
+        ]);
+
+        $this->actingAs($this->admin(), 'sanctum')
+            ->postJson("/api/v1/admin/orders/{$order->id}/label")
+            ->assertStatus(409)
+            ->assertJsonPath('message', 'This order is on hold because its payment could not be captured.');
+    }
+
+    public function test_cancelling_an_order_on_payment_hold_restocks_it_without_touching_stripe(): void
+    {
+        Queue::fake([SendAdminAlert::class, SettleCancelledOrderPayment::class]);
+        $product = Product::factory()->create(['stock_qty' => 10, 'in_stock' => true]);
+        $order = $this->authorizedOrder([], $product);
+        $order->update(['payment_status' => 'failed', 'fulfillment_hold' => true]);
+
+        $this->actingAs($this->admin(), 'sanctum')
+            ->postJson("/api/v1/admin/orders/{$order->id}/status", ['status' => 'cancelled'])
+            ->assertOk();
+
+        $this->assertSame(10, $product->fresh()->stock_qty);
+        Queue::assertNotPushed(SettleCancelledOrderPayment::class);
+    }
+
+    public function test_transient_capture_errors_are_retried_and_alert_once_after_the_limit(): void
+    {
+        config(['orders.capture_max_attempts' => 2]);
+        $order = $this->authorizedOrder(['authorized_at' => now()->subHours(4)]);
+
+        $this->mock(StripeCheckoutService::class, function ($mock): void {
+            $mock->shouldReceive('retrievePaymentIntent')->andThrow(new RuntimeException('Stripe is down'));
+        });
+
+        foreach (range(1, 3) as $run) {
+            $this->artisan('orders:capture-authorized-payments')->assertSuccessful();
+        }
+
+        $order->refresh();
+        $this->assertSame('authorized', $order->payment_status);
+        $this->assertFalse($order->fulfillment_hold);
+        $this->assertSame(3, $order->capture_attempts);
         Queue::assertPushed(SendAdminAlert::class, 1);
+    }
+
+    public function test_the_cancel_window_length_comes_from_config(): void
+    {
+        config(['orders.direct_cancel_window_minutes' => 10]);
+        $due = $this->authorizedOrder(['authorized_at' => now()->subMinutes(11), 'stripe_payment_intent_id' => 'pi_due']);
+        $open = $this->authorizedOrder(['authorized_at' => now()->subMinutes(5), 'stripe_payment_intent_id' => 'pi_open']);
+
+        $this->assertSame(['direct', 'within_window'], $this->cancellationOf($open));
+        $this->assertSame(
+            $open->authorized_at->copy()->addMinutes(10)->toIso8601String(),
+            $this->actingAs($this->customer, 'sanctum')->getJson("/api/v1/orders/{$open->id}")->json('data.cancellation.direct_until'),
+        );
+
+        $this->mock(StripeCheckoutService::class, function ($mock) use ($due): void {
+            $mock->shouldReceive('retrievePaymentIntent')->once()
+                ->withArgs(fn (Order $order) => $order->id === $due->id)
+                ->andReturn($this->intent('requires_capture'));
+            $mock->shouldReceive('capturePayment')->once()->andReturn($this->intent('succeeded'));
+        });
+
+        $this->artisan('orders:capture-authorized-payments')->assertSuccessful();
+
+        $this->assertSame('paid', $due->fresh()->payment_status);
+        $this->assertSame('authorized', $open->fresh()->payment_status);
+    }
+
+    public function test_holds_left_uncaptured_too_long_alert_the_admin_once(): void
+    {
+        $this->authorizedOrder(['authorized_at' => now()->subHours(7), 'stripe_payment_intent_id' => 'pi_stale']);
+        $this->authorizedOrder(['authorized_at' => now()->subHours(2), 'stripe_payment_intent_id' => 'pi_recent']);
+
+        $this->artisan('orders:alert-stale-authorizations')->assertSuccessful();
+        $this->artisan('orders:alert-stale-authorizations')->assertSuccessful();
+
+        Queue::assertPushed(SendAdminAlert::class, 1);
+    }
+
+    public function test_order_responses_include_the_server_time(): void
+    {
+        $order = $this->authorizedOrder();
+
+        $this->actingAs($this->customer, 'sanctum')->getJson("/api/v1/orders/{$order->id}")
+            ->assertOk()->assertJsonStructure(['data' => ['server_time']]);
+        $this->actingAs($this->customer, 'sanctum')->getJson('/api/v1/orders')
+            ->assertOk()->assertJsonStructure(['server_time', 'data' => [['server_time']]]);
     }
 
     public function test_buying_a_label_captures_the_held_payment_first(): void
@@ -518,6 +635,32 @@ class OrderPaymentAuthorizationTest extends TestCase
         ])->assertOk();
 
         $this->assertSame('failed', $order->fresh()->refund_status);
+    }
+
+    public function test_admin_cancellation_request_list_links_to_the_order(): void
+    {
+        $order = $this->authorizedOrder(['authorized_at' => now()->subHours(4)]);
+        $this->cancellationRequest($order);
+
+        $this->actingAs($this->admin(), 'sanctum')->getJson('/api/v1/admin/cancellation-requests')
+            ->assertOk()
+            ->assertJsonPath('data.data.0.order_id', $order->id)
+            ->assertJsonPath('data.data.0.order_number', $order->order_number);
+    }
+
+    public function test_a_hold_cancelled_in_stripe_puts_the_order_on_hold(): void
+    {
+        $order = $this->authorizedOrder();
+
+        $this->postSigned([
+            'id' => 'evt_pi_canceled', 'object' => 'event', 'type' => 'payment_intent.canceled',
+            'data' => ['object' => ['object' => 'payment_intent', 'id' => 'pi_auth', 'status' => 'canceled']],
+        ])->assertOk();
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id, 'status' => 'processing', 'payment_status' => 'failed', 'fulfillment_hold' => true,
+        ]);
+        Queue::assertPushed(SendAdminAlert::class, 1);
     }
 
     public function test_admin_can_retry_a_failed_settlement(): void

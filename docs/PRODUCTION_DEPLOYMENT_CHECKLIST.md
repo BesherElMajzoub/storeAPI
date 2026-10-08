@@ -27,6 +27,15 @@ Never paste secret values into this file, terminal captures, tickets, or chat. R
 - [ ] Deployment Owner: configure EasyPost key, webhook secret, real warehouse origin, and approved package presets.
 - [ ] Deployment Owner: confirm `EASYPOST_DRIVER=easypost`; the staging-only `fake` driver is rejected by production and by the readiness gate.
 - [ ] Deployment Owner: confirm durable queue workers and a production mail transport.
+- [ ] Deployment Owner: set `ORDER_DIRECT_CANCEL_WINDOW_MINUTES=180` (UAT may use 10; it MUST be 180 at launch).
+- [ ] Deployment Owner: cron `* * * * * php artisan schedule:run` is running (captures held payments every 5 minutes, alerts on holds older than 6 h hourly).
+- [ ] Deployment Owner: a queue worker (Supervisor or the host's equivalent) is running for mail, refunds, alerts.
+- [ ] Deployment Owner: set `APP_NAME="Otantik Queen"`, `MAIL_FROM_ADDRESS` (the old value had the typo `conact-us@`), `MAIL_BRAND_NAME`, optional `MAIL_LOGO_URL`, `ADMIN_ALERT_EMAIL`, `STORE_TIMEZONE`; check SPF/DKIM/DMARC for the sending domain.
+- [ ] Deployment Owner: Stripe webhook subscribes to `checkout.session.completed`, `checkout.session.expired`, `charge.refunded`, `refund.failed`, `payment_intent.canceled`; Checkout stays card-only (manual capture).
+- [ ] Deployment Owner: `storage/app/private/labels` is on persistent, backed-up storage (label PDFs are kept there); `EASYPOST_LABEL_FORMAT=PDF`, `EASYPOST_LABEL_SIZE=4x6`.
+- [ ] Deployment Owner: PHP `upload_max_filesize >= 6M` and `post_max_size >= 45M` (8 images x 5 MB per request); `APP_DEBUG=false`.
+- [ ] Deployment Owner: disable the host's browser-check/bot challenge for the storefront and API domains.
+- [ ] Deployment Owner: after deploy run `php artisan media-library:regenerate --force` (product cards are now 600x800).
 - [ ] Product Owner: record decisions for tax and free-shipping behavior, or explicitly approve no tax/free-shipping feature for this release.
 
 ## Code verification before deployment

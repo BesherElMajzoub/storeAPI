@@ -64,6 +64,10 @@ return [
         'capture_method' => env('STRIPE_CAPTURE_METHOD', 'manual'),
     ],
 
+    'admin_alerts' => [
+        'email' => env('ADMIN_ALERT_EMAIL'),
+    ],
+
     'telegram' => [
         'bot_token' => env('TELEGRAM_BOT_TOKEN'),
         'admin_chat_id' => env('TELEGRAM_ADMIN_CHAT_ID'),
@@ -81,6 +85,9 @@ return [
         'api_key' => env('EASYPOST_API_KEY'),
         'webhook_secret' => env('EASYPOST_WEBHOOK_SECRET'),
         'quote_ttl_minutes' => (int) env('EASYPOST_QUOTE_TTL_MINUTES', 15),
+        // The owner prints on a 4x6 thermal printer from a phone app that needs a PDF.
+        'label_format' => env('EASYPOST_LABEL_FORMAT', 'PDF'),
+        'label_size' => env('EASYPOST_LABEL_SIZE', '4x6'),
         'supported_countries' => ['US'],
         // Domestic checkout is limited to these two carrier accounts so rate requests
         // stay fast and the storefront only ever needs to show "Standard"/"Express".

@@ -13,6 +13,8 @@ class CancellationRequestResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'order_id' => $this->order_id,
+            'order_number' => $this->whenLoaded('order', fn () => $this->order?->order_number),
             'status' => $this->status,
             'reason' => $this->reason,
             'admin_note' => $this->admin_note,

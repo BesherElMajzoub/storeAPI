@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Jobs\SendAdminAlert;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Route;
@@ -101,6 +102,31 @@ class ApiHygieneTest extends TestCase
         $this->assertStringNotContainsString('SQLSTATE', $response->getContent());
         $this->assertStringNotContainsString('application.php', $response->getContent());
         $this->assertStringNotContainsString('trace', strtolower($response->getContent()));
+    }
+
+    public function test_model_404s_do_not_leak_class_names(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user, 'sanctum')->getJson('/api/v1/orders/999999')
+            ->assertNotFound()
+            ->assertExactJson(['success' => false, 'message' => 'Order not found.', 'data' => null, 'errors' => null]);
+
+        $this->getJson('/api/v1/no-such-route')
+            ->assertNotFound()
+            ->assertJsonPath('message', 'Resource not found.');
+    }
+
+    public function test_duplicate_registration_names_the_email_field(): void
+    {
+        User::factory()->create(['email' => 'taken@example.com']);
+
+        $this->postJson('/api/v1/auth/register', [
+            'name' => 'Someone', 'email' => 'taken@example.com',
+            'password' => 'Secret123', 'password_confirmation' => 'Secret123',
+        ])->assertStatus(422)
+            ->assertJsonPath('message', "This email can't be used to register. Try signing in or resetting your password.")
+            ->assertJsonPath('errors.email.0', "This email can't be used to register. Try signing in or resetting your password.");
     }
 
     public function test_unauthenticated_api_requests_return_json_401_without_a_web_login_route(): void

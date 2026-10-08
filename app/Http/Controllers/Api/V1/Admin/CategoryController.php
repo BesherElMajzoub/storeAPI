@@ -9,6 +9,7 @@ use App\Http\Requests\Api\V1\Admin\UpdateCategoryRequest;
 use App\Http\Resources\CategoryDetailResource;
 use App\Models\Category;
 use App\Services\CategoryService;
+use App\Services\ImageSanitizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -104,7 +105,7 @@ class CategoryController extends Controller
         $category = Category::create($data);
 
         if ($request->hasFile('image')) {
-            $category->addMediaFromRequest('image')
+            $category->addMedia(app(ImageSanitizer::class)->clean($request->file('image')))
                 ->usingFileName((string) Str::uuid().'.'.$request->file('image')->guessExtension())
                 ->toMediaCollection('category_image');
         }
@@ -165,7 +166,7 @@ class CategoryController extends Controller
 
         if ($request->hasFile('image')) {
             // singleFile() collection auto-clears the old image
-            $category->addMediaFromRequest('image')
+            $category->addMedia(app(ImageSanitizer::class)->clean($request->file('image')))
                 ->usingFileName((string) Str::uuid().'.'.$request->file('image')->guessExtension())
                 ->toMediaCollection('category_image');
         }

@@ -28,7 +28,8 @@ return [
 
     'allowed_headers' => ['*'],
 
-    'exposed_headers' => [],
+    // Date lets the storefront align countdowns with the server clock.
+    'exposed_headers' => ['Date'],
 
     'max_age' => 0,
 

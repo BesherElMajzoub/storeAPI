@@ -67,7 +67,8 @@ type PaymentStatus =
   | 'unpaid'
   | 'authorized' // NEW: card held, not charged yet
   | 'paid'
-  | 'failed'     // payment failed, or cancelled before payment / hold released
+  | 'failed'     // a payment or capture really failed (order is on hold if processing)
+  | 'voided'     // cancelled before any money was taken (unpaid order closed / hold released)
   | 'refunded';
 
 type CancellationMode = 'direct' | 'request' | 'none';
@@ -292,7 +293,8 @@ text.
 | `unpaid` | Awaiting payment |
 | `authorized` | Payment confirmed |
 | `paid` | Paid |
-| `failed` | Not charged (when cancelled) / Payment failed |
+| `voided` | Not charged |
+| `failed` | Payment failed (if `status` is `processing`, the shop will contact the customer) |
 | `refunded` | Refunded |
 
 `authorized` must look like a successful payment to the customer. The money
@@ -395,3 +397,18 @@ Use test card `4242 4242 4242 4242`.
 
 Questions: contact the backend team. The OpenAPI spec (`/api/documentation`) has
 been regenerated with these fields.
+
+---
+
+## 11. Update 2026-10-08 (reply to the frontend)
+
+- **Window length** is `ORDER_DIRECT_CANCEL_WINDOW_MINUTES` (180 in production). Always use `cancellation.direct_until`.
+- **`server_time`** (ISO 8601 UTC) is on every order resource and at the top level of `GET /orders`. The `Date` header is also CORS-exposed. Offset the countdown by `server_time - Date.now()` and re-fetch at zero.
+- **`payment_status: voided`** replaces `failed` for orders cancelled before any charge. `failed` now means a real failure.
+- **Failed capture**: the order stays `processing`, `payment_status: failed`, admin `fulfillment_hold: true`; the customer sees `cancellation.mode: none`, `reason: payment_failed`. The admin is alerted (Telegram + email). The admin can cancel the order from its page, which restocks it. A label cannot be bought while on hold (`409`).
+- **`POST /admin/orders/{id}/status`** returns the same resource as `GET /admin/orders/{id}`. Marking an order `shipped` needs a purchased label or `tracking_number` + `shipping_carrier` in the request (`422` otherwise) and a captured/capturable payment. A held payment is captured first.
+- **Bulk status** refuses `cancelled` for `authorized`/`paid` orders (cancel them one at a time) and refuses `shipped` unless every order already has tracking and a captured payment. The whole batch is rejected with `409` and per-order messages.
+- **Cancellation requests** (`GET /admin/cancellation-requests`) include `order_id` and `order_number`.
+- **Label PDF (4x6)**: `shipment.label_download_url` (admin order resource and label purchase response) is a signed link valid 15 minutes, no bearer token. It opens the stored PDF inline (`GET /admin/shipments/{order}/label`); an expired or tampered signature returns `403`. `/admin/orders/{id}/label` is the final path; `/ship` stays as an alias.
+- **Shipment status** after purchase is `pre_transit`. The public tracking `status` is `null` when the order has no label.
+- **Dashboard** `current_orders_count` = processing orders with `authorized`/`paid` payment; `alerts.pending_orders` = `pending_payment`; `alerts.payment_holds`; `alerts.low_stock` = `stock_qty < 3`. The `filters` object holds the query string of the list that returns each number.

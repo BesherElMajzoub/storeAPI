@@ -18,6 +18,9 @@ class Product extends Model implements HasMedia
 {
     use HasFactory, InteractsWithMedia, SoftDeletes;
 
+    /** Products with fewer units than this raise the dashboard low-stock alert. */
+    public const LOW_STOCK_THRESHOLD = 3;
+
     protected $fillable = [
         'name', 'slug', 'description', 'price', 'discount_price', 'sku',
         'stock_qty', 'weight_oz', 'length_in', 'width_in', 'height_in',
@@ -60,7 +63,7 @@ class Product extends Model implements HasMedia
             ->nonQueued();
 
         $this->addMediaConversion('product_card')
-            ->fit(Fit::Crop, 420, 420)
+            ->fit(Fit::Crop, 600, 800)
             ->format('webp')
             ->nonQueued();
 

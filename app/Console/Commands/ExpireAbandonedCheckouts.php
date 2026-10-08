@@ -48,7 +48,7 @@ class ExpireAbandonedCheckouts extends Command
                                 && $order->getRawOriginal('status') === 'pending_payment'
                                 && $order->getRawOriginal('payment_status') === 'unpaid'
                                 && $order->stripe_session_id === $candidate->stripe_session_id) {
-                                $order->update(['status' => 'cancelled', 'payment_status' => 'failed', 'cancelled_at' => now()]);
+                                $order->update(['status' => 'cancelled', 'payment_status' => 'voided', 'cancelled_at' => now()]);
                             }
                         });
                     } catch (\Throwable $e) {

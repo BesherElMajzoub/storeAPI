@@ -16,6 +16,10 @@ class ProductVariantResource extends JsonResource
             'name' => $this->name,
             'sku' => $this->sku,
             'price' => $this->price !== null ? (float) $this->price : null,
+            // Needs the product relation (set by ProductDetailResource); never lazy-loads.
+            'final_price' => $this->relationLoaded('product')
+                ? $this->finalPriceFor($this->product)
+                : ($this->price !== null ? (float) $this->price : null),
             'stock_qty' => $this->stock_qty,
             'attributes' => $this->attributes,
             'weight_oz' => $this->weight_oz !== null ? (float) $this->weight_oz : null,

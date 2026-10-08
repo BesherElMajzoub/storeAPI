@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Services\ShippingLabelStore;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -41,6 +42,8 @@ class OrderResource extends JsonResource
             'cancelled_at' => $this->cancelled_at?->toIso8601String(),
             'refunded_at' => $this->refunded_at?->toIso8601String(),
             'created_at' => $this->created_at->toIso8601String(),
+            // Lets the client align the cancel countdown with the server clock.
+            'server_time' => now()->utc()->toIso8601String(),
             'cancellation_request' => $this->when(
                 $this->relationLoaded('cancellationRequest'),
                 fn () => $this->cancellationRequest
@@ -83,6 +86,7 @@ class OrderResource extends JsonResource
 
         if ($includeLabel) {
             $shipment['label_url'] = $this->label_url;
+            $shipment['label_download_url'] = app(ShippingLabelStore::class)->downloadUrl($this->resource);
         }
 
         return $shipment;

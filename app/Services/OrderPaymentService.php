@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
+use Stripe\Exception\ApiErrorException;
 
 /**
  * Moves money for an order after checkout: captures held payments, and
@@ -19,6 +20,9 @@ use RuntimeException;
  */
 class OrderPaymentService
 {
+    /** PaymentIntent states in which a held payment can never be captured. */
+    private const UNCAPTURABLE_INTENT_STATUSES = ['canceled', 'requires_payment_method'];
+
     public function __construct(private readonly StripeCheckoutService $stripe) {}
 
     /**
@@ -36,27 +40,89 @@ class OrderPaymentService
             $intent = $this->stripe->retrievePaymentIntent($order);
 
             if ($intent->status === 'requires_capture') {
-                $intent = $this->stripe->capturePayment($order);
+                try {
+                    $intent = $this->stripe->capturePayment($order);
+                } catch (ApiErrorException $e) {
+                    // A declined or expired hold leaves the intent in a final
+                    // state; anything else (network, Stripe outage) is retried.
+                    $intent = $this->stripe->retrievePaymentIntent($order);
+                    if (! in_array($intent->status, self::UNCAPTURABLE_INTENT_STATUSES, true) && $intent->status !== 'succeeded') {
+                        throw $e;
+                    }
+                }
             }
 
             if ($intent->status === 'succeeded') {
                 DB::transaction(function () use ($order): void {
-                    $order->update(['payment_status' => 'paid', 'paid_at' => now()]);
+                    $order->update(['payment_status' => 'paid', 'paid_at' => now(), 'capture_attempts' => 0]);
                     Payment::query()->where('order_id', $order->id)->update(['status' => 'completed', 'updated_at' => now()]);
                 });
 
                 return true;
             }
 
-            if ($intent->status === 'canceled') {
-                // The hold expired or was cancelled outside the app: nothing can be captured.
-                $order->update(['payment_status' => 'failed']);
-                Log::critical('Stripe authorization was cancelled before capture.', ['order_id' => $order->id]);
-                SendAdminAlert::dispatch("URGENT: payment hold for order {$order->order_number} expired or was cancelled before capture. Do not ship it unpaid.");
+            if (in_array($intent->status, self::UNCAPTURABLE_INTENT_STATUSES, true)) {
+                $this->markCaptureFailed($order, "Stripe PaymentIntent is {$intent->status}");
             }
 
             return false;
         });
+    }
+
+    /**
+     * A held payment can no longer be captured (hold expired, card blocked,
+     * or cancelled in Stripe). The order stays in processing on a fulfilment
+     * hold so it is never shipped unpaid; the admin contacts the customer or
+     * cancels it, which restocks the items.
+     */
+    public function markCaptureFailed(Order $order, string $reason): void
+    {
+        $updated = Order::query()->whereKey($order->id)
+            ->where('status', 'processing')->where('payment_status', 'authorized')
+            ->update([
+                'payment_status' => 'failed',
+                'fulfillment_hold' => true,
+                'capture_failed_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+        if ($updated === 0) {
+            return;
+        }
+
+        Payment::query()->where('order_id', $order->id)->update(['status' => 'failed', 'updated_at' => now()]);
+        $order->refresh();
+
+        Log::critical('Held payment could not be captured.', ['order_id' => $order->id, 'reason' => $reason]);
+        SendAdminAlert::dispatch(
+            "URGENT: the card payment for order {$order->order_number} could not be captured ({$reason}). "
+            .'The order is on hold: do not ship it. Contact the customer, or cancel the order to restock it.',
+            email: true,
+        );
+    }
+
+    /**
+     * Count a capture attempt that failed for a transient reason; the admin
+     * is alerted once when it keeps failing. The scheduler keeps retrying.
+     */
+    public function recordCaptureError(Order $order, \Throwable $e): void
+    {
+        $attempts = (int) $order->capture_attempts + 1;
+        Order::query()->whereKey($order->id)->update(['capture_attempts' => $attempts]);
+
+        Log::warning('Unable to capture authorized payment; will retry.', [
+            'order_id' => $order->id,
+            'attempt' => $attempts,
+            'error' => $e->getMessage(),
+        ]);
+
+        if ($attempts === max(1, (int) config('orders.capture_max_attempts', 3))) {
+            SendAdminAlert::dispatch(
+                "Capturing the card payment for order {$order->order_number} has failed {$attempts} times "
+                ."({$e->getMessage()}). It will keep retrying; check Stripe if this continues.",
+                email: true,
+            );
+        }
     }
 
     /**
@@ -124,7 +190,7 @@ class OrderPaymentService
                 DB::transaction(function () use ($order): void {
                     $order->update([
                         'refund_status' => 'released',
-                        'payment_status' => $order->isAuthorized() ? 'failed' : $order->payment_status,
+                        'payment_status' => in_array($order->payment_status, ['authorized', 'failed'], true) ? 'voided' : $order->payment_status,
                     ]);
                     Payment::query()->where('order_id', $order->id)->update(['status' => 'failed', 'updated_at' => now()]);
                 });

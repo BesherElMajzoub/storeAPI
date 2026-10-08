@@ -11,6 +11,7 @@ use App\Services\StripeCheckoutService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Stripe\Checkout\Session as StripeSession;
+use Stripe\PaymentIntent;
 use Stripe\Refund;
 use Tests\TestCase;
 
@@ -146,8 +147,9 @@ class AdminOrderBulkStatusTest extends TestCase
         $product->update(['stock_qty' => 9]);
         Payment::create(['order_id' => $order->id, 'payment_provider' => 'stripe', 'status' => 'completed', 'amount' => 100]);
 
-        $this->postJson("/api/v1/admin/orders/{$order->id}/status", ['status' => 'shipped'])
-            ->assertOk();
+        $this->postJson("/api/v1/admin/orders/{$order->id}/status", [
+            'status' => 'shipped', 'shipping_carrier' => 'USPS', 'tracking_number' => '9400100000000000000001',
+        ])->assertOk()->assertJsonPath('data.shipment.tracking_number', '9400100000000000000001');
         $this->assertNotNull($order->fresh()->shipped_at);
 
         $this->mock(StripeCheckoutService::class, function ($mock): void {
@@ -164,6 +166,7 @@ class AdminOrderBulkStatusTest extends TestCase
             $order = Order::factory()->create([
                 'status' => 'processing', 'payment_status' => 'paid',
                 'stripe_payment_intent_id' => "pi_bulk_ship_{$index}", 'stock_reserved_at' => now(), 'total' => 50,
+                'tracking_number' => "EZBULK{$index}", 'shipping_carrier' => 'USPS',
             ]);
             $order->items()->create([
                 'product_id' => $product->id, 'product_name' => $product->name,
@@ -190,6 +193,62 @@ class AdminOrderBulkStatusTest extends TestCase
             $this->postJson("/api/v1/admin/orders/{$order->id}/refund")->assertOk();
         }
         $this->assertSame(8, (int) $product->fresh()->stock_qty);
+    }
+
+    public function test_an_order_cannot_be_marked_shipped_without_tracking(): void
+    {
+        $order = Order::factory()->create(['status' => 'processing', 'payment_status' => 'paid', 'tracking_number' => null]);
+
+        $this->postJson("/api/v1/admin/orders/{$order->id}/status", ['status' => 'shipped'])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Buy a shipping label, or enter the carrier and tracking number, before marking the order shipped.');
+        $this->postJson('/api/v1/admin/orders/bulk-status', ['ids' => [$order->id], 'status' => 'shipped'])
+            ->assertConflict();
+
+        $this->assertSame('processing', $order->fresh()->status);
+    }
+
+    public function test_manual_shipping_captures_a_held_payment_first(): void
+    {
+        $order = Order::factory()->create([
+            'status' => 'processing', 'payment_status' => 'authorized',
+            'stripe_payment_intent_id' => 'pi_manual', 'authorized_at' => now()->subHour(),
+        ]);
+        $this->mock(StripeCheckoutService::class, function ($mock): void {
+            $mock->shouldReceive('retrievePaymentIntent')->once()->andReturn(PaymentIntent::constructFrom(['id' => 'pi_manual', 'status' => 'requires_capture']));
+            $mock->shouldReceive('capturePayment')->once()->andReturn(PaymentIntent::constructFrom(['id' => 'pi_manual', 'status' => 'succeeded']));
+        });
+
+        $this->postJson("/api/v1/admin/orders/{$order->id}/status", [
+            'status' => 'shipped', 'shipping_carrier' => 'USPS', 'tracking_number' => 'MANUAL1',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'shipped', 'payment_status' => 'paid']);
+    }
+
+    public function test_bulk_cannot_cancel_orders_that_hold_money(): void
+    {
+        $paid = Order::factory()->create(['status' => 'processing', 'payment_status' => 'paid']);
+        $authorized = Order::factory()->create(['status' => 'processing', 'payment_status' => 'authorized']);
+
+        $response = $this->postJson('/api/v1/admin/orders/bulk-status', [
+            'ids' => [$paid->id, $authorized->id], 'status' => 'cancelled',
+        ])->assertConflict();
+
+        $this->assertSame(['Paid orders must be cancelled one at a time from the order page.'], $response->json("errors.orders.{$paid->id}"));
+        $this->assertSame('processing', $paid->fresh()->status);
+        $this->assertSame('processing', $authorized->fresh()->status);
+    }
+
+    public function test_single_status_change_returns_the_admin_order_resource(): void
+    {
+        $order = Order::factory()->create(['status' => 'pending', 'payment_status' => 'unpaid']);
+
+        $this->postJson("/api/v1/admin/orders/{$order->id}/status", ['status' => 'cancelled'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'cancelled')
+            ->assertJsonPath('data.payment_status', 'voided')
+            ->assertJsonStructure(['data' => ['refund' => ['status', 'amount'], 'cancellation' => ['mode', 'reason'], 'shipment']]);
     }
 
     protected function tearDown(): void

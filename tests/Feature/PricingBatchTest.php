@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Jobs\SendAdminAlert;
-use App\Mail\OrderPaidMail;
+use App\Mail\OrderConfirmedMail;
 use App\Models\Coupon;
 use App\Models\CouponUsage;
 use App\Models\Order;
@@ -59,7 +59,7 @@ class PricingBatchTest extends TestCase
         $this->assertSame('paid', $order->payment_status);
         $this->assertDatabaseHas('payments', ['order_id' => $order->id, 'payment_provider' => 'free', 'status' => 'completed', 'amount' => 0]);
         $this->assertDatabaseHas('coupon_usages', ['coupon_id' => $coupon->id, 'order_id' => $order->id]);
-        Mail::assertQueued(OrderPaidMail::class, 1);
+        Mail::assertQueued(OrderConfirmedMail::class, 1);
         Queue::assertPushed(SendAdminAlert::class, 1);
     }
 

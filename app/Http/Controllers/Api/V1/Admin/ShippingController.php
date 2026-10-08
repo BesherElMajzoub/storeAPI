@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\OrderCancellationRequest;
 use App\Services\OrderPaymentService;
 use App\Services\ShipmentTrackingService;
+use App\Services\ShippingLabelStore;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Http\JsonResponse;
@@ -16,7 +17,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use OpenApi\Attributes as OA;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ShippingController extends Controller
 {
@@ -26,6 +29,7 @@ class ShippingController extends Controller
         EasyPostServiceInterface $easyPostService,
         private readonly ShipmentTrackingService $tracking,
         private readonly OrderPaymentService $payments,
+        private readonly ShippingLabelStore $labels,
     ) {
         $this->easyPostService = $easyPostService;
     }
@@ -107,6 +111,12 @@ class ShippingController extends Controller
             return $this->shipmentResponse($order, 'Shipping label already exists.');
         }
 
+        if ($order->fulfillment_hold) {
+            return $this->error('This order is on hold because its payment could not be captured.', 409, [
+                'status' => ['Contact the customer or cancel the order.'],
+            ]);
+        }
+
         // Check if order is eligible for shipping
         if ($order->status !== 'processing' || ! ($order->isPaid() || $order->isAuthorized())) {
             return $this->error('Only paid processing orders can be shipped.', 409, [
@@ -182,7 +192,7 @@ class ShippingController extends Controller
                     'tracking_number' => $boughtShipment->tracking_code,
                     'label_url' => $boughtShipment->postage_label->label_url,
                     'tracking_url' => $boughtShipment->tracker->public_url ?? null,
-                    'shipment_status' => $boughtShipment->tracker->status ?? 'pre_transit',
+                    'shipment_status' => 'pre_transit',
                     'shipped_at' => now(),
                     'estimated_delivery' => isset($boughtShipment->tracker->est_delivery_date)
                         ? Carbon::parse($boughtShipment->tracker->est_delivery_date)->toDateString()
@@ -197,6 +207,9 @@ class ShippingController extends Controller
             if (isset($boughtShipment->tracker)) {
                 $updatedOrder = $this->tracking->sync($updatedOrder, $boughtShipment->tracker);
             }
+
+            // Keep our own PDF copy; if this fails the download link retries.
+            $this->labels->store($updatedOrder, $boughtShipment->postage_label ?? null);
 
             try {
                 Mail::to($updatedOrder->user->email)->queue(new OrderShippedMail($updatedOrder));
@@ -232,6 +245,10 @@ class ShippingController extends Controller
     {
         return DB::transaction(function () use ($order): ?string {
             $locked = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
+
+            if ($locked->fulfillment_hold) {
+                return 'This order is on hold because its payment could not be captured.';
+            }
 
             if ($locked->status !== 'processing' || ! ($locked->isPaid() || $locked->isAuthorized())) {
                 return 'Only paid processing orders can be shipped.';
@@ -371,6 +388,31 @@ class ShippingController extends Controller
         ], $status);
     }
 
+    #[OA\Get(
+        path: '/api/v1/admin/shipments/{order}/label',
+        summary: 'Download a shipping label (4x6 PDF)',
+        description: 'Opens the stored label PDF. Needs no bearer token: use the temporary signed `shipment.label_download_url` (valid 15 minutes) from GET /admin/orders/{id} or the label purchase response.',
+        tags: ['Admin Shipping']
+    )]
+    #[OA\Parameter(name: 'order', in: 'path', required: true, description: 'Order ID', schema: new OA\Schema(type: 'integer'))]
+    #[OA\Response(response: 200, description: 'The label PDF', content: new OA\MediaType(mediaType: 'application/pdf'))]
+    #[OA\Response(response: 403, description: 'Missing, invalid or expired signature')]
+    #[OA\Response(response: 404, description: 'The order has no label')]
+    public function downloadLabel(int $orderId): StreamedResponse|JsonResponse
+    {
+        $order = Order::findOrFail($orderId);
+        $path = $this->labels->path($order);
+
+        if ($path === null) {
+            return $this->error('No label is available for this order yet.', 404);
+        }
+
+        return Storage::disk($this->labels->disk())->response($path, "label-{$order->order_number}.pdf", [
+            'Content-Type' => 'application/pdf',
+            'Cache-Control' => 'private, no-store',
+        ], 'inline');
+    }
+
     private function shipmentResponse(Order $order, string $message): JsonResponse
     {
         return $this->success([
@@ -385,6 +427,7 @@ class ShippingController extends Controller
                 'service' => $order->shipping_service,
                 'tracking_url' => $order->tracking_url,
                 'label_url' => $order->label_url,
+                'label_download_url' => $this->labels->downloadUrl($order),
                 'shipped_at' => $order->shipped_at?->toIso8601String(),
                 'estimated_delivery' => $order->estimated_delivery?->format('Y-m-d'),
                 'status' => $order->shipment_status ?? 'unknown',

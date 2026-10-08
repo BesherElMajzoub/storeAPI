@@ -40,7 +40,7 @@ class ExpireAbandonedCheckoutsTest extends TestCase
         Artisan::call('orders:expire-abandoned-checkouts');
         $order->refresh();
         $this->assertSame('cancelled', $order->status);
-        $this->assertSame('failed', $order->payment_status);
+        $this->assertSame('voided', $order->payment_status);
         $this->assertSame(4, (int) $product->fresh()->stock_qty);
 
         Artisan::call('orders:expire-abandoned-checkouts');

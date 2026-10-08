@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Jobs\SendAdminAlert;
-use App\Mail\OrderPaidMail;
+use App\Mail\OrderConfirmedMail;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
@@ -63,7 +63,7 @@ class StripeWebhookSecurityTest extends TestCase
             'status' => 'completed',
             'amount' => 100,
         ]);
-        Mail::assertQueued(OrderPaidMail::class, 1);
+        Mail::assertQueued(OrderConfirmedMail::class, 1);
 
         // Replay is idempotent and does not change the final state.
         $this->postSigned([
@@ -75,7 +75,7 @@ class StripeWebhookSecurityTest extends TestCase
             ]],
         ])->assertOk();
 
-        Mail::assertQueued(OrderPaidMail::class, 1);
+        Mail::assertQueued(OrderConfirmedMail::class, 1);
     }
 
     public function test_signed_webhook_with_wrong_amount_or_currency_is_rejected(): void
@@ -163,7 +163,7 @@ class StripeWebhookSecurityTest extends TestCase
         $this->assertDatabaseHas('orders', [
             'id' => $order->id,
             'status' => 'cancelled',
-            'payment_status' => 'failed',
+            'payment_status' => 'voided',
         ]);
         $this->assertSame(1, $product->fresh()->stock_qty);
         $this->assertNotNull($order->fresh()->stock_released_at);

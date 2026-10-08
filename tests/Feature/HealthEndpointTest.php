@@ -21,4 +21,16 @@ class HealthEndpointTest extends TestCase
                 'deployed_at' => '2026-09-25T20:00:00Z',
             ]);
     }
+
+    public function test_health_falls_back_to_git_revision_when_version_is_unset(): void
+    {
+        config(['app.version' => 'unknown', 'app.deployed_at' => null]);
+
+        $version = $this->getJson('/api/v1/health')->assertOk()->json('version');
+
+        $this->assertMatchesRegularExpression('/^([0-9a-f]{7}|unknown)$/', $version);
+        if (is_dir(base_path('.git'))) {
+            $this->assertNotSame('unknown', $version);
+        }
+    }
 }

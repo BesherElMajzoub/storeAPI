@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Verify Code — {{ config('app.name', 'Otantik') }}</title>
+  <title>Verify Code — {{ config('mail.brand.name', 'Otantik Queen') }}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet" />
@@ -78,7 +78,7 @@
             <td class="header-padding" align="center" valign="top" style="background-color: #262320; padding: 50px 40px; text-align: center; border-bottom: 3px solid #d4af37;">
               <!-- Small Logo/Branding Header -->
               <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 16px; font-weight: 400; color: #d4af37; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 15px;">
-                {{ config('app.name', 'Otantik') }}
+                {{ config('mail.brand.name', 'Otantik Queen') }}
               </div>
               <h1 style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 36px; font-weight: 300; color: #ffffff; margin: 0; line-height: 1.2; letter-spacing: 0.5px;">
                 Verify <span style="color: #d4af37; font-style: italic;">Code</span>
@@ -101,7 +101,7 @@
               <!-- Info Notice Block -->
               <div style="border-radius: 8px; border: 1px solid #E8E2D9; background-color: #f9f5f0; padding: 18px 20px; margin-bottom: 35px;">
                 <p style="font-family: 'Jost', 'Helvetica Neue', Arial, sans-serif; font-weight: 500; font-size: 14px; color: #262320; margin: 0 0 4px 0; line-height: 1.4;">
-                  Verification Code for {{ $purposeLabel }}
+                  Use this code to {{ $purposeLabel }}
                 </p>
                 <p style="font-family: 'Jost', 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #6B7280; margin: 0; line-height: 1.5;">
                   Check your inbox and enter the 6-digit code below.
@@ -153,7 +153,7 @@
           <tr>
             <td align="center" valign="top" style="background-color: #f9f5f0; padding: 30px 40px; border-top: 1px solid #E8E2D9; text-align: center;">
               <p style="font-family: 'Jost', 'Helvetica Neue', Arial, sans-serif; font-size: 12px; color: #9CA3AF; margin: 0; line-height: 1.5;">
-                &copy; {{ date('Y') }} {{ config('app.name', 'Otantik') }}. All rights reserved.
+                &copy; {{ date('Y') }} {{ config('mail.brand.name', 'Otantik Queen') }}. All rights reserved.
               </p>
               <p style="font-family: 'Jost', 'Helvetica Neue', Arial, sans-serif; font-size: 11px; color: #9CA3AF; margin: 5px 0 0 0; line-height: 1.5;">
                 This is an automated security notification. Please do not reply directly to this email.

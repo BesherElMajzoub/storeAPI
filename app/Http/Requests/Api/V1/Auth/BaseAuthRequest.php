@@ -17,7 +17,8 @@ abstract class BaseAuthRequest extends FormRequest
     {
         $response = response()->json([
             'success' => false,
-            'message' => 'Validation failed.',
+            // The first field error reads better in a form than a generic line.
+            'message' => $validator->errors()->first() ?: 'Validation failed.',
             'data' => null,
             'errors' => $validator->errors(),
         ], 422);

@@ -1410,6 +1410,61 @@
                 ]
             }
         },
+        "/api/v1/admin/contact-messages/{id}/replies": {
+            "post": {
+                "tags": [
+                    "Admin Contact Messages"
+                ],
+                "summary": "Admin Reply To Contact Message",
+                "description": "Saves the reply, emails it to the customer, and marks the message as replied.",
+                "operationId": "fd34ba0228da168289f85f8e81b88e33",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "body"
+                                ],
+                                "properties": {
+                                    "body": {
+                                        "type": "string",
+                                        "maxLength": 5000
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Reply created: {id, admin_name, body, created_at}"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/NotFoundResponse"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationErrorResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/admin/contact-messages/{id}/status": {
             "patch": {
                 "tags": [
@@ -2059,6 +2114,7 @@
                                             "example": 1540.5
                                         },
                                         "current_orders_count": {
+                                            "description": "Orders to fulfil. Same as GET /admin/orders?status=processing&payment_status=authorized,paid",
                                             "type": "integer",
                                             "example": 25
                                         },
@@ -2078,15 +2134,29 @@
                                                 "$ref": "#/components/schemas/Order"
                                             }
                                         },
+                                        "filters": {
+                                            "description": "Query string of the list that returns each count, so a tile can link to it.",
+                                            "type": "object",
+                                            "additionalProperties": {
+                                                "type": "string"
+                                            }
+                                        },
                                         "alerts": {
                                             "properties": {
                                                 "low_stock": {
+                                                    "description": "Same as GET /admin/products?low_stock=1 (stock_qty < 3)",
                                                     "type": "integer",
                                                     "example": 3
                                                 },
                                                 "pending_orders": {
+                                                    "description": "Awaiting payment. Same as GET /admin/orders?status=pending_payment",
                                                     "type": "integer",
                                                     "example": 5
+                                                },
+                                                "payment_holds": {
+                                                    "description": "Payment could not be captured; do not ship. Same as GET /admin/orders?status=processing&payment_status=failed",
+                                                    "type": "integer",
+                                                    "example": 0
                                                 }
                                             },
                                             "type": "object"
@@ -2801,7 +2871,7 @@
                         "description": "All order statuses updated"
                     },
                     "409": {
-                        "description": "At least one transition is invalid; no orders changed"
+                        "description": "At least one transition is invalid; no orders changed. Bulk cannot cancel authorized/paid orders, and bulk shipped requires a captured payment and a tracking number on every order."
                     }
                 },
                 "security": [
@@ -2844,6 +2914,16 @@
                                         "description": "unpaid or failed. Paid/refunded are controlled by verified payment flows.",
                                         "type": "string",
                                         "nullable": true
+                                    },
+                                    "tracking_number": {
+                                        "description": "Only with status=shipped, for a parcel shipped without a purchased label. Requires shipping_carrier.",
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "shipping_carrier": {
+                                        "type": "string",
+                                        "example": "USPS",
+                                        "nullable": true
                                     }
                                 },
                                 "type": "object"
@@ -2853,7 +2933,7 @@
                 },
                 "responses": {
                     "200": {
-                        "description": "Order status updated",
+                        "description": "Order status updated. Returns the same order resource as GET /admin/orders/{id}.",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -2866,6 +2946,9 @@
                                 }
                             }
                         }
+                    },
+                    "422": {
+                        "description": "Marked shipped without a purchased label or a manual carrier + tracking number, or without a successful payment"
                     },
                     "409": {
                         "description": "Status transition not allowed"
@@ -2967,6 +3050,14 @@
                     {
                         "name": "is_featured",
                         "in": "query",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "low_stock",
+                        "in": "query",
+                        "description": "Only products with stock_qty below 3 (the dashboard low-stock alert)",
                         "schema": {
                             "type": "boolean"
                         }
@@ -4170,6 +4261,41 @@
                         "bearerAuth": []
                     }
                 ]
+            }
+        },
+        "/api/v1/admin/shipments/{order}/label": {
+            "get": {
+                "tags": [
+                    "Admin Shipping"
+                ],
+                "summary": "Download a shipping label (4x6 PDF)",
+                "description": "Opens the stored label PDF. Needs no bearer token: use the temporary signed `shipment.label_download_url` (valid 15 minutes) from GET /admin/orders/{id} or the label purchase response.",
+                "operationId": "cfcf52440a14bb6f94282e47cfdf4c97",
+                "parameters": [
+                    {
+                        "name": "order",
+                        "in": "path",
+                        "description": "Order ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The label PDF",
+                        "content": {
+                            "application/pdf": {}
+                        }
+                    },
+                    "403": {
+                        "description": "Missing, invalid or expired signature"
+                    },
+                    "404": {
+                        "description": "The order has no label"
+                    }
+                }
             }
         },
         "/api/v1/admin/skus/generate": {
@@ -5771,6 +5897,29 @@
                         "$ref": "#/components/responses/NotFoundResponse"
                     }
                 }
+            }
+        },
+        "/api/v1/me/contact-messages": {
+            "get": {
+                "tags": [
+                    "Contact"
+                ],
+                "summary": "My contact messages",
+                "description": "Messages sent with the signed-in customer's email, newest first, with our replies.",
+                "operationId": "a370257900b954da578f0c52be57d09a",
+                "responses": {
+                    "200": {
+                        "description": "List of {id, subject, message, status, replies[{id, admin_name, body, created_at}], created_at, updated_at}"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/UnauthorizedResponse"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
             }
         },
         "/api/v1/contact-messages": {
@@ -8464,7 +8613,7 @@
                         ]
                     },
                     "payment_status": {
-                        "description": "`authorized` = card held at checkout, captured after the cancel window closes or when the label is bought.",
+                        "description": "`authorized` = card held at checkout, captured after the cancel window closes or when the label is bought. `voided` = cancelled before any money was taken (unpaid order closed or card hold released). `failed` = a payment or capture really failed.",
                         "type": "string",
                         "example": "unpaid",
                         "enum": [
@@ -8472,6 +8621,7 @@
                             "authorized",
                             "paid",
                             "failed",
+                            "voided",
                             "refunded"
                         ]
                     },
@@ -8551,6 +8701,7 @@
                                 ]
                             },
                             "reason": {
+                                "description": "`payment_failed` = the held payment could not be captured; the shop will contact the customer.",
                                 "type": "string",
                                 "example": "within_window",
                                 "enum": [
@@ -8560,6 +8711,7 @@
                                     "fulfillment_in_progress",
                                     "not_directly_cancellable",
                                     "request_pending",
+                                    "payment_failed",
                                     "shipped",
                                     "delivered",
                                     "cancelled",
@@ -8626,6 +8778,16 @@
                         "example": "cs_test_a1b2c3d4",
                         "nullable": true
                     },
+                    "fulfillment_hold": {
+                        "description": "Admin only. True when the payment could not be captured: do not ship.",
+                        "type": "boolean"
+                    },
+                    "capture_failed_at": {
+                        "description": "Admin only.",
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
                     "stripe_payment_intent_id": {
                         "type": "string",
                         "example": "pi_123456789",
@@ -8666,6 +8828,11 @@
                         "nullable": true
                     },
                     "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "server_time": {
+                        "description": "Server clock (UTC) when the response was built; offset the cancel countdown by `server_time - Date.now()`.",
                         "type": "string",
                         "format": "date-time"
                     }
@@ -9076,7 +9243,13 @@
                         "nullable": true
                     },
                     "label_url": {
-                        "description": "Admin responses only",
+                        "description": "Admin responses only. EasyPost link; may expire.",
+                        "type": "string",
+                        "format": "uri",
+                        "nullable": true
+                    },
+                    "label_download_url": {
+                        "description": "Admin responses only. Signed link to our stored 4x6 PDF, valid 15 minutes, no bearer token needed.",
                         "type": "string",
                         "format": "uri",
                         "nullable": true
@@ -9317,6 +9490,10 @@
         {
             "name": "Categories",
             "description": "Categories"
+        },
+        {
+            "name": "Contact",
+            "description": "Contact"
         },
         {
             "name": "Public",

@@ -13,6 +13,7 @@ class ListProductsRequest extends BaseAdminRequest
             'category_id' => ['sometimes', 'integer', 'exists:categories,id'],
             'status' => ['sometimes', Rule::in(['draft', 'published', 'archived'])],
             'is_featured' => ['sometimes', 'boolean'],
+            'low_stock' => ['sometimes', 'boolean'],
             'sort' => ['sometimes', Rule::in([
                 'created_desc', 'price_asc', 'price_desc', 'stock_asc',
                 'name_asc',

@@ -115,7 +115,7 @@ class OrderInventoryService
                 }
             }
 
-            $price = (float) ($variant?->price ?? $product->final_price);
+            $price = $variant ? $variant->finalPriceFor($product) : (float) $product->final_price;
             $lineTotal = round($price * $quantity, 2);
             $subtotal = round($subtotal + $lineTotal, 2);
 

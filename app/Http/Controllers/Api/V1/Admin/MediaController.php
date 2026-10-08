@@ -7,6 +7,7 @@ use App\Http\Requests\Api\V1\Admin\ReorderMediaRequest;
 use App\Http\Requests\Api\V1\Admin\UploadMediaRequest;
 use App\Models\Category;
 use App\Models\Product;
+use App\Services\ImageSanitizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
 use OpenApi\Attributes as OA;
@@ -81,7 +82,7 @@ class MediaController extends Controller
 
         $uploaded = [];
         foreach ($files as $file) {
-            $media = $product->addMedia($file)
+            $media = $product->addMedia(app(ImageSanitizer::class)->clean($file))
                 ->usingFileName((string) Str::uuid().'.'.$file->guessExtension())
                 ->toMediaCollection('product_images');
 
@@ -151,7 +152,7 @@ class MediaController extends Controller
         }
 
         // singleFile() collection — Spatie auto-clears the old one
-        $media = $category->addMediaFromRequest('image')
+        $media = $category->addMedia(app(ImageSanitizer::class)->clean($request->file('image')))
             ->usingFileName((string) Str::uuid().'.'.$request->file('image')->guessExtension())
             ->toMediaCollection('category_image');
 

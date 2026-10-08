@@ -205,9 +205,9 @@ class DemoCommerceSeeder extends DemoSeeder
             Payment::updateOrCreate(
                 ['order_id' => $order->id],
                 [
-                    'transaction_id' => $scenario['payment_status'] === 'unpaid' ? null : 'txn_demo_'.$index,
+                    'transaction_id' => in_array($scenario['payment_status'], ['unpaid', 'voided'], true) ? null : 'txn_demo_'.$index,
                     'payment_provider' => 'stripe',
-                    'status' => $scenario['payment_status'] === 'unpaid'
+                    'status' => in_array($scenario['payment_status'], ['unpaid', 'voided'], true)
                         ? ($scenario['status'] === 'cancelled' ? 'failed' : 'pending')
                         : 'completed',
                     'amount' => $total,
@@ -292,7 +292,7 @@ class DemoCommerceSeeder extends DemoSeeder
                 'partial_refund' => false,
             ],
             5 => ['status' => 'delivered', 'payment_status' => 'paid', 'has_shipment' => true, 'shipment_status' => 'delivered', 'partial_refund' => false],
-            6 => ['status' => 'cancelled', 'payment_status' => 'failed', 'has_shipment' => false, 'shipment_status' => 'cancelled', 'partial_refund' => false],
+            6 => ['status' => 'cancelled', 'payment_status' => 'voided', 'has_shipment' => false, 'shipment_status' => 'cancelled', 'partial_refund' => false],
             7 => ['status' => 'refunded', 'payment_status' => 'refunded', 'has_shipment' => false, 'shipment_status' => null, 'partial_refund' => false],
             8 => ['status' => 'processing', 'payment_status' => 'paid', 'has_shipment' => false, 'shipment_status' => 'pre_transit', 'partial_refund' => true],
         };

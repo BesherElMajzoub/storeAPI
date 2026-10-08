@@ -19,6 +19,7 @@ class PublicOrderTrackingTest extends TestCase
         $order = Order::factory()->for($user)->create([
             'order_number' => 'OQ-10234',
             'status' => 'shipped',
+            'tracking_number' => '9400100000000000000001',
             'shipment_status' => 'in_transit',
             'estimated_delivery' => '2026-09-04',
             'tracking_events' => [[
@@ -38,6 +39,16 @@ class PublicOrderTrackingTest extends TestCase
             ->assertJsonPath('data.events.0.location', 'Los Angeles, CA')
             ->assertJsonMissingPath('data.shipping_address')
             ->assertJsonMissingPath('data.tracking_number');
+    }
+
+    public function test_an_order_without_a_label_has_no_shipment_status(): void
+    {
+        $user = User::factory()->create(['email' => 'early@example.com']);
+        $order = Order::factory()->for($user)->create(['status' => 'processing', 'tracking_number' => null, 'shipment_status' => null]);
+
+        $this->postJson('/api/v1/orders/track', ['order_number' => $order->order_number, 'email' => 'early@example.com'])
+            ->assertOk()
+            ->assertJsonPath('data.status', null);
     }
 
     public function test_not_found_and_email_mismatch_have_identical_responses(): void

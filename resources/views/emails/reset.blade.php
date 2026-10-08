@@ -1,25 +1,16 @@
-<!DOCTYPE html>
-<html>
+@extends('emails.layouts.brand')
 
-<head>
-    <title>Reset Password</title>
-</head>
+@section('title', 'Reset your password')
+@section('heading', 'Reset your password')
 
-<body style="font-family: sans-serif; line-height: 1.6; color: #333;">
-    <h2>Hello!</h2>
-    <p>You are receiving this email because we received a password reset request for your account.</p>
-    <p>
-        <a href="{{ $url }}"
-            style="display: inline-block; background: #4F66CD; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
-            Reset Password
-        </a>
-    </p>
-    <p>If you did not request a password reset, no further action is required.</p>
-    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-    <p style="font-size: 0.9em; color: #666;">
-        Link not working? Copy and paste this URL into your browser:<br>
-        <a href="{{ $url }}" style="color: #4F66CD;">{{ $url }}</a>
-    </p>
-</body>
-
-</html>
+@section('content')
+  <p style="margin: 0 0 20px 0;">We received a request to reset the password for your account.</p>
+  <p style="margin: 0 0 24px 0; text-align: center;">
+    <a href="{{ $url }}" style="display: inline-block; background-color: #262320; color: #ffffff; padding: 12px 26px; border-radius: 6px; text-decoration: none;">Reset password</a>
+  </p>
+  <p style="margin: 0 0 20px 0; color: #6B7280;">If you did not ask for this, you can ignore this email; your password stays the same.</p>
+  <p style="margin: 0; font-size: 12px; color: #9CA3AF;">
+    Link not working? Copy this address into your browser:<br />
+    <a href="{{ $url }}" style="color: #9CA3AF; word-break: break-all;">{{ $url }}</a>
+  </p>
+@endsection

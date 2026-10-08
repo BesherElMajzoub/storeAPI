@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Jobs\SendAdminAlert;
-use App\Mail\OrderPaidMail;
+use App\Mail\OrderConfirmedMail;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Services\OrderPaymentService;
@@ -62,6 +62,7 @@ class StripeWebhookController extends Controller
             'checkout.session.expired' => tap(true, fn () => $this->handleSessionExpired($event)),
             'charge.refunded' => tap(true, fn () => $this->handleChargeRefunded($event)),
             'refund.failed' => tap(true, fn () => $this->handleRefundFailed($event)),
+            'payment_intent.canceled' => tap(true, fn () => $this->handlePaymentIntentCanceled($event)),
             default => true,
         };
 
@@ -148,7 +149,7 @@ class StripeWebhookController extends Controller
 
             if ($updated === 0) {
                 $isLateCancelledPayment = (string) $lockedOrder->getRawOriginal('status') === 'cancelled'
-                    && in_array((string) $lockedOrder->getRawOriginal('payment_status'), ['unpaid', 'failed'], true);
+                    && in_array((string) $lockedOrder->getRawOriginal('payment_status'), ['unpaid', 'failed', 'voided'], true);
 
                 // refund_status other than 'none' means the money is already
                 // being (or has been) returned, so this is a replay.
@@ -217,7 +218,7 @@ class StripeWebhookController extends Controller
         $itemCount = (int) $order->items()->sum('quantity');
         $message = "🛒 New order {$order->order_number} — \${$order->total} — {$itemCount} items";
         SendAdminAlert::dispatch($message)->onQueue('notifications');
-        Mail::to($order->user()->value('email'))->queue(new OrderPaidMail($order));
+        Mail::to($order->user()->value('email'))->queue(new OrderConfirmedMail($order));
 
         Log::info("Order {$order->order_number} marked as paid via Stripe.");
 
@@ -253,7 +254,7 @@ class StripeWebhookController extends Controller
 
             $order->update([
                 'status' => 'cancelled',
-                'payment_status' => 'failed',
+                'payment_status' => 'voided',
                 'cancelled_at' => now(),
             ]);
 
@@ -307,6 +308,26 @@ class StripeWebhookController extends Controller
                 'full_refund' => $isFullRefund,
             ]);
         });
+    }
+
+    /**
+     * A card hold was cancelled in Stripe (expired, or cancelled in the
+     * dashboard) before the app captured it: put the order on hold. Holds
+     * the app releases itself belong to cancelled orders and are ignored.
+     */
+    private function handlePaymentIntentCanceled(Event $event): void
+    {
+        $intentId = $event->data->object->id ?? null;
+        if (! $intentId) {
+            return;
+        }
+
+        $order = Order::query()->where('stripe_payment_intent_id', $intentId)
+            ->where('status', 'processing')->where('payment_status', 'authorized')->first();
+
+        if ($order) {
+            app(OrderPaymentService::class)->markCaptureFailed($order, 'the card hold was cancelled in Stripe');
+        }
     }
 
     private function handleRefundFailed(Event $event): void

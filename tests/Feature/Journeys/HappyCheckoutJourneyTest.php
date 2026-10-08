@@ -3,7 +3,7 @@
 namespace Tests\Feature\Journeys;
 
 use App\Contracts\EasyPostServiceInterface;
-use App\Mail\OrderPaidMail;
+use App\Mail\OrderConfirmedMail;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\StripeCheckoutService;
@@ -152,7 +152,7 @@ class HappyCheckoutJourneyTest extends TestCase
             'payment_status' => 'paid',
         ]);
         $this->assertSame(9, $product->fresh()->stock_qty);
-        Mail::assertQueued(OrderPaidMail::class, 1);
+        Mail::assertQueued(OrderConfirmedMail::class, 1);
 
         // Step 7: the order is visible in "my orders" with the final state.
         $myOrders = $this->withToken($token)->getJson('/api/v1/orders')->assertOk();

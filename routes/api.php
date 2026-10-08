@@ -92,6 +92,9 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
 
     // --- USER PROTECTED ---
     Route::middleware(['auth:sanctum', 'active.user'])->group(function () {
+        // The signed-in customer's own contact messages and our replies
+        Route::get('me/contact-messages', [ContactMessageController::class, 'mine']);
+
         // Orders
         Route::post('orders', [OrderController::class, 'store']);
         Route::get('orders', [OrderController::class, 'index']);
@@ -124,6 +127,10 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         Route::get('wishlist/check/{productId}', [WishlistController::class, 'check']);
         Route::delete('wishlist/{productId}', [WishlistController::class, 'destroy']);
     });
+
+    // Signed link instead of a bearer token, so a phone can open the label PDF.
+    Route::get('admin/shipments/{order}/label', [AdminShippingController::class, 'downloadLabel'])
+        ->middleware('signed')->name('admin.shipments.label');
 
     // --- ADMIN ---
     Route::prefix('admin')->middleware(['auth:sanctum', 'active.user', 'can:admin-access', 'audit.admin'])->group(function () {
@@ -197,6 +204,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
 
         // Contact Messages
         Route::apiResource('contact-messages', AdminContactMessageController::class)->except(['store']);
+        Route::post('contact-messages/{id}/replies', [AdminContactMessageController::class, 'reply']);
         Route::patch('contact-messages/{id}/status', [AdminContactMessageController::class, 'updateStatus']);
 
         // Inspired Leads

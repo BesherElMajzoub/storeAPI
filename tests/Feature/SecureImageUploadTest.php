@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\ImageSanitizer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -54,6 +55,33 @@ class SecureImageUploadTest extends TestCase
         $this->assertFileExists($conversionPath);
         $this->assertStringNotContainsString('<?php', file_get_contents($conversionPath));
         $this->assertSame('webp', pathinfo($conversionPath, PATHINFO_EXTENSION));
+    }
+
+    public function test_sanitizer_strips_embedded_metadata_and_keeps_a_valid_image(): void
+    {
+        $file = UploadedFile::fake()->image('photo.jpg', 40, 40);
+        $jpeg = file_get_contents($file->getPathname());
+        // An APP1 (EXIF) segment holding a recognisable GPS marker, right after the JPEG start marker.
+        $payload = 'Exif'.chr(0).chr(0).'SECRET-GPS-MARKER';
+        file_put_contents($file->getPathname(), substr($jpeg, 0, 2).chr(0xFF).chr(0xE1).pack('n', strlen($payload) + 2).$payload.substr($jpeg, 2));
+        $this->assertStringContainsString('SECRET-GPS-MARKER', file_get_contents($file->getPathname()));
+
+        $clean = app(ImageSanitizer::class)->clean($file);
+
+        $this->assertStringNotContainsString('SECRET-GPS-MARKER', file_get_contents($clean->getPathname()));
+        $this->assertSame([40, 40], array_slice(getimagesize($clean->getPathname()), 0, 2));
+    }
+
+    public function test_card_conversion_is_three_by_four_portrait(): void
+    {
+        $product = Product::factory()->create();
+
+        $this->post("/api/v1/admin/products/{$product->id}/images", ['images' => [UploadedFile::fake()->image('wide.jpg', 400, 300)]], ['Accept' => 'application/json'])
+            ->assertCreated();
+
+        $media = Media::query()->where('model_id', $product->id)->firstOrFail();
+        [$width, $height] = getimagesize($media->getPath('product_card'));
+        $this->assertSame([600, 800], [$width, $height]);
     }
 
     public function test_product_image_upload_returns_only_the_documented_uploaded_image_array(): void

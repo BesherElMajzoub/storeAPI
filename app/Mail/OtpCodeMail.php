@@ -21,11 +21,12 @@ class OtpCodeMail extends Mailable
     public function build()
     {
         $purposeLabel = match ($this->purpose) {
-            'password_reset' => 'Password reset',
-            default => ucfirst(str_replace('_', ' ', $this->purpose)),
+            'password_reset' => 'reset your password',
+            'email_verification' => 'verify your email',
+            default => str_replace('_', ' ', $this->purpose),
         };
 
-        return $this->subject(config('otp.email_subject', 'Your verification code'))
+        return $this->subject(config('otp.email_subject', 'Your Otantik Queen verification code'))
             ->view('emails.otp')
             ->with([
                 'purposeLabel' => $purposeLabel,

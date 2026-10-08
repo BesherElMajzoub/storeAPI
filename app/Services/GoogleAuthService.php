@@ -67,6 +67,13 @@ class GoogleAuthService
         ];
     }
 
+    private function markEmailVerified(User $user, string $googleEmail): void
+    {
+        if ($user->email_verified_at === null && strcasecmp($user->email, $googleEmail) === 0) {
+            $user->forceFill(['email_verified_at' => now()])->save();
+        }
+    }
+
     /**
      * Find or create a user from verified Google data.
      * Handles: new users, existing users (link accounts), and existing social accounts.
@@ -86,15 +93,21 @@ class GoogleAuthService
                 'avatar_url' => $googleData['avatar_url'],
             ]);
 
-            return $socialAccount->user;
+            /** @var User $linkedUser */
+            $linkedUser = $socialAccount->user;
+            $this->markEmailVerified($linkedUser, $googleData['email']);
+
+            return $linkedUser;
         }
 
         // 2. No social account → look for user with same email
         $user = User::where('email', $googleData['email'])->first();
 
         if ($user) {
-            // Link the Google account to the existing user
+            // Link the Google account to the existing user. Google has
+            // verified this address, so the account is verified too.
             $this->createSocialAccount($user, $googleData);
+            $this->markEmailVerified($user, $googleData['email']);
 
             Log::info('Google account linked to existing user', [
                 'user_id' => $user->id,

@@ -63,6 +63,19 @@ class ReviewTest extends TestCase
         $this->assertDatabaseCount('reviews', 0);
     }
 
+    public function test_purchase_is_checked_before_an_existing_review(): void
+    {
+        Review::create([
+            'user_id' => $this->user->id, 'product_id' => $this->product->id,
+            'rating' => 4, 'comment' => 'An older review left without a purchase.', 'status' => 'approved',
+        ]);
+
+        $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/products/{$this->product->id}/reviews", ['rating' => 5, 'comment' => 'Trying to review it again.'])
+            ->assertStatus(403)
+            ->assertJsonPath('errors.code', 'REVIEW_PURCHASE_REQUIRED');
+    }
+
     /**
      * Test that a user can review a product after purchasing it and order is delivered.
      */
@@ -100,6 +113,10 @@ class ReviewTest extends TestCase
 
     public function test_duplicate_review_is_the_only_submission_conflict(): void
     {
+        Order::factory()->create(['user_id' => $this->user->id, 'status' => 'delivered'])->items()->create([
+            'product_id' => $this->product->id, 'product_name' => $this->product->name,
+            'price' => 150.00, 'quantity' => 1, 'total' => 150.00,
+        ]);
         Review::create([
             'user_id' => $this->user->id,
             'product_id' => $this->product->id,

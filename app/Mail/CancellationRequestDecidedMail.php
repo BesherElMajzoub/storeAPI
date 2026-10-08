@@ -34,6 +34,8 @@ class CancellationRequestDecidedMail extends Mailable implements ShouldQueue
                 'orderNumber' => $order->order_number,
                 'adminNote' => $this->cancellationRequest->admin_note,
                 'decidedAt' => $this->cancellationRequest->decided_at,
+                // Money was only taken if the payment was captured; otherwise the card hold is released.
+                'moneyOutcome' => $order->paid_at !== null || $order->refund_status === 'succeeded' ? 'refund' : 'released',
             ]);
     }
 }

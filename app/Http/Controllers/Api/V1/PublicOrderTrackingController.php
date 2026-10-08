@@ -44,7 +44,8 @@ class PublicOrderTrackingController extends Controller
             'message' => 'Tracking information retrieved.',
             'data' => [
                 'order_number' => $order->order_number,
-                'status' => $order->shipment_status ?? 'pre_transit',
+                // No label yet means nothing to track, not "label created".
+                'status' => $order->tracking_number ? ($order->shipment_status ?? 'pre_transit') : null,
                 'estimated_delivery' => $order->estimated_delivery?->format('Y-m-d'),
                 'events' => $order->tracking_events ?? [],
             ],

@@ -93,6 +93,12 @@ class FakeEasyPostService implements EasyPostServiceInterface
         return $shipment;
     }
 
+    public function pdfLabelUrl(string $shipmentId): string
+    {
+        return $this->retrieveShipment($shipmentId)->postage_label->label_url
+            ?? "https://example.test/mock-labels/{$shipmentId}.pdf";
+    }
+
     public function retrieveRate(string $rateId): object
     {
         $rate = Cache::get($this->rateKey($rateId));

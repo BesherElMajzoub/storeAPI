@@ -12,7 +12,7 @@ use App\Http\Requests\Api\V1\StoreCancellationRequestRequest;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Resources\OrderResource;
 use App\Jobs\SendAdminAlert;
-use App\Mail\OrderPaidMail;
+use App\Mail\OrderConfirmedMail;
 use App\Models\Coupon;
 use App\Models\CouponUsage;
 use App\Models\Order;
@@ -68,7 +68,7 @@ class OrderController extends Controller
             ->latest()
             ->paginate(10);
 
-        return OrderResource::collection($orders);
+        return OrderResource::collection($orders)->additional(['server_time' => now()->utc()->toIso8601String()]);
     }
 
     #[OA\Get(
@@ -525,7 +525,7 @@ class OrderController extends Controller
             });
 
             SendAdminAlert::dispatch("New free order {$order->order_number}")->onQueue('notifications');
-            Mail::to($order->user()->value('email'))->queue(new OrderPaidMail($order));
+            Mail::to($order->user()->value('email'))->queue(new OrderConfirmedMail($order));
 
             return response()->json([
                 'success' => true,
@@ -596,7 +596,7 @@ class OrderController extends Controller
 
             // Updating the status invokes OrderObserver, which idempotently
             // releases the reserved inventory before the order is hidden.
-            $lockedOrder->update(['status' => 'cancelled', 'payment_status' => 'failed']);
+            $lockedOrder->update(['status' => 'cancelled', 'payment_status' => 'voided']);
             $lockedOrder->delete();
         }, 3);
     }
@@ -681,7 +681,7 @@ class OrderController extends Controller
             // by OrderObserver, which queues the hold release or refund.
             $locked->update(array_merge(
                 ['status' => 'cancelled', 'cancelled_at' => now()],
-                $locked->payment_status === 'unpaid' ? ['payment_status' => 'failed'] : [],
+                $locked->payment_status === 'unpaid' ? ['payment_status' => 'voided'] : [],
             ));
 
             return $locked;

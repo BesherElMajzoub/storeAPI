@@ -23,6 +23,12 @@ class ShipmentTrackingService
             ? $tracker->status
             : 'unknown';
 
+        // Carriers report "unknown" until the first scan: the label exists,
+        // so that is pre_transit, and it never erases a status we already know.
+        if ($status === 'unknown') {
+            $status = in_array($order->shipment_status, [null, 'unknown'], true) ? 'pre_transit' : $order->shipment_status;
+        }
+
         $events = $this->events($tracker);
 
         $order->forceFill([

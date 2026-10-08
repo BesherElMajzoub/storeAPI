@@ -21,6 +21,9 @@ class UpdateOrderStatusRequest extends BaseAdminRequest
                 'unpaid',
                 'failed',
             ])],
+            // A parcel shipped without a purchased label (e.g. at the counter).
+            'tracking_number' => ['sometimes', 'string', 'max:64', 'prohibited_unless:status,shipped', 'required_with:shipping_carrier'],
+            'shipping_carrier' => ['sometimes', 'string', 'max:64', 'prohibited_unless:status,shipped', 'required_with:tracking_number'],
         ];
     }
 

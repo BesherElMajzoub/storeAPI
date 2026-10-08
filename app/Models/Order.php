@@ -14,9 +14,6 @@ class Order extends Model
 {
     use HasFactory, SoftDeletes;
 
-    /** Hours after checkout during which a customer may cancel without admin approval. */
-    public const CUSTOMER_CANCEL_WINDOW_HOURS = 3;
-
     protected $attributes = [
         'refund_status' => 'none',
     ];
@@ -28,7 +25,8 @@ class Order extends Model
         'stripe_session_id', 'stripe_payment_intent_id', 'authorized_at',
         'paid_at', 'cancelled_at', 'refunded_at', 'stock_reserved_at', 'stock_released_at',
         'easypost_shipment_id', 'shipping_rate_id', 'shipping_carrier', 'shipping_service',
-        'tracking_number', 'shipment_status', 'tracking_url', 'label_url', 'shipped_at', 'fulfillment_started_at',
+        'tracking_number', 'shipment_status', 'tracking_url', 'label_url', 'label_path', 'shipped_at', 'fulfillment_started_at',
+        'fulfillment_hold', 'capture_attempts', 'capture_failed_at',
         'estimated_delivery', 'tracking_events',
     ];
 
@@ -50,6 +48,9 @@ class Order extends Model
         'stock_released_at' => 'datetime',
         'shipped_at' => 'datetime',
         'fulfillment_started_at' => 'datetime',
+        'fulfillment_hold' => 'boolean',
+        'capture_attempts' => 'integer',
+        'capture_failed_at' => 'datetime',
         'estimated_delivery' => 'date:Y-m-d',
         'tracking_events' => 'array',
     ];
@@ -80,17 +81,23 @@ class Order extends Model
     public function customerCancelDeadline(): ?Carbon
     {
         if ($this->status === 'pending_payment' && $this->payment_status === 'unpaid') {
-            return $this->created_at?->copy()->addHours(self::CUSTOMER_CANCEL_WINDOW_HOURS);
+            return $this->created_at?->copy()->addMinutes(self::directCancelWindowMinutes());
         }
 
         if ($this->status === 'processing'
             && in_array($this->payment_status, ['authorized', 'paid'], true)
             && ! $this->tracking_number
             && ! $this->fulfillment_started_at) {
-            return ($this->authorized_at ?? $this->paid_at)?->copy()->addHours(self::CUSTOMER_CANCEL_WINDOW_HOURS);
+            return ($this->authorized_at ?? $this->paid_at)?->copy()->addMinutes(self::directCancelWindowMinutes());
         }
 
         return null;
+    }
+
+    /** Minutes after checkout during which a customer may cancel without admin approval. */
+    public static function directCancelWindowMinutes(): int
+    {
+        return max(1, (int) config('orders.direct_cancel_window_minutes', 180));
     }
 
     public function canBeCancelledByCustomer(): bool
@@ -111,6 +118,11 @@ class Order extends Model
     {
         if (in_array($this->status, ['shipped', 'delivered', 'cancelled', 'refunded'], true)) {
             return ['mode' => 'none', 'reason' => $this->status, 'direct_until' => null];
+        }
+
+        // A held payment that could not be captured: the shop contacts the customer.
+        if ($this->fulfillment_hold && $this->payment_status === 'failed') {
+            return ['mode' => 'none', 'reason' => 'payment_failed', 'direct_until' => null];
         }
 
         $deadline = $this->customerCancelDeadline();

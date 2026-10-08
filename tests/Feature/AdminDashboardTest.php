@@ -37,8 +37,31 @@ class AdminDashboardTest extends TestCase
             ->getJson('/api/v1/admin/dashboard')
             ->assertOk();
 
-        $response->assertJsonPath('current_orders_count', 3);
+        $response->assertJsonPath('current_orders_count', 1);
         $response->assertJsonPath('alerts.pending_orders', 3);
+    }
+
+    public function test_each_dashboard_count_matches_its_list_filter(): void
+    {
+        Order::factory()->count(2)->create(['status' => 'processing', 'payment_status' => 'paid']);
+        Order::factory()->create(['status' => 'processing', 'payment_status' => 'authorized']);
+        Order::factory()->create(['status' => 'processing', 'payment_status' => 'failed', 'fulfillment_hold' => true]);
+        Order::factory()->create(['status' => 'pending_payment', 'payment_status' => 'unpaid']);
+        Order::factory()->create(['status' => 'shipped', 'payment_status' => 'paid']);
+        Product::factory()->create(['stock_qty' => 1]);
+        Product::factory()->create(['stock_qty' => 40]);
+        $admin = $this->admin();
+
+        $dashboard = $this->actingAs($admin, 'sanctum')->getJson('/api/v1/admin/dashboard')->assertOk();
+
+        $this->assertSame(3, $dashboard->json('current_orders_count'));
+        $this->assertSame(1, $dashboard->json('alerts.payment_holds'));
+        foreach (['current_orders_count' => 'current_orders_count', 'pending_orders' => 'alerts.pending_orders', 'payment_holds' => 'alerts.payment_holds'] as $key => $path) {
+            $list = $this->getJson('/api/v1/admin/orders?'.$dashboard->json("filters.{$key}"))->assertOk();
+            $this->assertSame($dashboard->json($path), $list->json('data.meta.total'), $key);
+        }
+        $products = $this->getJson('/api/v1/admin/products?'.$dashboard->json('filters.low_stock'))->assertOk();
+        $this->assertSame($dashboard->json('alerts.low_stock'), $products->json('data.meta.total'));
     }
 
     public function test_dashboard_month_sales_total_excludes_unpaid_and_cancelled_orders(): void

@@ -15,6 +15,8 @@ class AdminOrderResource extends OrderResource
             'shipping_rate_id' => $this->shipping_rate_id,
             'carrier_shipping_cost' => $this->carrier_shipping_cost === null ? null : (float) $this->carrier_shipping_cost,
             'label_url' => $this->label_url,
+            'fulfillment_hold' => (bool) $this->fulfillment_hold,
+            'capture_failed_at' => $this->capture_failed_at?->toIso8601String(),
             'shipment' => $this->shipmentPayload(true),
             'user' => $this->whenLoaded('user'),
             'payment' => $this->whenLoaded('payment'),

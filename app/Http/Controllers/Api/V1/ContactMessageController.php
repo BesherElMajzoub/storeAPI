@@ -4,13 +4,46 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\StoreContactMessageRequest;
+use App\Http\Resources\ContactMessageReplyResource;
 use App\Jobs\SendAdminAlert;
 use App\Models\ContactMessage;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use OpenApi\Attributes as OA;
 
 class ContactMessageController extends Controller
 {
+    #[OA\Get(
+        path: '/api/v1/me/contact-messages',
+        summary: 'My contact messages',
+        description: 'Messages sent with the signed-in customer\'s email, newest first, with our replies.',
+        security: [['bearerAuth' => []]],
+        tags: ['Contact']
+    )]
+    #[OA\Response(response: 200, description: 'List of {id, subject, message, status, replies[{id, admin_name, body, created_at}], created_at, updated_at}')]
+    #[OA\Response(response: 401, ref: '#/components/responses/UnauthorizedResponse')]
+    public function mine(Request $request): JsonResponse
+    {
+        $messages = ContactMessage::query()
+            ->where('email', $request->user()->email)
+            ->with('replies.admin')
+            ->latest()
+            ->limit(100)
+            ->get()
+            ->map(fn (ContactMessage $message) => [
+                'id' => $message->id,
+                'subject' => $message->subject,
+                'message' => $message->message,
+                'status' => $message->status,
+                'replies' => ContactMessageReplyResource::collection($message->replies)->resolve(),
+                'created_at' => $message->created_at?->toIso8601String(),
+                'updated_at' => $message->updated_at?->toIso8601String(),
+            ]);
+
+        return response()->json(['success' => true, 'message' => 'Messages retrieved.', 'data' => $messages, 'errors' => null]);
+    }
+
     #[OA\Post(
         path: '/api/v1/contact-messages',
         summary: 'Submit Contact Us Form',
@@ -54,7 +87,7 @@ class ContactMessageController extends Controller
             $message = "📩 New message from {$contactMessage->name} ({$contactMessage->email}): \"{$contactMessage->subject}\"";
             SendAdminAlert::dispatch($message)->onQueue('notifications');
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('Contact form: admin alert failed, message was still saved.', [
+            Log::warning('Contact form: admin alert failed, message was still saved.', [
                 'contact_message_id' => $contactMessage->id,
                 'error' => $e->getMessage(),
             ]);
