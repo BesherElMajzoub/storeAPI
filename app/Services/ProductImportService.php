@@ -298,9 +298,8 @@ class ProductImportService
         }
 
         $state = $this->effectiveProductState($data, $existing);
-        $errors = array_merge_recursive($errors, $this->productStateErrors($state, [
+        $errors = array_merge_recursive($errors, $this->productStateErrors($state, $data, [
             'creating' => ! $existing,
-            'price_given' => array_key_exists('price', $data),
             'category_checked' => ! isset($errors['category_slug']),
         ]));
 
@@ -317,10 +316,10 @@ class ProductImportService
         return array_merge($base, array_intersect_key($data, $base));
     }
 
-    private function productStateErrors(array $state, array $context): array
+    private function productStateErrors(array $state, array $data, array $context): array
     {
         $errors = [];
-        if ($context['creating'] && ! $context['price_given']) {
+        if ($context['creating'] && ! array_key_exists('price', $data)) {
             $errors['price'][] = 'The price field is required.';
         }
         if (is_numeric($state['discount_price']) && is_numeric($state['price'])
@@ -328,10 +327,18 @@ class ProductImportService
             $errors['discount_price'][] = 'The discount price must be less than price.';
         }
         if ($state['status'] === 'published') {
-            if ($context['category_checked'] && $state['category_id'] === null) {
+            // Like UpdateProductRequest: the full publish check runs on create or when the row
+            // sends status; otherwise only publish fields the row touches are checked, so
+            // legacy published products with gaps can still receive unrelated updates.
+            $checkAll = $context['creating'] || array_key_exists('status', $data);
+            if ($context['category_checked'] && $state['category_id'] === null
+                && ($checkAll || array_key_exists('category_id', $data))) {
                 $errors['category_slug'][] = 'Published products require a category.';
             }
             foreach (self::DIMENSIONS as $field) {
+                if (! ($checkAll || array_key_exists($field, $data))) {
+                    continue;
+                }
                 if (! is_numeric($state[$field]) || (float) $state[$field] <= 0) {
                     $errors[$field][] = 'Published products require complete shipping weight and dimensions.';
                 }

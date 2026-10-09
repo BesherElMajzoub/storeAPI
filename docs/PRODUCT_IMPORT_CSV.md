@@ -59,11 +59,16 @@ Set `type` to `product` (case-insensitive).
 
 ### Publish rules use the final product state
 
-Publish rules are checked against the product as it will be after the import: the stored values, overlaid with the values the row provides (including explicit `NULL`). If the final status is `published`, the final product must have a category and all four of `weight_oz`, `length_in`, `width_in`, `height_in` greater than 0. Consequences:
+Publish rules are checked against the product as it will be after the import: the stored values, overlaid with the values the row provides (including explicit `NULL`). A published product needs a category and all four of `weight_oz`, `length_in`, `width_in`, `height_in` greater than 0. Which fields are checked:
+
+- **New product, or the row has a `status` value of `published`:** all publish fields are checked (same as the admin update endpoint when `status=published` is sent).
+- **Existing published product, row without `status`:** only the publish fields the row itself sets are checked, so an import can't break a published product, and a published product with incomplete data can still receive unrelated updates (e.g. stock or price).
+
+Consequences:
 
 - A row containing only `type,sku,name,status=published` publishes an existing product that already has a category and complete dimensions.
 - `weight_oz=NULL` (or `category_slug=NULL`) on a product that is or will be published is rejected.
-- A product that is already published but is missing a category or a dimension cannot be updated by the import until the row supplies the missing values (or sets a non-published status).
+- A published product that is missing a dimension can still have its `stock_qty` updated; sending `status=published` for it is rejected until the row supplies the missing values.
 
 Messages match the admin product endpoints: `Published products require a category.` (key `category_slug`) and `Published products require complete shipping weight and dimensions.` (key per dimension).
 

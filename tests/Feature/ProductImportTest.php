@@ -210,6 +210,29 @@ class ProductImportTest extends TestCase
         $this->assertDatabaseMissing('products', ['sku' => 'NEW-1']);
     }
 
+    public function test_legacy_published_product_with_gaps_accepts_unrelated_updates(): void
+    {
+        $product = Product::factory()->create(['sku' => 'L-1', 'status' => 'published', 'category_id' => null, 'height_in' => null]);
+
+        $this->import("type,sku,name,stock_qty\nproduct,L-1,Legacy,4")
+            ->assertOk()
+            ->assertJsonPath('data.committed', true);
+
+        $this->assertSame(4, $product->fresh()->stock_qty);
+    }
+
+    public function test_sending_published_status_checks_all_publish_fields_on_update(): void
+    {
+        $product = Product::factory()->create(['sku' => 'L-2', 'status' => 'published', 'category_id' => null, 'height_in' => null]);
+
+        $this->import("type,sku,name,status\nproduct,L-2,Legacy,published")
+            ->assertUnprocessable()
+            ->assertJsonPath('data.rows.0.errors.category_slug.0', 'Published products require a category.')
+            ->assertJsonPath('data.rows.0.errors.height_in.0', 'Published products require complete shipping weight and dimensions.');
+
+        $this->assertNotSame('Legacy', $product->fresh()->name);
+    }
+
     public function test_variant_stock_sum_exceeding_product_stock_is_rejected(): void
     {
         $message = "The total stock quantity of variants (50) cannot exceed the product's stock quantity (1).";

@@ -23,7 +23,7 @@ Statuses: `NOT-STARTED` -> `IN-PROGRESS` -> `READY-FOR-REVIEW` ->
 | 05 Security | `results/05-security.md` | APPROVED | `reviews/B3full-B4-review.md` | 0 |
 | 06 Final verification | `results/06-final-verification.md` | APPROVED | `reviews/B5-final-review.md` | 0 |
 | 08 Post-approval audit | `results/08-post-approval-audit.md` | READY-FOR-REVIEW (audit) | — | 8 |
-| 09 CSV import fix | `results/09-csv-import-fix.md` (branch `fix/csv-import`) | READY-FOR-REVIEW | — | 0 |
+| 09 CSV import fix | `results/09-csv-import-fix.md` (branch `fix/csv-import`) | APPROVED | `reviews/09-csv-import-fix-review.md` | 0 |
 
 ## Open decisions (NEEDS-DECISION)
 
@@ -53,3 +53,4 @@ Statuses: `NOT-STARTED` -> `IN-PROGRESS` -> `READY-FOR-REVIEW` ->
 2026-09-27 - B4 completed: clean-code report corrected, PHPStan level 5 clean with baseline reduced to 208 entries, J01-J15 coverage complete (J08 carried by real concurrency test), refreshed Newman collection passed 11/11 assertions. B5 review fixes applied: J01/J02/J03/J05/J06/J07/J09/J10/J11/J12/J13/J15 are now real multi-step HTTP chains; category reorder strict-mode failure fixed with regression coverage; actual `postman_collection.json` passed 39 requests, 39 test scripts, 42 prerequest scripts and 66 assertions. Final verification is ready for review.
 2026-09-27 - REVIEWER: B5 independently re-verified (not just re-read) - reran the full suite (244/1390), reran `RemainingJourneysTest` in isolation (12/136), reverted the category-reorder fix and reproduced the exact pre-fix SQL error, started a live `php artisan serve` against a freshly seeded DB and reran Newman against the real `postman_collection.json` myself (39/39/66/0, matching exactly). Every journey re-read against the original phase 04 spec line by line. ALL 13 PHASES NOW APPROVED - see `reviews/B5-final-review.md`. Quality pass complete; branch `ai/quality-pass` ready for owner review and merge.
 2026-10-09 - Phase 09 CSV product import fix on branch `fix/csv-import`: A1-A4 (category wipe, variant re-parenting, publish rules on final state, variant stock sum), B1-B5, C1 (15,002 -> 13 queries for 5,000 rows), D1-D7, plus CSV-X1 (NULL in NOT NULL columns) and CSV-X2 (DB errors leaked SQL as 422 file errors). 32 import tests, journeys green; full-suite and PHPStan notes in the result file. READY-FOR-REVIEW - 4dcf82f, 44c443d, 06e792b, 5bac3fc
+2026-10-09 - REVIEWER: phase 09 approved. Reviewer fix R1: publish rule on import updates now checks all fields only on create or when status is sent; otherwise only touched publish fields (legacy published products can still get stock/price updates). 46 passed (283 assertions) for import + journeys. See reviews/09-csv-import-fix-review.md.
