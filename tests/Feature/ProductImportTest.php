@@ -8,6 +8,8 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 class ProductImportTest extends TestCase
@@ -110,6 +112,179 @@ class ProductImportTest extends TestCase
             ->assertJsonPath('message', 'CSV files may contain at most 5,000 data rows.');
 
         $this->assertDatabaseCount('products', 0);
+    }
+
+    public function test_update_without_category_slug_keeps_existing_category(): void
+    {
+        $category = Category::create(['name' => 'Dresses', 'slug' => 'dresses']);
+        $product = Product::factory()->create(['sku' => 'P-1', 'category_id' => $category->id, 'status' => 'published']);
+
+        $this->import("type,sku,name,price,stock_qty\nproduct,P-1,Renamed,10,5")
+            ->assertOk()
+            ->assertJsonPath('data.committed', true)
+            ->assertJsonPath('data.rows.0.action', 'update');
+
+        $product->refresh();
+        $this->assertSame('Renamed', $product->name);
+        $this->assertSame($category->id, $product->category_id);
+        $this->assertSame('published', $product->status);
+    }
+
+    public function test_null_category_slug_clears_category_on_draft_product(): void
+    {
+        $category = Category::create(['name' => 'Dresses', 'slug' => 'dresses']);
+        $product = Product::factory()->create(['sku' => 'P-2', 'category_id' => $category->id, 'status' => 'draft']);
+
+        $this->import("type,sku,name,price,category_slug\nproduct,P-2,Draft,10,NULL")
+            ->assertOk()
+            ->assertJsonPath('data.committed', true);
+
+        $this->assertNull($product->fresh()->category_id);
+    }
+
+    public function test_null_category_slug_on_published_product_is_rejected(): void
+    {
+        $category = Category::create(['name' => 'Dresses', 'slug' => 'dresses']);
+        $product = Product::factory()->create(['sku' => 'P-3', 'category_id' => $category->id, 'status' => 'published']);
+
+        $this->import("type,sku,name,price,category_slug\nproduct,P-3,Published,10,NULL")
+            ->assertUnprocessable()
+            ->assertJsonPath('data.rows.0.action', 'error')
+            ->assertJsonPath('data.rows.0.errors.category_slug.0', 'Published products require a category.');
+
+        $this->assertSame($category->id, $product->fresh()->category_id);
+    }
+
+    public function test_existing_variant_sku_cannot_move_to_another_product(): void
+    {
+        $productA = Product::factory()->create(['sku' => 'A', 'stock_qty' => 10]);
+        Product::factory()->create(['sku' => 'B', 'stock_qty' => 10]);
+        $variant = $productA->variants()->create(['sku' => 'V-1', 'name' => 'V', 'stock_qty' => 1]);
+
+        $this->import("type,sku,name,parent_sku\nvariant,V-1,V,B")
+            ->assertUnprocessable()
+            ->assertJsonPath('data.rows.0.action', 'error')
+            ->assertJsonPath('data.rows.0.errors.sku.0', 'SKU belongs to a variant of another product (A).');
+
+        $this->assertSame($productA->id, $variant->fresh()->product_id);
+    }
+
+    public function test_null_dimension_on_published_product_is_rejected(): void
+    {
+        Category::create(['name' => 'X', 'slug' => 'x']);
+        $product = Product::factory()->create(['sku' => 'D-1', 'status' => 'published', 'weight_oz' => 12]);
+
+        $this->import("type,sku,name,price,category_slug,weight_oz\nproduct,D-1,D,10,x,NULL")
+            ->assertUnprocessable()
+            ->assertJsonPath('data.rows.0.errors.weight_oz.0', 'Published products require complete shipping weight and dimensions.');
+
+        $this->assertSame('12.00', $product->fresh()->weight_oz);
+    }
+
+    public function test_publishing_existing_product_uses_stored_dimensions_and_category(): void
+    {
+        $category = Category::create(['name' => 'Dresses', 'slug' => 'dresses']);
+        $product = Product::factory()->create(['sku' => 'E-1', 'category_id' => $category->id, 'status' => 'draft']);
+
+        $this->import("type,sku,name,price,status\nproduct,E-1,E,10,published")
+            ->assertOk()
+            ->assertJsonPath('data.rows.0.action', 'update');
+
+        $product->refresh();
+        $this->assertSame('published', $product->status);
+        $this->assertSame($category->id, $product->category_id);
+    }
+
+    public function test_creating_published_product_without_dimensions_is_rejected(): void
+    {
+        Category::create(['name' => 'Dresses', 'slug' => 'dresses']);
+
+        $this->import("type,sku,name,price,status,category_slug\nproduct,NEW-1,New,10,published,dresses")
+            ->assertUnprocessable()
+            ->assertJsonPath('data.rows.0.errors.weight_oz.0', 'Published products require complete shipping weight and dimensions.')
+            ->assertJsonPath('data.rows.0.errors.height_in.0', 'Published products require complete shipping weight and dimensions.');
+
+        $this->assertDatabaseMissing('products', ['sku' => 'NEW-1']);
+    }
+
+    public function test_variant_stock_sum_exceeding_product_stock_is_rejected(): void
+    {
+        $message = "The total stock quantity of variants (50) cannot exceed the product's stock quantity (1).";
+
+        $this->import(implode("\n", [
+            'type,sku,name,parent_sku,price,stock_qty,status',
+            'product,S-1,S,,10,1,draft',
+            'variant,S-1-A,A,S-1,,50,',
+        ]))
+            ->assertUnprocessable()
+            ->assertJsonPath('data.summary.errors', 2)
+            ->assertJsonPath('data.rows.0.errors.stock_qty.0', $message)
+            ->assertJsonPath('data.rows.1.errors.stock_qty.0', $message);
+
+        $this->assertDatabaseMissing('products', ['sku' => 'S-1']);
+        $this->assertDatabaseMissing('product_variants', ['sku' => 'S-1-A']);
+    }
+
+    public function test_variant_stock_check_includes_existing_variants_not_in_csv(): void
+    {
+        $product = Product::factory()->create(['sku' => 'S-2', 'stock_qty' => 10]);
+        $product->variants()->create(['sku' => 'S-2-A', 'name' => 'A', 'stock_qty' => 8]);
+
+        $this->import("type,sku,name,parent_sku,stock_qty\nvariant,S-2-B,B,S-2,5")
+            ->assertUnprocessable()
+            ->assertJsonPath('data.rows.0.errors.stock_qty.0', "The total stock quantity of variants (13) cannot exceed the product's stock quantity (10).");
+
+        $this->assertDatabaseMissing('product_variants', ['sku' => 'S-2-B']);
+    }
+
+    public function test_lowering_product_stock_below_existing_variant_sum_is_rejected(): void
+    {
+        $product = Product::factory()->create(['sku' => 'S-3', 'stock_qty' => 10]);
+        $product->variants()->create(['sku' => 'S-3-A', 'name' => 'A', 'stock_qty' => 8]);
+
+        $this->import("type,sku,name,price,stock_qty\nproduct,S-3,S,10,5")
+            ->assertUnprocessable()
+            ->assertJsonPath('data.rows.0.errors.stock_qty.0', "The total stock quantity of variants (8) cannot exceed the product's stock quantity (5).");
+
+        $this->assertSame(10, $product->fresh()->stock_qty);
+    }
+
+    public function test_five_thousand_row_import_uses_bounded_queries(): void
+    {
+        Category::create(['name' => 'Bulk', 'slug' => 'bulk']);
+        $rows = ['type,sku,name,parent_sku,price,stock_qty,status,category_slug'];
+        for ($index = 1; $index <= 4000; $index++) {
+            $rows[] = "product,BULK-{$index},Bulk {$index},,10,5,draft,bulk";
+        }
+        for ($index = 1; $index <= 1000; $index++) {
+            $rows[] = "variant,BULK-{$index}-V,Variant {$index},BULK-{$index},,2,,";
+        }
+        $csv = implode("\n", $rows);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $started = microtime(true);
+        $response = $this->import($csv, true);
+        $elapsed = microtime(true) - $started;
+        $queries = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        if (getenv('IMPORT_PERF')) {
+            fwrite(STDERR, sprintf("\n[import-perf] queries=%d time=%.2fs\n", $queries, $elapsed));
+        }
+
+        $response->assertOk()
+            ->assertJsonPath('data.summary.creates', 5000)
+            ->assertJsonPath('data.summary.errors', 0);
+        $this->assertLessThan(50, $queries, "Import preview ran {$queries} queries.");
+    }
+
+    private function import(string $contents, bool $dryRun = false): TestResponse
+    {
+        return $this->post('/api/v1/admin/products/import', [
+            'file' => $this->csv($contents),
+            'dry_run' => $dryRun ? 'true' : 'false',
+        ], ['Accept' => 'application/json']);
     }
 
     private function csv(string $contents): UploadedFile
