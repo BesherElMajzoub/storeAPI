@@ -374,14 +374,14 @@ class ProductImportService
         foreach ($this->groupByParent($entries) as $parentKey => $group) {
             $parent = $maps['products'][$parentKey] ?? null;
             $productRow = $group['product'] !== null ? $entries[$group['product']]['data'] : [];
-            $productStock = array_key_exists('stock_qty', $productRow) ? $productRow['stock_qty'] : ($parent?->stock_qty ?? 0);
+            $productStock = array_key_exists('stock_qty', $productRow) ? $productRow['stock_qty'] : ($parent->stock_qty ?? 0);
 
             $variantStock = $parent ? ($maps['parentVariants'][$parent->id] ?? []) : [];
             foreach ($group['variants'] as $index) {
                 $variant = $entries[$index];
                 $variantStock[$variant['key'] ?? "row-{$index}"] = array_key_exists('stock_qty', $variant['data'])
                     ? $variant['data']['stock_qty']
-                    : ($variant['existing']?->stock_qty ?? 0);
+                    : ($variant['existing']->stock_qty ?? 0);
             }
 
             $values = [...array_values($variantStock), $productStock];

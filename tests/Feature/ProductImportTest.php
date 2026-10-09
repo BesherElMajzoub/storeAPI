@@ -347,6 +347,18 @@ class ProductImportTest extends TestCase
             ->assertJsonPath('data.rows.0.errors.stock_qty.0', 'The stock qty field must be an integer.');
 
         $this->assertSame(7, $product->fresh()->stock_qty);
+
+        $response = $this->import(implode("\n", [
+            'type,sku,name,parent_sku,price,stock_qty,status,in_stock,is_featured',
+            'product,N-1,NULL,,NULL,,null,NULL,NULL',
+            'variant,N-1-A,A,N-1,,NULL,,,',
+        ]), true)->assertUnprocessable();
+
+        $this->assertEqualsCanonicalizing(
+            ['name', 'price', 'status', 'in_stock', 'is_featured'],
+            array_keys($response->json('data.rows.0.errors'))
+        );
+        $response->assertJsonPath('data.rows.1.errors.stock_qty.0', 'The stock qty field must be an integer.');
     }
 
     public function test_database_errors_are_not_reported_as_csv_file_errors(): void
