@@ -6,6 +6,7 @@ use App\Exceptions\ProductImportConflictException;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use RuntimeException;
 use SplFileObject;
+use stdClass;
 
 class ProductImportService
 {
@@ -22,6 +24,8 @@ class ProductImportService
     private const CHUNK_SIZE = 1000;
 
     private const DIMENSIONS = ['weight_oz', 'length_in', 'width_in', 'height_in'];
+
+    private const DECIMAL_FIELDS = ['price', 'discount_price', ...self::DIMENSIONS];
 
     private const PRODUCT_FIELDS = [
         'name', 'description', 'price', 'discount_price', 'stock_qty', 'status',
@@ -36,13 +40,17 @@ class ProductImportService
 
     private const IDENTITY_COLUMNS = ['type', 'sku', 'parent_sku', 'slug', 'category_slug'];
 
+    private const KNOWN_COLUMNS = [...self::IDENTITY_COLUMNS, ...self::PRODUCT_FIELDS, ...self::VARIANT_FIELDS];
+
     public function __construct(private readonly ProductService $products) {}
 
     public function process(UploadedFile $file, bool $dryRun): array
     {
-        $analysis = $this->analyze($this->readCsv($file));
+        $csv = $this->readCsv($file);
+        $analysis = $this->analyze($csv['rows']);
         $normalized = $analysis['normalized'];
         unset($analysis['normalized']);
+        $analysis['warnings'] = $csv['warnings'];
 
         if ($analysis['summary']['errors'] > 0 || $dryRun) {
             return $analysis + ['committed' => false];
@@ -59,22 +67,27 @@ class ProductImportService
 
     private function readCsv(UploadedFile $file): array
     {
+        $contents = (string) file_get_contents($file->getRealPath());
+        if (! mb_check_encoding($contents, 'UTF-8')) {
+            throw new RuntimeException('CSV must be UTF-8 encoded. In Excel use "CSV UTF-8 (Comma delimited)".');
+        }
+
         $csv = new SplFileObject($file->getRealPath(), 'r');
         $csv->setFlags(SplFileObject::READ_CSV | SplFileObject::SKIP_EMPTY | SplFileObject::DROP_NEW_LINE);
+        $csv->setCsvControl($this->detectDelimiter($contents), '"', '\\');
         $header = null;
         $rows = [];
 
+        // SplFileObject::key() is the record index: a blank line counts as one
+        // row and a quoted cell with line breaks stays one row, so key() + 1 is
+        // the spreadsheet row number.
         foreach ($csv as $index => $values) {
-            if ($values === [null] || $values === false) {
+            if ($values === false || collect($values)->every(fn ($value) => trim((string) $value) === '')) {
                 continue;
             }
 
             if ($header === null) {
-                $header = array_map(fn ($value) => trim((string) $value), $values);
-                $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0] ?? '');
-                if (count($header) !== count(array_unique($header)) || in_array('', $header, true)) {
-                    throw new RuntimeException('CSV headers must be non-empty and unique.');
-                }
+                $header = $this->readHeader($values);
 
                 continue;
             }
@@ -95,7 +108,42 @@ class ProductImportService
             throw new RuntimeException('CSV must contain at least one data row.');
         }
 
-        return $rows;
+        return ['rows' => $rows, 'warnings' => $this->unknownColumnWarnings($header)];
+    }
+
+    private function readHeader(array $values): array
+    {
+        $values[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string) $values[0]);
+        $header = array_map(fn ($value) => mb_strtolower(trim((string) $value)), $values);
+        if (count($header) !== count(array_unique($header)) || in_array('', $header, true)) {
+            throw new RuntimeException('CSV headers must be non-empty and unique.');
+        }
+
+        return $header;
+    }
+
+    private function detectDelimiter(string $contents): string
+    {
+        $line = strtok(preg_replace('/^\xEF\xBB\xBF/', '', $contents), "\r\n");
+        $counts = [',' => 0, ';' => 0, "\t" => 0];
+        $quoted = false;
+        foreach (str_split((string) $line) as $char) {
+            if ($char === '"') {
+                $quoted = ! $quoted;
+            } elseif (! $quoted && isset($counts[$char])) {
+                $counts[$char]++;
+            }
+        }
+        arsort($counts);
+
+        return array_key_first($counts);
+    }
+
+    private function unknownColumnWarnings(array $header): array
+    {
+        return collect($header)->reject(fn ($column) => in_array($column, self::KNOWN_COLUMNS, true))
+            ->map(fn ($column) => "Unknown column \"{$column}\" is ignored.")
+            ->values()->all();
     }
 
     private function analyze(array $rows): array
@@ -131,11 +179,10 @@ class ProductImportService
 
     private function normalize(array $row): array
     {
-        $known = [...self::IDENTITY_COLUMNS, ...self::PRODUCT_FIELDS, ...self::VARIANT_FIELDS];
         $normalized = [];
         foreach ($row as $key => $value) {
             $value = is_string($value) ? trim($value) : $value;
-            if ($value === '' || $value === null || ! in_array($key, $known, true)) {
+            if ($value === '' || $value === null || ! in_array($key, self::KNOWN_COLUMNS, true)) {
                 continue;
             }
             $normalized[$key] = strtoupper((string) $value) === 'NULL' ? null : $value;
@@ -170,6 +217,11 @@ class ProductImportService
     private function skuKey(mixed $sku): ?string
     {
         return is_string($sku) && $sku !== '' ? mb_strtolower($sku) : null;
+    }
+
+    private function find(array $map, ?string $key): mixed
+    {
+        return $key === null ? null : ($map[$key] ?? null);
     }
 
     private function preload(array $entries): array
@@ -227,7 +279,7 @@ class ProductImportService
     {
         $data = $entry['data'];
         $errors = $this->validationErrors($entry, $this->productRules());
-        $existing = $maps['products'][$entry['key']] ?? null;
+        $existing = $this->find($maps['products'], $entry['key']);
 
         if (array_key_exists('category_slug', $data)) {
             $data['category_id'] = $data['category_slug'] === null
@@ -238,7 +290,7 @@ class ProductImportService
                 unset($data['category_id']);
             }
         }
-        if (isset($maps['variants'][$entry['key']])) {
+        if ($this->find($maps['variants'], $entry['key'])) {
             $errors['sku'][] = 'SKU is already used by a product variant.';
         }
         if ($existing?->trashed()) {
@@ -292,14 +344,14 @@ class ProductImportService
     private function validateVariantRow(array $entry, array $maps): array
     {
         $errors = $this->validationErrors($entry, $this->variantRules());
-        $parent = $maps['products'][$entry['parent_key']] ?? null;
+        $parent = $this->find($maps['products'], $entry['parent_key']);
         $parent = $parent?->trashed() ? null : $parent;
-        $existing = $maps['variants'][$entry['key']] ?? null;
+        $existing = $this->find($maps['variants'], $entry['key']);
 
-        if ($entry['parent_key'] !== null && ! $parent && ! isset($maps['csvProducts'][$entry['parent_key']])) {
+        if ($entry['parent_key'] !== null && ! $parent && $this->find($maps['csvProducts'], $entry['parent_key']) === null) {
             $errors['parent_sku'][] = 'Parent product SKU was not found.';
         }
-        if (isset($maps['products'][$entry['key']])) {
+        if ($this->find($maps['products'], $entry['key'])) {
             $errors['sku'][] = 'SKU is already used by a product.';
         }
         if ($existing && (int) $existing->product_id !== (int) $parent?->id) {
@@ -379,6 +431,12 @@ class ProductImportService
             'sku' => $entry['data']['sku'] ?? null,
             'action' => $entry['errors'] ? 'error' : ($entry['existing'] ? 'update' : 'create'),
             'errors' => $entry['errors'],
+            'changes' => $entry['errors'] || ! $entry['existing'] ? null : $this->diff(
+                $entry['data']['type'] === 'product'
+                    ? $this->productData($entry['data'])
+                    : collect($entry['data'])->only(self::VARIANT_FIELDS)->all(),
+                $entry['existing']
+            ),
         ]);
 
         return [
@@ -391,6 +449,39 @@ class ProductImportService
             'rows' => $results->all(),
             'normalized' => collect($entries)->reject(fn (array $entry) => $entry['errors'])->pluck('data')->all(),
         ];
+    }
+
+    private function diff(array $values, Model $existing): array|stdClass
+    {
+        $changes = [];
+        foreach ($values as $field => $new) {
+            $old = $existing->getAttribute($field);
+            if (! $this->sameValue($field, $old, $new)) {
+                $changes[$field] = [$this->displayValue($field, $old), $this->displayValue($field, $new)];
+            }
+        }
+
+        return $changes === [] ? new stdClass : $changes;
+    }
+
+    private function sameValue(string $field, mixed $old, mixed $new): bool
+    {
+        return match (true) {
+            $old === null || $new === null => $old === $new,
+            is_array($old) || is_array($new) => $old == $new,
+            is_bool($old) || is_bool($new) => (bool) $old === (bool) $new,
+            default => (string) $this->displayValue($field, $old) === (string) $this->displayValue($field, $new),
+        };
+    }
+
+    private function displayValue(string $field, mixed $value): mixed
+    {
+        return match (true) {
+            ! is_numeric($value) => $value,
+            in_array($field, self::DECIMAL_FIELDS, true) => number_format((float) $value, 2, '.', ''),
+            in_array($field, ['stock_qty', 'category_id'], true) => (int) $value,
+            default => $value,
+        };
     }
 
     private function productRules(): array
@@ -454,20 +545,27 @@ class ProductImportService
     private function upsertProduct(array $row): Product
     {
         $product = Product::firstOrNew(['sku' => $row['sku']]);
-        $data = collect($row)->only(self::PRODUCT_FIELDS)->all();
+        $data = $this->productData($row);
         $data['status'] = $data['status'] ?? ($product->exists ? $product->status : 'draft');
         $data['slug'] = isset($row['slug'])
             ? $this->products->generateUniqueSlug($row['slug'], $product->id)
             : ($product->exists ? $product->slug : $this->products->generateUniqueSlug($row['name']));
+        $product->fill($data)->save();
+
+        return $product;
+    }
+
+    private function productData(array $row): array
+    {
+        $data = collect($row)->only(self::PRODUCT_FIELDS)->all();
         if (array_key_exists('category_id', $row)) {
             $data['category_id'] = $row['category_id'];
         }
         if (! array_key_exists('in_stock', $data) && array_key_exists('stock_qty', $data)) {
             $data['in_stock'] = (int) $data['stock_qty'] > 0;
         }
-        $product->fill($data)->save();
 
-        return $product;
+        return $data;
     }
 
     private function upsertVariant(array $row, int $productId): void

@@ -597,6 +597,13 @@ class ProductController extends Controller
 
         $hasErrors = $result['summary']['errors'] > 0;
 
+        if ($result['committed']) {
+            $this->logActivity('import_products', 'Imported products from CSV', [
+                'summary' => $result['summary'],
+                'skus' => collect($result['rows'])->pluck('sku')->take(100)->values()->all(),
+            ]);
+        }
+
         return response()->json([
             'success' => ! $hasErrors,
             'message' => $hasErrors

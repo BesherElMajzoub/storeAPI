@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\Role;
@@ -359,6 +360,22 @@ class ProductImportTest extends TestCase
             ->assertJsonMissingPath('errors.file');
     }
 
+    public function test_rows_without_sku_and_numeric_skus_are_handled(): void
+    {
+        $this->import(implode("\n", [
+            'type,sku,name,parent_sku,price,stock_qty',
+            'product,,No Sku,,10,1',
+            'variant,,No Sku Variant,,,',
+            'product,12345,Numeric,,10,5',
+            'variant,12345-1,Numeric Variant,12345,,2',
+        ]), true)
+            ->assertUnprocessable()
+            ->assertJsonPath('data.rows.0.errors.sku.0', 'The sku field is required.')
+            ->assertJsonPath('data.rows.1.errors.sku.0', 'The sku field is required.')
+            ->assertJsonPath('data.rows.2.action', 'create')
+            ->assertJsonPath('data.rows.3.action', 'create');
+    }
+
     public function test_five_thousand_row_import_uses_bounded_queries(): void
     {
         Category::create(['name' => 'Bulk', 'slug' => 'bulk']);
@@ -387,6 +404,106 @@ class ProductImportTest extends TestCase
             ->assertJsonPath('data.summary.creates', 5000)
             ->assertJsonPath('data.summary.errors', 0);
         $this->assertLessThan(50, $queries, "Import preview ran {$queries} queries.");
+    }
+
+    public function test_headers_are_case_insensitive(): void
+    {
+        $this->import(" Type ,SKU,Name,PRICE\nproduct,H-1,Header Case,10")
+            ->assertOk()
+            ->assertJsonPath('data.rows.0.action', 'create')
+            ->assertJsonPath('data.warnings', []);
+
+        $this->assertDatabaseHas('products', ['sku' => 'H-1', 'name' => 'Header Case', 'price' => 10]);
+    }
+
+    public function test_semicolon_delimiter_is_detected(): void
+    {
+        $this->import("type;sku;name;price;description\nproduct;SC-1;Semi;10;\"a, b\"")
+            ->assertOk()
+            ->assertJsonPath('data.committed', true);
+
+        $this->assertDatabaseHas('products', ['sku' => 'SC-1', 'name' => 'Semi', 'description' => 'a, b']);
+    }
+
+    public function test_non_utf8_file_is_rejected(): void
+    {
+        $this->import("type,sku,name,price\nproduct,L-1,Caf\xE9,10")
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'CSV must be UTF-8 encoded. In Excel use "CSV UTF-8 (Comma delimited)".');
+
+        $this->assertDatabaseMissing('products', ['sku' => 'L-1']);
+    }
+
+    public function test_unknown_columns_are_reported_as_warnings(): void
+    {
+        $this->import("type,sku,name,price,stok_qty\nproduct,W-1,Warned,10,5", true)
+            ->assertOk()
+            ->assertJsonPath('data.summary.errors', 0)
+            ->assertJsonPath('data.warnings', ['Unknown column "stok_qty" is ignored.']);
+    }
+
+    public function test_preview_reports_changes_for_update_rows(): void
+    {
+        $product = Product::factory()->create([
+            'sku' => 'CH-1', 'name' => 'Old', 'price' => 100, 'stock_qty' => 5, 'in_stock' => true,
+            'options' => ['Color'], 'is_featured' => false, 'status' => 'draft',
+        ]);
+        $product->variants()->create(['sku' => 'CH-1-A', 'name' => 'A', 'price' => 20, 'stock_qty' => 2]);
+
+        $this->import(implode("\n", [
+            'type,sku,name,parent_sku,price,stock_qty,options,is_featured',
+            'product,CH-1,New Name,,100.00,5,"[""Color""]",true',
+            'product,CH-2,Created,,10,1,,',
+            'variant,CH-1-A,A,CH-1,20.5,3,,',
+            'variant,CH-1-A-SAME,Same,CH-2,,,,',
+        ]), true)
+            ->assertOk()
+            ->assertJsonPath('data.rows.0.action', 'update')
+            ->assertJsonPath('data.rows.0.changes', ['name' => ['Old', 'New Name'], 'is_featured' => [false, true]])
+            ->assertJsonPath('data.rows.1.action', 'create')
+            ->assertJsonPath('data.rows.1.changes', null)
+            ->assertJsonPath('data.rows.2.action', 'update')
+            ->assertJsonPath('data.rows.2.changes', ['price' => ['20.00', '20.50'], 'stock_qty' => [2, 3]])
+            ->assertJsonPath('data.rows.3.action', 'create')
+            ->assertJsonPath('data.rows.3.changes', null);
+
+        $this->import("type,sku,name,price\nproduct,CH-1,Old,100", true)
+            ->assertOk()
+            ->assertJsonPath('data.rows.0.action', 'update')
+            ->assertJsonPath('data.rows.0.changes', []);
+    }
+
+    public function test_successful_commit_is_audit_logged(): void
+    {
+        $csv = "type,sku,name,price\nproduct,AU-1,Audited,10";
+
+        $this->import($csv, true)->assertOk();
+        $this->assertDatabaseMissing('audit_logs', ['action' => 'import_products']);
+
+        $this->import($csv)->assertOk();
+        $log = AuditLog::where('action', 'import_products')->sole();
+        $this->assertSame('Imported products from CSV', $log->description);
+        $this->assertSame(['AU-1'], $log->changes['skus']);
+        $this->assertSame(1, $log->changes['summary']['creates']);
+    }
+
+    public function test_row_numbers_match_spreadsheet_rows_with_blank_lines_and_multiline_cells(): void
+    {
+        $this->import(implode("\n", [
+            'type,sku,name,price,description',
+            'product,R-1,One,10,"line a',
+            'line b"',
+            'product,R-2,Two,10,',
+            '',
+            ',,,,',
+            'product,R-3,,10,',
+        ]), true)
+            ->assertUnprocessable()
+            ->assertJsonPath('data.summary.rows', 3)
+            ->assertJsonPath('data.rows.0.row', 2)
+            ->assertJsonPath('data.rows.1.row', 3)
+            ->assertJsonPath('data.rows.2.row', 6)
+            ->assertJsonPath('data.rows.2.errors.name.0', 'The name field is required.');
     }
 
     private function import(string $contents, bool $dryRun = false): TestResponse
