@@ -6,6 +6,8 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\ProductImportService;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -247,6 +249,114 @@ class ProductImportTest extends TestCase
             ->assertJsonPath('data.rows.0.errors.stock_qty.0', "The total stock quantity of variants (8) cannot exceed the product's stock quantity (5).");
 
         $this->assertSame(10, $product->fresh()->stock_qty);
+    }
+
+    public function test_lowering_price_below_existing_discount_is_rejected(): void
+    {
+        $product = Product::factory()->create(['sku' => 'B-1', 'price' => 100, 'discount_price' => 80]);
+
+        $this->import("type,sku,name,price\nproduct,B-1,B,50")
+            ->assertUnprocessable()
+            ->assertJsonPath('data.rows.0.errors.discount_price.0', 'The discount price must be less than price.');
+
+        $this->assertSame('100.00', $product->fresh()->price);
+    }
+
+    public function test_update_row_without_price_keeps_existing_price(): void
+    {
+        $product = Product::factory()->create(['sku' => 'B-2', 'price' => 100, 'status' => 'draft']);
+
+        $this->import("type,sku,name\nproduct,B-2,Renamed")
+            ->assertOk()
+            ->assertJsonPath('data.rows.0.action', 'update');
+
+        $product->refresh();
+        $this->assertSame('Renamed', $product->name);
+        $this->assertSame('100.00', $product->price);
+    }
+
+    public function test_create_row_without_price_is_rejected(): void
+    {
+        $this->import("type,sku,name\nproduct,B-3,New")
+            ->assertUnprocessable()
+            ->assertJsonPath('data.rows.0.errors.price.0', 'The price field is required.');
+
+        $this->assertDatabaseMissing('products', ['sku' => 'B-3']);
+    }
+
+    public function test_invalid_type_reports_only_type_error(): void
+    {
+        $this->import("type,sku,name,parent_sku,price\nprodcut,T-1,T,,10", true)
+            ->assertUnprocessable()
+            ->assertJsonPath('data.summary.errors', 1)
+            ->assertJsonPath('data.rows.0.action', 'error')
+            ->assertJsonPath('data.rows.0.errors', ['type' => ['Type must be product or variant.']]);
+    }
+
+    public function test_variant_parent_sku_matches_csv_product_case_insensitively(): void
+    {
+        $this->import(implode("\n", [
+            'type,sku,name,parent_sku,price,stock_qty',
+            'Product,ABC-1,Bag,,10,5',
+            'variant,ABC-1-RED,Red,abc-1,,2',
+        ]))->assertOk()->assertJsonPath('data.committed', true);
+
+        $product = Product::where('sku', 'ABC-1')->firstOrFail();
+        $this->assertDatabaseHas('product_variants', ['sku' => 'ABC-1-RED', 'product_id' => $product->id]);
+    }
+
+    public function test_unique_conflict_during_commit_returns_409_without_writes(): void
+    {
+        Product::creating(function (Product $product) {
+            if ($product->sku === 'RACE-2') {
+                DB::table('products')->insert([
+                    'name' => 'Concurrent', 'slug' => 'concurrent-race', 'sku' => 'RACE-2', 'price' => 1,
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
+            }
+        });
+
+        $this->import("type,sku,name,price\nproduct,RACE-1,First,10\nproduct,RACE-2,Second,10")
+            ->assertStatus(409)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'The catalog changed during import; run the preview again.');
+
+        $this->assertDatabaseMissing('products', ['sku' => 'RACE-1']);
+        $this->assertDatabaseMissing('products', ['name' => 'Second']);
+    }
+
+    public function test_malformed_json_reports_valid_json_message(): void
+    {
+        $this->import(implode("\n", [
+            'type,sku,name,price,options',
+            'product,J-1,One,10,"{bad"',
+            'product,J-2,Two,10,5',
+        ]), true)
+            ->assertUnprocessable()
+            ->assertJsonPath('data.rows.0.errors.options', ['options must be valid JSON.'])
+            ->assertJsonPath('data.rows.1.errors.options', ['The options field must be an array.']);
+    }
+
+    public function test_null_in_non_nullable_column_is_a_row_error(): void
+    {
+        $product = Product::factory()->create(['sku' => 'N-1', 'stock_qty' => 7]);
+
+        $this->import("type,sku,name,price,stock_qty\nproduct,N-1,N,10,NULL")
+            ->assertUnprocessable()
+            ->assertJsonPath('data.rows.0.errors.stock_qty.0', 'The stock qty field must be an integer.');
+
+        $this->assertSame(7, $product->fresh()->stock_qty);
+    }
+
+    public function test_database_errors_are_not_reported_as_csv_file_errors(): void
+    {
+        $this->mock(ProductImportService::class, fn ($mock) => $mock->shouldReceive('process')->andThrow(
+            new QueryException('mysql', 'insert into `products`', [], new \PDOException('SQLSTATE[HY000]: General error'))
+        ));
+
+        $this->import("type,sku,name,price\nproduct,Q-1,Q,10")
+            ->assertStatus(500)
+            ->assertJsonMissingPath('errors.file');
     }
 
     public function test_five_thousand_row_import_uses_bounded_queries(): void

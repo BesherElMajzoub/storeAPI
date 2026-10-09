@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Exceptions\InsufficientStockException;
+use App\Exceptions\ProductImportConflictException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Admin\AdjustProductStockRequest;
 use App\Http\Requests\Api\V1\Admin\BulkUpdateProductsRequest;
@@ -17,6 +18,7 @@ use App\Services\OrderInventoryService;
 use App\Services\ProductImportService;
 use App\Services\ProductService;
 use App\Traits\LogsActivity;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -570,6 +572,7 @@ class ProductController extends Controller
         )
     )]
     #[OA\Response(response: 200, description: 'Preview completed or import committed')]
+    #[OA\Response(response: 409, description: 'The catalog changed between validation and commit; nothing was written, run the preview again')]
     #[OA\Response(response: 422, description: 'CSV or row validation failed; no writes performed')]
     public function import(ImportProductsRequest $request, ProductImportService $importer): JsonResponse
     {
@@ -578,6 +581,11 @@ class ProductController extends Controller
                 $request->file('file'),
                 (bool) $request->validated('dry_run')
             );
+        } catch (ProductImportConflictException $e) {
+            return $this->error($e->getMessage(), 409);
+        } catch (QueryException $e) {
+            // QueryException extends RuntimeException; database failures are not file errors.
+            throw $e;
         } catch (\RuntimeException $e) {
             return response()->json([
                 'success' => false,

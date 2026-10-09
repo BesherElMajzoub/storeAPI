@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use App\Exceptions\ProductImportConflictException;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -46,7 +48,11 @@ class ProductImportService
             return $analysis + ['committed' => false];
         }
 
-        DB::transaction(fn () => $this->commit($normalized), 3);
+        try {
+            DB::transaction(fn () => $this->commit($normalized), 3);
+        } catch (UniqueConstraintViolationException $e) {
+            throw new ProductImportConflictException($e);
+        }
 
         return $analysis + ['committed' => true];
     }
@@ -99,6 +105,12 @@ class ProductImportService
         $seenSkus = [];
 
         foreach ($entries as $index => $entry) {
+            if (! in_array($entry['data']['type'], ['product', 'variant'], true)) {
+                $entries[$index] = ['errors' => ['type' => ['Type must be product or variant.']], 'existing' => null] + $entry;
+
+                continue;
+            }
+
             $duplicateOf = $entry['key'] !== null ? ($seenSkus[$entry['key']] ?? null) : null;
             if ($entry['key'] !== null && $duplicateOf === null) {
                 $seenSkus[$entry['key']] = $entry['row'];
@@ -131,19 +143,25 @@ class ProductImportService
 
         $normalized['type'] = mb_strtolower((string) ($normalized['type'] ?? ''));
         foreach (['in_stock', 'is_featured'] as $field) {
-            if (array_key_exists($field, $normalized)) {
+            if (isset($normalized[$field])) {
                 $normalized[$field] = filter_var($normalized[$field], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
             }
         }
+        $invalidJson = [];
         foreach (['options', 'attributes'] as $field) {
             if (isset($normalized[$field]) && is_string($normalized[$field])) {
                 $decoded = json_decode($normalized[$field], true);
-                $normalized[$field] = json_last_error() === JSON_ERROR_NONE ? $decoded : $normalized[$field];
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    $normalized[$field] = $decoded;
+                } else {
+                    $invalidJson[] = $field;
+                }
             }
         }
 
         return [
             'data' => $normalized,
+            'invalid_json' => $invalidJson,
             'key' => $this->skuKey($normalized['sku'] ?? null),
             'parent_key' => $this->skuKey($normalized['parent_sku'] ?? null),
         ];
@@ -208,7 +226,7 @@ class ProductImportService
     private function validateProductRow(array $entry, array $maps): array
     {
         $data = $entry['data'];
-        $errors = $this->validationErrors($data, $this->productRules());
+        $errors = $this->validationErrors($entry, $this->productRules());
         $existing = $maps['products'][$entry['key']] ?? null;
 
         if (array_key_exists('category_slug', $data)) {
@@ -228,7 +246,11 @@ class ProductImportService
         }
 
         $state = $this->effectiveProductState($data, $existing);
-        $errors = array_merge_recursive($errors, $this->productStateErrors($state, ! isset($errors['category_slug'])));
+        $errors = array_merge_recursive($errors, $this->productStateErrors($state, [
+            'creating' => ! $existing,
+            'price_given' => array_key_exists('price', $data),
+            'category_checked' => ! isset($errors['category_slug']),
+        ]));
 
         return ['data' => $data, 'errors' => $errors, 'existing' => $existing] + $entry;
     }
@@ -243,11 +265,18 @@ class ProductImportService
         return array_merge($base, array_intersect_key($data, $base));
     }
 
-    private function productStateErrors(array $state, bool $checkCategory): array
+    private function productStateErrors(array $state, array $context): array
     {
         $errors = [];
+        if ($context['creating'] && ! $context['price_given']) {
+            $errors['price'][] = 'The price field is required.';
+        }
+        if (is_numeric($state['discount_price']) && is_numeric($state['price'])
+            && (float) $state['discount_price'] >= (float) $state['price']) {
+            $errors['discount_price'][] = 'The discount price must be less than price.';
+        }
         if ($state['status'] === 'published') {
-            if ($checkCategory && $state['category_id'] === null) {
+            if ($context['category_checked'] && $state['category_id'] === null) {
                 $errors['category_slug'][] = 'Published products require a category.';
             }
             foreach (self::DIMENSIONS as $field) {
@@ -262,7 +291,7 @@ class ProductImportService
 
     private function validateVariantRow(array $entry, array $maps): array
     {
-        $errors = $this->validationErrors($entry['data'], $this->variantRules());
+        $errors = $this->validationErrors($entry, $this->variantRules());
         $parent = $maps['products'][$entry['parent_key']] ?? null;
         $parent = $parent?->trashed() ? null : $parent;
         $existing = $maps['variants'][$entry['key']] ?? null;
@@ -280,9 +309,12 @@ class ProductImportService
         return ['errors' => $errors, 'existing' => $existing] + $entry;
     }
 
-    private function validationErrors(array $data, array $rules): array
+    private function validationErrors(array $entry, array $rules): array
     {
-        return Validator::make($data, $rules)->errors()->toArray();
+        $errors = collect($entry['invalid_json'])->mapWithKeys(fn ($field) => [$field => ["{$field} must be valid JSON."]])->all();
+        $data = collect($entry['data'])->except($entry['invalid_json'])->all();
+
+        return array_merge_recursive($errors, Validator::make($data, $rules)->errors()->toArray());
     }
 
     private function validateVariantStock(array $entries, array $maps): array
@@ -369,10 +401,10 @@ class ProductImportService
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:10000'],
-            'price' => ['required', 'numeric', 'min:0'],
-            'discount_price' => ['nullable', 'numeric', 'min:0', 'lt:price'],
-            'stock_qty' => ['nullable', 'integer', 'min:0'],
-            'status' => ['nullable', Rule::in(['draft', 'published', 'archived'])],
+            'price' => ['sometimes', 'numeric', 'min:0'],
+            'discount_price' => ['nullable', 'numeric', 'min:0'],
+            'stock_qty' => ['sometimes', 'integer', 'min:0'],
+            'status' => ['sometimes', Rule::in(['draft', 'published', 'archived'])],
             'category_slug' => ['nullable', 'string', 'max:255'],
             'in_stock' => ['sometimes', 'boolean'],
             'is_featured' => ['sometimes', 'boolean'],
@@ -394,7 +426,7 @@ class ProductImportService
             'parent_sku' => ['required', 'string', 'max:255', 'different:sku'],
             'name' => ['required', 'string', 'max:255'],
             'price' => ['nullable', 'numeric', 'min:0'],
-            'stock_qty' => ['nullable', 'integer', 'min:0'],
+            'stock_qty' => ['sometimes', 'integer', 'min:0'],
             'attributes' => ['nullable', 'array'],
             'weight_oz' => ['nullable', 'numeric', 'gt:0', 'max:2400'],
             'length_in' => ['nullable', 'numeric', 'gt:0', 'max:200'],
@@ -405,11 +437,17 @@ class ProductImportService
 
     private function commit(array $rows): void
     {
-        foreach (collect($rows)->where('type', 'product') as $row) {
-            $this->upsertProduct($row);
+        $rows = collect($rows);
+        $productIds = $this->chunked(
+            $rows->where('type', 'variant')->pluck('parent_sku')->unique(),
+            fn (array $skus) => Product::whereIn('sku', $skus)->lockForUpdate()->get(['id', 'sku'])
+        )->mapWithKeys(fn (Product $product) => [mb_strtolower($product->sku) => $product->id])->all();
+
+        foreach ($rows->where('type', 'product') as $row) {
+            $productIds[mb_strtolower($row['sku'])] = $this->upsertProduct($row)->id;
         }
-        foreach (collect($rows)->where('type', 'variant') as $row) {
-            $this->upsertVariant($row);
+        foreach ($rows->where('type', 'variant') as $row) {
+            $this->upsertVariant($row, $productIds[mb_strtolower($row['parent_sku'])] ?? throw new ProductImportConflictException);
         }
     }
 
@@ -432,12 +470,14 @@ class ProductImportService
         return $product;
     }
 
-    private function upsertVariant(array $row): void
+    private function upsertVariant(array $row, int $productId): void
     {
-        $product = Product::where('sku', $row['parent_sku'])->firstOrFail();
         $variant = ProductVariant::firstOrNew(['sku' => $row['sku']]);
+        if ($variant->exists && (int) $variant->product_id !== $productId) {
+            throw new ProductImportConflictException;
+        }
         $variant->fill(collect($row)->only(self::VARIANT_FIELDS)->all());
-        $variant->product()->associate($product);
+        $variant->product_id = $productId;
         $variant->save();
     }
 }
