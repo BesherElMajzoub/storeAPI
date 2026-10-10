@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Mail\OrderShippedMail;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
@@ -9,6 +10,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Services\StripeCheckoutService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Mockery;
 use Stripe\Checkout\Session as StripeSession;
 use Stripe\PaymentIntent;
@@ -27,6 +29,7 @@ class AdminOrderBulkStatusTest extends TestCase
         $this->admin = User::factory()->create();
         $this->admin->roles()->attach(Role::create(['name' => 'Admin']));
         $this->actingAs($this->admin, 'sanctum');
+        Mail::fake();
     }
 
     public function test_bulk_order_status_update_is_atomic_and_returns_a_result_per_id(): void
@@ -224,6 +227,7 @@ class AdminOrderBulkStatusTest extends TestCase
         ])->assertOk();
 
         $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'shipped', 'payment_status' => 'paid']);
+        Mail::assertQueued(OrderShippedMail::class, fn (OrderShippedMail $mail): bool => $mail->order->is($order));
     }
 
     public function test_bulk_cannot_cancel_orders_that_hold_money(): void

@@ -120,6 +120,7 @@ return [
         'name' => env('MAIL_BRAND_NAME', 'Otantik Queen'),
         'logo_url' => env('MAIL_LOGO_URL'),
         'support_email' => env('MAIL_SUPPORT_ADDRESS', env('MAIL_FROM_ADDRESS')),
+        'timezone' => env('MAIL_BRAND_TIMEZONE', 'America/Los_Angeles'),
     ],
 
 ];

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Admin\BulkUpdateOrderStatusRequest;
 use App\Http\Requests\Api\V1\Admin\UpdateOrderStatusRequest;
 use App\Http\Resources\AdminOrderResource;
+use App\Mail\OrderShippedMail;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Services\OrderPaymentService;
@@ -16,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use OpenApi\Attributes as OA;
 
 class OrderController extends Controller
@@ -330,6 +332,17 @@ class OrderController extends Controller
 
             return $order->refresh()->load(['items', 'user', 'payment', 'cancellationRequest']);
         });
+
+        if (($data['status'] ?? null) === 'shipped' && filled($data['tracking_number'] ?? null)) {
+            try {
+                Mail::to($order->user->email)->queue(new OrderShippedMail($order));
+            } catch (\Throwable $mailError) {
+                Log::error('Order manually shipped but shipment email could not be queued.', [
+                    'order_id' => $order->id,
+                    'error' => $mailError->getMessage(),
+                ]);
+            }
+        }
 
         return $this->success(new AdminOrderResource($order), 'Order status updated.');
     }

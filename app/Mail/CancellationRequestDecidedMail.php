@@ -32,6 +32,7 @@ class CancellationRequestDecidedMail extends Mailable implements ShouldQueue
             ->with([
                 'decision' => $this->decision,
                 'orderNumber' => $order->order_number,
+                'orderUrl' => rtrim((string) config('app.frontend_url'), '/')."/orders/{$order->id}",
                 'adminNote' => $this->cancellationRequest->admin_note,
                 'decidedAt' => $this->cancellationRequest->decided_at,
                 // Money was only taken if the payment was captured; otherwise the card hold is released.

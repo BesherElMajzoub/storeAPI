@@ -40,25 +40,29 @@ class CustomerEmailsTest extends TestCase
 
     public function test_cancellation_email_says_no_charge_for_a_released_hold(): void
     {
-        $html = (new CancellationRequestDecidedMail($this->request(['payment_status' => 'authorized', 'paid_at' => null]), 'accepted'))->render();
+        config(['app.frontend_url' => 'https://shop.test']);
+        $request = $this->request(['payment_status' => 'authorized', 'paid_at' => null]);
+        $html = (new CancellationRequestDecidedMail($request, 'accepted'))->render();
 
-        $this->assertStringContainsString('No charge was made', $html);
+        $this->assertStringContainsString('You were not charged', $html);
         $this->assertStringNotContainsString('refund has been initiated', $html);
+        $this->assertStringContainsString('https://shop.test/orders/'.$request->order_id, $html);
+        $this->assertStringNotContainsString('/orders/'.$request->order->order_number, $html);
     }
 
     public function test_cancellation_email_promises_a_refund_only_after_a_capture(): void
     {
         $html = (new CancellationRequestDecidedMail($this->request(['payment_status' => 'paid', 'paid_at' => now()]), 'accepted'))->render();
 
-        $this->assertStringContainsString('We are returning your payment', $html);
-        $this->assertStringNotContainsString('No charge was made', $html);
+        $this->assertStringContainsString('Your refund is on its way', $html);
+        $this->assertStringNotContainsString('You were not charged', $html);
     }
 
     public function test_otp_email_is_branded_and_has_plain_wording(): void
     {
         $html = (new OtpCodeMail('123456', 'email_verification', 10, 'a@b.test', 'a@b.test', false))->render();
 
-        $this->assertStringContainsString('Use this code to verify your email', $html);
+        $this->assertStringContainsString('Enter this code to verify your email', $html);
         $this->assertStringNotContainsString('Verification Code for', $html);
         $this->assertStringContainsString('Otantik Queen', $html);
     }
