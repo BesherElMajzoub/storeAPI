@@ -2,13 +2,22 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Order;
 use Illuminate\Http\Request;
 
+/** @mixin Order */
 class AdminOrderResource extends OrderResource
 {
     public function toArray(Request $request): array
     {
-        return array_merge(parent::toArray($request), [
+        $data = parent::toArray($request);
+        $data['refund'] = array_merge($data['refund'], [
+            'failure_code' => $this->refund_failure_code,
+            'failure_message' => $this->refund_failure_message,
+            'failed_at' => $this->refund_failed_at?->toIso8601String(),
+        ]);
+
+        return array_merge($data, [
             'stripe_session_id' => $this->stripe_session_id,
             'stripe_payment_intent_id' => $this->stripe_payment_intent_id,
             'easypost_shipment_id' => $this->easypost_shipment_id,

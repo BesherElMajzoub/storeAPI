@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Stripe\Exception\ApiErrorException;
+use Throwable;
 
 /**
  * Moves money for an order after checkout: captures held payments, and
@@ -105,7 +106,7 @@ class OrderPaymentService
      * Count a capture attempt that failed for a transient reason; the admin
      * is alerted once when it keeps failing. The scheduler keeps retrying.
      */
-    public function recordCaptureError(Order $order, \Throwable $e): void
+    public function recordCaptureError(Order $order, Throwable $e): void
     {
         $attempts = (int) $order->capture_attempts + 1;
         Order::query()->whereKey($order->id)->update(['capture_attempts' => $attempts]);
@@ -155,9 +156,22 @@ class OrderPaymentService
      */
     public function queueSettlement(Order $order): void
     {
-        $order->forceFill(['refund_status' => 'pending'])->saveQuietly();
+        $order->forceFill([
+            'refund_status' => 'pending',
+            'refund_failure_code' => null,
+            'refund_failure_message' => null,
+            'refund_failed_at' => null,
+        ])->saveQuietly();
 
-        SettleCancelledOrderPayment::dispatch($order->id)->afterCommit();
+        try {
+            SettleCancelledOrderPayment::dispatch($order->id)->afterCommit();
+        } catch (Throwable $e) {
+            $this->recordRefundFailure($order, $e);
+            Log::critical('Unable to queue settlement for a cancelled order.', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -173,6 +187,13 @@ class OrderPaymentService
             if (! in_array($order->refund_status, ['pending', 'failed'], true)) {
                 return $order->refund_status;
             }
+
+            $order->forceFill([
+                'refund_status' => 'pending',
+                'refund_failure_code' => null,
+                'refund_failure_message' => null,
+                'refund_failed_at' => null,
+            ])->saveQuietly();
 
             if (! $order->stripe_payment_intent_id) {
                 $order->update(['refund_status' => 'none']);
@@ -227,6 +248,9 @@ class OrderPaymentService
                 'payment_status' => 'refunded',
                 'refunded_amount' => $order->total,
                 'refunded_at' => now(),
+                'refund_failure_code' => null,
+                'refund_failure_message' => null,
+                'refund_failed_at' => null,
             ]);
             Payment::query()->where('order_id', $order->id)->update([
                 'status' => 'refunded',
@@ -234,6 +258,23 @@ class OrderPaymentService
                 'updated_at' => now(),
             ]);
         });
+    }
+
+    /** @return array{code: ?string, message: string} */
+    public function recordRefundFailure(Order $order, Throwable $exception): array
+    {
+        $code = $exception instanceof ApiErrorException ? $exception->getStripeCode() : null;
+        $message = trim(preg_replace('/\s+/', ' ', $exception->getMessage()) ?? '');
+        $message = mb_substr($message !== '' ? $message : 'Payment provider error.', 0, 1000);
+
+        $order->forceFill([
+            'refund_status' => 'failed',
+            'refund_failure_code' => $code,
+            'refund_failure_message' => $message,
+            'refund_failed_at' => now(),
+        ])->saveQuietly();
+
+        return ['code' => $code, 'message' => $message];
     }
 
     /**

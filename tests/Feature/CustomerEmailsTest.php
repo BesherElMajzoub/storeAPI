@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Mail\CancellationRequestDecidedMail;
 use App\Mail\OrderConfirmedMail;
+use App\Mail\OrderShippedMail;
 use App\Mail\OtpCodeMail;
 use App\Models\Order;
 use App\Models\OrderCancellationRequest;
@@ -27,6 +28,7 @@ class CustomerEmailsTest extends TestCase
         $this->travelTo($order->authorized_at->copy()->addMinutes(5));
 
         $html = (new OrderConfirmedMail($order))->render();
+        $mail = (new OrderConfirmedMail($order))->build();
 
         $this->assertStringContainsString('Order confirmed', $html);
         $this->assertStringContainsString($order->order_number, $html);
@@ -36,6 +38,7 @@ class CustomerEmailsTest extends TestCase
         $this->assertStringContainsString('https://shop.test/orders/'.$order->id, $html);
         $this->assertStringNotContainsString('Laravel', $html);
         $this->assertStringContainsString('Otantik Queen', $html);
+        $this->assertSame("Order confirmed: {$order->order_number}", $mail->subject);
     }
 
     public function test_cancellation_email_says_no_charge_for_a_released_hold(): void
@@ -48,6 +51,24 @@ class CustomerEmailsTest extends TestCase
         $this->assertStringNotContainsString('refund has been initiated', $html);
         $this->assertStringContainsString('https://shop.test/orders/'.$request->order_id, $html);
         $this->assertStringNotContainsString('/orders/'.$request->order->order_number, $html);
+        $this->assertSame(
+            "Your cancellation request for order {$request->order->order_number} has been accepted",
+            (new CancellationRequestDecidedMail($request, 'accepted'))->build()->subject
+        );
+    }
+
+    public function test_shipped_email_subject_uses_the_order_number_without_a_hash_prefix(): void
+    {
+        $order = Order::factory()->for(User::factory()->create())->create([
+            'status' => 'shipped',
+            'shipping_carrier' => 'USPS',
+            'tracking_number' => '9400111899223856928499',
+        ]);
+
+        $this->assertSame(
+            "Order {$order->order_number} has shipped",
+            (new OrderShippedMail($order))->build()->subject
+        );
     }
 
     public function test_cancellation_email_promises_a_refund_only_after_a_capture(): void

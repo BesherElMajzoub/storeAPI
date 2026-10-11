@@ -2992,6 +2992,45 @@
                     "409": {
                         "description": "Order not eligible for refund"
                     },
+                    "502": {
+                        "description": "Stripe refused the refund. The order keeps `refund_status = failed` with the reason, so Retry stays available.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Stripe refund failed."
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "example": null,
+                                            "nullable": true
+                                        },
+                                        "errors": {
+                                            "properties": {
+                                                "stripe_code": {
+                                                    "type": "string",
+                                                    "example": "charge_already_refunded",
+                                                    "nullable": true
+                                                },
+                                                "stripe_message": {
+                                                    "type": "string",
+                                                    "example": "Charge ch_123 has already been refunded."
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
                     "404": {
                         "$ref": "#/components/responses/NotFoundResponse"
                     }
@@ -3772,6 +3811,9 @@
                 "responses": {
                     "200": {
                         "description": "Preview completed or import committed"
+                    },
+                    "409": {
+                        "description": "The catalog changed between validation and commit; nothing was written, run the preview again"
                     },
                     "422": {
                         "description": "CSV or row validation failed; no writes performed"
@@ -7213,7 +7255,77 @@
                 },
                 "responses": {
                     "200": {
-                        "description": "Tracking snapshot returned"
+                        "description": "Tracking snapshot returned. Shipment-specific fields are omitted until a tracking number exists.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Tracking information retrieved."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "order_number": {
+                                                    "type": "string",
+                                                    "example": "ORD-ABC123"
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "example": "in_transit",
+                                                    "nullable": true
+                                                },
+                                                "estimated_delivery": {
+                                                    "type": "string",
+                                                    "format": "date",
+                                                    "nullable": true
+                                                },
+                                                "events": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object"
+                                                    }
+                                                },
+                                                "source": {
+                                                    "type": "string",
+                                                    "nullable": true,
+                                                    "enum": [
+                                                        "manual",
+                                                        "easypost"
+                                                    ]
+                                                },
+                                                "carrier": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "service": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "tracking_number": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "tracking_url": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
                     },
                     "404": {
                         "description": "Generic not-found response for both missing orders and email mismatch"
@@ -7330,7 +7442,7 @@
                     "Reviews"
                 ],
                 "summary": "Update Review",
-                "description": "Update your own review. Edit window is 30 days from creation.",
+                "description": "Update your own review. Rejected reviews can always be resubmitted; other reviews have a 30-day edit window.",
                 "operationId": "61f3e5bed904223d4ab93429a1678bf7",
                 "parameters": [
                     {
@@ -7723,6 +7835,11 @@
                                             },
                                             "type": "object"
                                         }
+                                    },
+                                    "coupon_code": {
+                                        "type": "string",
+                                        "example": "FREESHIP",
+                                        "nullable": true
                                     }
                                 },
                                 "type": "object"
@@ -7749,6 +7866,14 @@
                                             "type": "array",
                                             "items": {
                                                 "properties": {
+                                                    "method": {
+                                                        "type": "string",
+                                                        "example": "standard",
+                                                        "enum": [
+                                                            "standard",
+                                                            "express"
+                                                        ]
+                                                    },
                                                     "rate_id": {
                                                         "type": "string",
                                                         "example": "rate_abc123"
@@ -7762,14 +7887,34 @@
                                                         "example": "Priority"
                                                     },
                                                     "amount": {
+                                                        "description": "Customer-payable shipping charge.",
+                                                        "type": "number",
+                                                        "format": "float",
+                                                        "example": 0
+                                                    },
+                                                    "carrier_amount": {
+                                                        "description": "Actual carrier charge retained for display/accounting.",
                                                         "type": "number",
                                                         "format": "float",
                                                         "example": 8.45
+                                                    },
+                                                    "free_shipping_reason": {
+                                                        "type": "string",
+                                                        "example": "threshold",
+                                                        "nullable": true,
+                                                        "enum": [
+                                                            "threshold",
+                                                            "coupon"
+                                                        ]
                                                     },
                                                     "eta_days": {
                                                         "type": "integer",
                                                         "example": 3,
                                                         "nullable": true
+                                                    },
+                                                    "expires_at": {
+                                                        "type": "string",
+                                                        "format": "date-time"
                                                     }
                                                 },
                                                 "type": "object"

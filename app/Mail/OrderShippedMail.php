@@ -16,7 +16,7 @@ class OrderShippedMail extends Mailable implements ShouldQueue
 
     public function build(): self
     {
-        return $this->subject("Order #{$this->order->order_number} has shipped")
+        return $this->subject("Order {$this->order->order_number} has shipped")
             ->view('emails.order_shipped')
             ->with(['order' => $this->order->loadMissing('items')]);
     }

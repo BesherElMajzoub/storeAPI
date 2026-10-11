@@ -20,6 +20,10 @@ class PublicOrderTrackingTest extends TestCase
             'order_number' => 'OQ-10234',
             'status' => 'shipped',
             'tracking_number' => '9400100000000000000001',
+            'shipment_source' => 'easypost',
+            'shipping_carrier' => 'USPS',
+            'shipping_service' => 'Ground Advantage',
+            'tracking_url' => 'https://track.easypost.test/one',
             'shipment_status' => 'in_transit',
             'estimated_delivery' => '2026-09-04',
             'tracking_events' => [[
@@ -36,9 +40,13 @@ class PublicOrderTrackingTest extends TestCase
         ])->assertOk()
             ->assertHeader('Cache-Control', 'no-store, private')
             ->assertJsonPath('data.status', 'in_transit')
+            ->assertJsonPath('data.source', 'easypost')
+            ->assertJsonPath('data.carrier', 'USPS')
+            ->assertJsonPath('data.service', 'Ground Advantage')
+            ->assertJsonPath('data.tracking_number', '9400100000000000000001')
+            ->assertJsonPath('data.tracking_url', 'https://track.easypost.test/one')
             ->assertJsonPath('data.events.0.location', 'Los Angeles, CA')
-            ->assertJsonMissingPath('data.shipping_address')
-            ->assertJsonMissingPath('data.tracking_number');
+            ->assertJsonMissingPath('data.shipping_address');
     }
 
     public function test_an_order_without_a_label_has_no_shipment_status(): void
@@ -48,7 +56,33 @@ class PublicOrderTrackingTest extends TestCase
 
         $this->postJson('/api/v1/orders/track', ['order_number' => $order->order_number, 'email' => 'early@example.com'])
             ->assertOk()
-            ->assertJsonPath('data.status', null);
+            ->assertJsonPath('data.status', null)
+            ->assertJsonMissingPath('data.tracking_number')
+            ->assertJsonMissingPath('data.carrier');
+    }
+
+    public function test_public_tracking_returns_manual_carrier_and_number_without_label_fields(): void
+    {
+        $user = User::factory()->create(['email' => 'manual@example.com']);
+        $order = Order::factory()->for($user)->create([
+            'order_number' => 'OQ-MANUAL',
+            'status' => 'shipped',
+            'tracking_number' => 'MANUAL123',
+            'shipment_source' => 'manual',
+            'shipping_carrier' => 'OnTrac',
+            'shipping_service' => null,
+            'shipment_status' => 'unknown',
+        ]);
+
+        $this->postJson('/api/v1/orders/track', [
+            'order_number' => $order->order_number,
+            'email' => 'manual@example.com',
+        ])->assertOk()
+            ->assertJsonPath('data.source', 'manual')
+            ->assertJsonPath('data.carrier', 'OnTrac')
+            ->assertJsonPath('data.tracking_number', 'MANUAL123')
+            ->assertJsonPath('data.service', null)
+            ->assertJsonPath('data.tracking_url', null);
     }
 
     public function test_not_found_and_email_mismatch_have_identical_responses(): void

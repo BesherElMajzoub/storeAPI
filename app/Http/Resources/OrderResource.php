@@ -2,10 +2,12 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Order;
 use App\Services\ShippingLabelStore;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
+/** @mixin Order */
 class OrderResource extends JsonResource
 {
     public function toArray(Request $request): array
@@ -75,6 +77,7 @@ class OrderResource extends JsonResource
         }
 
         $shipment = [
+            'source' => $this->shipment_source,
             'tracking_number' => $this->tracking_number,
             'carrier' => $this->shipping_carrier,
             'service' => $this->shipping_service,

@@ -16,7 +16,11 @@ class ReviewPolicy
             return false;
         }
 
-        // 30-day edit window
+        if ($review->status === 'rejected') {
+            return true;
+        }
+
+        // Pending and approved reviews retain the normal 30-day edit window.
         return $review->created_at->diffInDays(now()) <= 30;
     }
 

@@ -11,6 +11,7 @@ use App\Models\OrderCancellationRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use OpenApi\Attributes as OA;
 
@@ -76,6 +77,11 @@ class CancellationRequestController extends Controller
         }
 
         $blockedStatus = DB::transaction(function () use ($cancellation, $request): ?string {
+            $lockedCancellation = OrderCancellationRequest::query()->whereKey($cancellation->id)->lockForUpdate()->firstOrFail();
+            if ($lockedCancellation->status !== 'pending') {
+                return "request already {$lockedCancellation->status}";
+            }
+
             $order = Order::query()->whereKey($cancellation->order_id)->lockForUpdate()->firstOrFail();
 
             if (in_array($order->status, ['shipped', 'delivered', 'refunded'], true)) {
@@ -93,7 +99,7 @@ class CancellationRequestController extends Controller
             }
 
             // Mark the cancellation request as accepted
-            $cancellation->update([
+            $lockedCancellation->update([
                 'status' => 'accepted',
                 'admin_id' => $request->user()->id,
                 'decided_at' => now(),
@@ -107,8 +113,15 @@ class CancellationRequestController extends Controller
         }
 
         // Notify user
-        Mail::to($cancellation->user->email)
-            ->queue(new CancellationRequestDecidedMail($cancellation->refresh(), 'accepted'));
+        try {
+            Mail::to($cancellation->user->email)
+                ->queue(new CancellationRequestDecidedMail($cancellation->refresh(), 'accepted'));
+        } catch (\Throwable $e) {
+            Log::error('Cancellation accepted but the decision email could not be queued.', [
+                'cancellation_request_id' => $cancellation->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return $this->success(
             ['message' => 'Cancellation request accepted. Order cancelled and user notified.'],

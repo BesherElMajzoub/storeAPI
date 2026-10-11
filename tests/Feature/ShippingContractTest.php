@@ -23,6 +23,7 @@ class ShippingContractTest extends TestCase
     public function test_standard_package_is_selected_from_server_side_product_data(): void
     {
         $product = Product::factory()->create([
+            'price' => 20,
             'weight_oz' => 8, 'length_in' => 8, 'width_in' => 6, 'height_in' => 2,
         ]);
         $rate = (object) [
@@ -43,6 +44,8 @@ class ShippingContractTest extends TestCase
         ])->assertOk()
             ->assertJsonPath('data.0.rate_id', 'rate_package')
             ->assertJsonPath('data.0.amount', 8.45)
+            ->assertJsonPath('data.0.carrier_amount', 8.45)
+            ->assertJsonPath('data.0.free_shipping_reason', null)
             ->assertJsonPath('data.0.expires_at', fn ($value) => Carbon::parse($value)->isFuture());
 
         $this->assertDatabaseHas('shipping_rate_quotes', [

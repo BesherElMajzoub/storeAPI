@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Contracts\EasyPostServiceInterface;
+use App\Exceptions\CouponValidationException;
 use App\Exceptions\ShippingProviderException;
 use App\Exceptions\ShippingValidationException;
 use App\Http\Controllers\Controller;
@@ -194,6 +195,7 @@ class ShippingController extends Controller
                         ]
                     )
                 ),
+                new OA\Property(property: 'coupon_code', type: 'string', nullable: true, example: 'FREESHIP'),
             ]
         )
     )]
@@ -209,11 +211,15 @@ class ShippingController extends Controller
                     property: 'data',
                     type: 'array',
                     items: new OA\Items(properties: [
+                        new OA\Property(property: 'method', type: 'string', enum: ['standard', 'express'], example: 'standard'),
                         new OA\Property(property: 'rate_id', type: 'string', example: 'rate_abc123'),
                         new OA\Property(property: 'carrier', type: 'string', example: 'USPS'),
                         new OA\Property(property: 'service', type: 'string', example: 'Priority'),
-                        new OA\Property(property: 'amount', type: 'number', format: 'float', example: 8.45),
+                        new OA\Property(property: 'amount', type: 'number', format: 'float', description: 'Customer-payable shipping charge.', example: 0),
+                        new OA\Property(property: 'carrier_amount', type: 'number', format: 'float', description: 'Actual carrier charge retained for display/accounting.', example: 8.45),
+                        new OA\Property(property: 'free_shipping_reason', type: 'string', enum: ['threshold', 'coupon'], nullable: true, example: 'threshold'),
                         new OA\Property(property: 'eta_days', type: 'integer', nullable: true, example: 3),
+                        new OA\Property(property: 'expires_at', type: 'string', format: 'date-time'),
                     ])
                 ),
                 new OA\Property(property: 'errors', type: 'object', nullable: true, example: null),
@@ -251,7 +257,9 @@ class ShippingController extends Controller
             if ($request->has('items')) {
                 $rates = $this->quotes->quote(
                     $request->validated('address'),
-                    $request->validated('items')
+                    $request->validated('items'),
+                    $request->user('sanctum'),
+                    $request->validated('coupon_code')
                 );
 
                 return response()->json([
@@ -282,6 +290,13 @@ class ShippingController extends Controller
                 ],
                 'errors' => null,
             ])->header('Deprecation', 'true');
+        } catch (CouponValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'data' => null,
+                'errors' => ['coupon_code' => [$e->getMessage()]],
+            ], 422);
         } catch (ShippingValidationException $e) {
             return response()->json([
                 'success' => false,

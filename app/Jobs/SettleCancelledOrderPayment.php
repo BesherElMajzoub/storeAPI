@@ -43,7 +43,7 @@ class SettleCancelledOrderPayment implements ShouldQueue
             return;
         }
 
-        $order->update(['refund_status' => 'failed']);
+        app(OrderPaymentService::class)->recordRefundFailure($order, $e);
 
         Log::critical('Returning money for a cancelled order failed after all retries.', [
             'order_id' => $order->id,

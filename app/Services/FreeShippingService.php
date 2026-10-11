@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Coupon;
 use App\Models\Setting;
 
 class FreeShippingService
@@ -37,6 +38,19 @@ class FreeShippingService
         $threshold = $this->threshold();
 
         return $threshold !== null && $subtotal >= $threshold;
+    }
+
+    public function reasonFor(string $method, float $subtotalAfterDiscount, ?Coupon $coupon = null): ?string
+    {
+        if ($method !== 'standard') {
+            return null;
+        }
+
+        if ($this->subtotalQualifies($subtotalAfterDiscount)) {
+            return 'threshold';
+        }
+
+        return $coupon?->isFreeShipping() ? 'coupon' : null;
     }
 
     public function update(bool $enabled, ?float $threshold): void

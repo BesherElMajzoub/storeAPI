@@ -1,7 +1,7 @@
 # Production Deployment Checklist
 
 **Prepared:** September 25, 2026  
-**Last updated:** September 26, 2026  
+**Last updated:** October 12, 2026
 **Release state:** Not approved until every blocking item below has evidence
 
 Never paste secret values into this file, terminal captures, tickets, or chat. Readiness output should remain masked.
@@ -34,8 +34,10 @@ Never paste secret values into this file, terminal captures, tickets, or chat. R
 - [ ] Deployment Owner: Stripe webhook subscribes to `checkout.session.completed`, `checkout.session.expired`, `charge.refunded`, `refund.failed`, `payment_intent.canceled`; Checkout stays card-only (manual capture).
 - [ ] Deployment Owner: `storage/app/private/labels` is on persistent, backed-up storage (label PDFs are kept there); `EASYPOST_LABEL_FORMAT=PDF`, `EASYPOST_LABEL_SIZE=4x6`.
 - [ ] Deployment Owner: PHP `upload_max_filesize >= 6M` and `post_max_size >= 45M` (8 images x 5 MB per request); `APP_DEBUG=false`.
-- [ ] Deployment Owner: disable the host's browser-check/bot challenge for the storefront and API domains.
-- [ ] Deployment Owner: after deploy run `php artisan media-library:regenerate --force` (product cards are now 600x800).
+- [ ] Deployment Owner: in Hostinger hPanel, disable browser-check/bot challenges for the storefront and API domains, and bypass CDN caching/challenges for `/api/*` when the plan supports it.
+- [ ] Deployment Owner: explicitly allow both `https://otantikqueen.com` and `https://www.otantikqueen.com` in CORS, while retaining the www-to-bare canonical redirect.
+- [ ] Deployment Owner: after deploy run `php artisan media-library:regenerate --force` and monitor the dedicated `media` queue until all product conversions finish.
+- [ ] Deployment Owner: run a dedicated worker for `media` jobs in addition to the default notification/payment worker.
 - [ ] Product Owner: record decisions for tax and free-shipping behavior, or explicitly approve no tax/free-shipping feature for this release.
 
 ## Code verification before deployment
@@ -79,6 +81,16 @@ php artisan view:cache
 php artisan app:production-readiness
 ```
 
+Demo cleanup, if approved, must be previewed first and requires a recorded backup:
+
+```bash
+php artisan app:cleanup-demo-data
+php artisan app:cleanup-demo-data --execute --backup-reference="BACKUP-REFERENCE"
+php artisan app:production-readiness
+```
+
+Use repeated `--order=ORD-...` or `--product=123` only for owner-approved retest records. Product 102 and all non-demo records are excluded unless explicitly supplied.
+
 8. If any readiness row fails, stop the release and follow the rollback section. Do not enable frontend feature flags.
 
 ## Production data verification
@@ -95,6 +107,9 @@ php artisan app:production-readiness
 Use approved test accounts/data and avoid destructive tests against customer records.
 
 - [ ] `GET /api/v1/health` returns the expected `version` and `deployed_at`.
+- [ ] Browser and script user agents can load the storefront and API without a Hostinger challenge or `403`.
+- [ ] `https://www.otantikqueen.com` redirects to the bare canonical domain, and the redirected API/storefront request succeeds.
+- [ ] A fresh browser profile passes CORS preflight from both allowed frontend origins; record CDN headers and end-to-end latency.
 - [ ] An intentionally invalid `/api/v1/*` request without `Accept` returns JSON `422`, never `302`.
 - [ ] Public product list excludes products in inactive categories.
 - [ ] `GET /products?in_stock=true` and `false` both return `200` with correct filtering.

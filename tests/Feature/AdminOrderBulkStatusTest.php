@@ -142,6 +142,8 @@ class AdminOrderBulkStatusTest extends TestCase
         $order = Order::factory()->create([
             'status' => 'processing', 'payment_status' => 'paid',
             'stripe_payment_intent_id' => 'pi_manual_ship', 'stock_reserved_at' => now(), 'total' => 100,
+            'easypost_shipment_id' => 'shp_quote_only', 'shipping_rate_id' => 'rate_quote_only',
+            'shipping_service' => 'Ground Advantage',
         ]);
         $order->items()->create([
             'product_id' => $product->id, 'product_name' => $product->name,
@@ -152,7 +154,20 @@ class AdminOrderBulkStatusTest extends TestCase
 
         $this->postJson("/api/v1/admin/orders/{$order->id}/status", [
             'status' => 'shipped', 'shipping_carrier' => 'USPS', 'tracking_number' => '9400100000000000000001',
-        ])->assertOk()->assertJsonPath('data.shipment.tracking_number', '9400100000000000000001');
+        ])->assertOk()
+            ->assertJsonPath('data.shipment.source', 'manual')
+            ->assertJsonPath('data.shipment.tracking_number', '9400100000000000000001')
+            ->assertJsonPath('data.shipment.service', null)
+            ->assertJsonPath('data.shipment.label_download_url', null)
+            ->assertJsonPath('data.easypost_shipment_id', null);
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'shipment_source' => 'manual',
+            'easypost_shipment_id' => null,
+            'shipping_rate_id' => null,
+            'shipping_service' => null,
+            'shipment_status' => 'unknown',
+        ]);
         $this->assertNotNull($order->fresh()->shipped_at);
 
         $this->mock(StripeCheckoutService::class, function ($mock): void {

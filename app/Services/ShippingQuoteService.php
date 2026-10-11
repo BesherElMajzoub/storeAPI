@@ -7,17 +7,26 @@ use App\Exceptions\ShippingProviderException;
 use App\Exceptions\ShippingValidationException;
 use App\Models\Product;
 use App\Models\ShippingRateQuote;
+use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 
 class ShippingQuoteService
 {
-    public function __construct(private readonly EasyPostServiceInterface $easyPost) {}
+    public function __construct(
+        private readonly EasyPostServiceInterface $easyPost,
+        private readonly CouponService $coupons,
+        private readonly FreeShippingService $freeShipping,
+    ) {}
 
-    public function quote(array $address, array $items): array
+    public function quote(array $address, array $items, ?User $user = null, ?string $couponCode = null): array
     {
         $normalizedAddress = $this->normalizeAddress($address);
         $normalizedItems = $this->normalizeItems($items);
+        $subtotal = $this->subtotal($normalizedItems);
+        $coupon = $couponCode ? $this->coupons->validateCoupon($couponCode, $user, $subtotal) : null;
+        $discount = $coupon ? $this->coupons->calculateDiscount($coupon, $subtotal) : 0.0;
+        $subtotalAfterDiscount = max(0.0, $subtotal - $discount);
         $parcel = $this->buildParcel($normalizedItems);
         $carrierAccounts = $this->domesticCarrierAccounts();
 
@@ -45,6 +54,7 @@ class ShippingQuoteService
                     'shipment_id' => $shipment->id,
                     'carrier' => $rate->carrier,
                     'service' => $rate->service,
+                    'method' => $method,
                     'amount' => $rate->rate,
                     'currency' => strtoupper($rate->currency ?? 'USD'),
                     'eta_days' => isset($rate->delivery_days) ? (int) $rate->delivery_days : null,
@@ -57,18 +67,34 @@ class ShippingQuoteService
                 ]
             );
 
+            $carrierAmount = (float) $quote->amount;
+            $freeShippingReason = $this->freeShipping->reasonFor($method, $subtotalAfterDiscount, $coupon);
+
             $result[] = [
                 'method' => $method,
                 'rate_id' => $quote->rate_id,
                 'carrier' => $quote->carrier,
                 'service' => $quote->service,
-                'amount' => (float) $quote->amount,
+                'amount' => $freeShippingReason ? 0.0 : $carrierAmount,
+                'carrier_amount' => $carrierAmount,
+                'free_shipping_reason' => $freeShippingReason,
                 'eta_days' => $quote->eta_days,
                 'expires_at' => $quote->expires_at->toIso8601String(),
             ];
         }
 
         return $result;
+    }
+
+    private function subtotal(Collection $items): float
+    {
+        return round($items->sum(function (array $line): float {
+            $price = $line['variant']
+                ? $line['variant']->finalPriceFor($line['product'])
+                : (float) $line['product']->final_price;
+
+            return $price * $line['quantity'];
+        }), 2);
     }
 
     /**

@@ -68,7 +68,7 @@ class ReviewController extends Controller
             return $this->error(
                 $e->getMessage(),
                 $e->httpStatus,
-                ['code' => $e->errorCode],
+                ['code' => $e->errorCode, ...$e->details],
             );
         }
     }
@@ -100,7 +100,7 @@ class ReviewController extends Controller
     #[OA\Put(
         path: '/api/v1/products/{product}/reviews/{review}',
         summary: 'Update Review',
-        description: 'Update your own review. Edit window is 30 days from creation.',
+        description: 'Update your own review. Rejected reviews can always be resubmitted; other reviews have a 30-day edit window.',
         security: [['bearerAuth' => []]],
         tags: ['Reviews']
     )]

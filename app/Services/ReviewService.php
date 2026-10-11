@@ -37,11 +37,16 @@ class ReviewService
             throw new ReviewSubmissionException(
                 message: match ($existingReview->status) {
                     'pending' => 'You already have a review for this product awaiting moderation.',
-                    'rejected' => 'Your previous review for this product was rejected. You cannot submit another one.',
+                    'rejected' => 'Your previous review was rejected. Edit and resubmit the existing review.',
                     default => 'You have already reviewed this product.',
                 },
                 httpStatus: 409,
-                errorCode: 'REVIEW_ALREADY_EXISTS',
+                errorCode: $existingReview->status === 'rejected'
+                    ? 'REVIEW_REJECTED_RESUBMIT'
+                    : 'REVIEW_ALREADY_EXISTS',
+                details: $existingReview->status === 'rejected'
+                    ? ['review_id' => $existingReview->id]
+                    : [],
             );
         }
 
@@ -84,6 +89,7 @@ class ReviewService
             'rating' => $data['rating'] ?? $review->rating,
             'comment' => $data['comment'] ?? $review->comment,
             'status' => 'pending', // Re-moderate after edit
+            'admin_note' => null,
         ]);
 
         return $review->fresh();

@@ -26,7 +26,7 @@ class OrderConfirmedMail extends Mailable implements ShouldQueue
             ? $cancellation['direct_until']?->copy()->setTimezone(config('orders.store_timezone', 'America/Los_Angeles'))
             : null;
 
-        return $this->subject("Order confirmed: #{$order->order_number}")
+        return $this->subject("Order confirmed: {$order->order_number}")
             ->view('emails.order_confirmed')
             ->with([
                 'order' => $order,

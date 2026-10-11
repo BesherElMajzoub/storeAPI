@@ -83,7 +83,9 @@ class ShippingLabelStore
      */
     public function downloadUrl(Order $order): ?string
     {
-        if (! $order->tracking_number || (! $order->label_path && ! $order->easypost_shipment_id)) {
+        if ($order->shipment_source !== 'easypost'
+            || ! $order->tracking_number
+            || (! $order->label_path && ! $order->label_url)) {
             return null;
         }
 

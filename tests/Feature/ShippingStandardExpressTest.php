@@ -3,8 +3,13 @@
 namespace Tests\Feature;
 
 use App\Contracts\EasyPostServiceInterface;
+use App\Models\Coupon;
+use App\Models\Order;
 use App\Models\Product;
+use App\Models\User;
+use App\Services\StripeCheckoutService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Stripe\Checkout\Session as StripeSession;
 use Tests\TestCase;
 
 class ShippingStandardExpressTest extends TestCase
@@ -43,7 +48,8 @@ class ShippingStandardExpressTest extends TestCase
 
     public function test_cheapest_usps_rate_becomes_standard_and_fastest_ups_rate_becomes_express(): void
     {
-        $product = Product::factory()->create();
+        // Above the $100 threshold, so Standard is free and Express is not.
+        $product = Product::factory()->create(['price' => 150.00, 'discount_price' => null]);
         $shipment = (object) ['id' => 'shp_bucket', 'rates' => [
             (object) ['id' => 'rate_usps_cheap', 'carrier' => 'USPS', 'service' => 'Ground Advantage', 'rate' => '6.00', 'currency' => 'USD', 'delivery_days' => 5],
             (object) ['id' => 'rate_usps_pricey', 'carrier' => 'USPS', 'service' => 'Priority', 'rate' => '9.00', 'currency' => 'USD', 'delivery_days' => 3],
@@ -66,6 +72,88 @@ class ShippingStandardExpressTest extends TestCase
 
         $this->assertSame('rate_usps_cheap', $standard['rate_id']);
         $this->assertSame('rate_ups_fast', $express['rate_id']);
+        $this->assertSame(0, $standard['amount']);
+        $this->assertSame(6, $standard['carrier_amount']);
+        $this->assertSame('threshold', $standard['free_shipping_reason']);
+        $this->assertSame(30, $express['amount']);
+        $this->assertSame(30, $express['carrier_amount']);
+        $this->assertNull($express['free_shipping_reason']);
+    }
+
+    public function test_monetary_discount_is_applied_before_the_standard_threshold(): void
+    {
+        $product = Product::factory()->create(['price' => 120]);
+        Coupon::create(['code' => 'SAVE30', 'type' => 'fixed', 'value' => 30, 'is_active' => true]);
+        $this->mockTwoRates('discount');
+
+        $data = $this->postJson('/api/v1/shipping/rates', [
+            'address' => $this->address(),
+            'items' => [['product_id' => $product->id, 'quantity' => 1]],
+            'coupon_code' => 'SAVE30',
+        ])->assertOk()->json('data');
+
+        $this->assertSame(6, collect($data)->firstWhere('method', 'standard')['amount']);
+        $this->assertNull(collect($data)->firstWhere('method', 'standard')['free_shipping_reason']);
+        $this->assertSame(30, collect($data)->firstWhere('method', 'express')['amount']);
+    }
+
+    public function test_free_shipping_coupon_waives_only_standard_below_the_threshold(): void
+    {
+        $product = Product::factory()->create(['price' => 60]);
+        Coupon::create(['code' => 'FREESHIP', 'type' => 'free_shipping', 'value' => 0, 'is_active' => true]);
+        $this->mockTwoRates('coupon');
+
+        $data = $this->postJson('/api/v1/shipping/rates', [
+            'address' => $this->address(),
+            'items' => [['product_id' => $product->id, 'quantity' => 1]],
+            'coupon_code' => 'FREESHIP',
+        ])->assertOk()->json('data');
+
+        $standard = collect($data)->firstWhere('method', 'standard');
+        $express = collect($data)->firstWhere('method', 'express');
+        $this->assertSame(0, $standard['amount']);
+        $this->assertSame('coupon', $standard['free_shipping_reason']);
+        $this->assertSame(30, $express['amount']);
+        $this->assertNull($express['free_shipping_reason']);
+    }
+
+    public function test_order_creation_recalculates_and_preserves_express_price_above_threshold(): void
+    {
+        $user = User::factory()->create();
+        $product = Product::factory()->create(['price' => 120, 'stock_qty' => 5]);
+        $shipment = (object) ['id' => 'shp_order_express', 'rates' => [
+            (object) ['id' => 'rate_order_standard', 'carrier' => 'USPS', 'service' => 'Ground Advantage', 'rate' => '6.00', 'currency' => 'USD', 'delivery_days' => 5],
+            (object) ['id' => 'rate_order_express', 'carrier' => 'UPS', 'service' => 'Next Day Air', 'rate' => '30.00', 'currency' => 'USD', 'delivery_days' => 1],
+        ]];
+
+        $this->mock(EasyPostServiceInterface::class, function ($mock) use ($shipment): void {
+            $mock->shouldReceive('getShippingRates')->once()->andReturn($shipment);
+            $mock->shouldReceive('retrieveRate')->once()->with('rate_order_express')->andReturn((object) [
+                'id' => 'rate_order_express', 'shipment_id' => 'shp_order_express',
+                'carrier' => 'UPS', 'service' => 'Next Day Air', 'rate' => '30.00',
+                'currency' => 'USD', 'delivery_days' => 1,
+            ]);
+        });
+        $this->mock(StripeCheckoutService::class, fn ($mock) => $mock->shouldReceive('createCheckoutSession')->once()->andReturn(
+            StripeSession::constructFrom(['id' => 'cs_express', 'url' => 'https://checkout.test/cs_express'])
+        ));
+
+        $rates = $this->actingAs($user, 'sanctum')->postJson('/api/v1/shipping/rates', [
+            'address' => $this->address(),
+            'items' => [['product_id' => $product->id, 'quantity' => 1]],
+        ])->assertOk()->json('data');
+        $express = collect($rates)->firstWhere('method', 'express');
+
+        $this->postJson('/api/v1/orders', [
+            'shipping_address' => $this->address(),
+            'items' => [['product_id' => $product->id, 'quantity' => 1]],
+            'shipping_rate_id' => $express['rate_id'],
+        ])->assertCreated();
+
+        $order = Order::latest('id')->firstOrFail();
+        $this->assertSame('30.00', $order->shipping_cost);
+        $this->assertSame('30.00', $order->carrier_shipping_cost);
+        $this->assertNull($order->free_shipping_reason);
     }
 
     public function test_falls_back_to_cheapest_and_fastest_overall_when_a_carrier_is_missing_from_the_response(): void
@@ -115,5 +203,15 @@ class ShippingStandardExpressTest extends TestCase
             'name' => 'Buyer', 'line1' => '123 Main St', 'city' => 'Pasadena', 'state' => 'CA',
             'postal_code' => '91101', 'country' => 'US',
         ];
+    }
+
+    private function mockTwoRates(string $suffix): void
+    {
+        $shipment = (object) ['id' => "shp_{$suffix}", 'rates' => [
+            (object) ['id' => "rate_usps_{$suffix}", 'carrier' => 'USPS', 'service' => 'Ground Advantage', 'rate' => '6.00', 'currency' => 'USD', 'delivery_days' => 5],
+            (object) ['id' => "rate_ups_{$suffix}", 'carrier' => 'UPS', 'service' => 'Next Day Air', 'rate' => '30.00', 'currency' => 'USD', 'delivery_days' => 1],
+        ]];
+
+        $this->mock(EasyPostServiceInterface::class, fn ($mock) => $mock->shouldReceive('getShippingRates')->once()->andReturn($shipment));
     }
 }

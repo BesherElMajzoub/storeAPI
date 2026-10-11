@@ -12,6 +12,18 @@ class ConcurrentInventoryTest extends TestCase
 {
     use DatabaseTruncation;
 
+    /**
+     * DatabaseTruncation only clears tables before a test. The worker
+     * processes commit real rows, so clear them afterwards too, or they
+     * leak into the RefreshDatabase tests that run next.
+     */
+    protected function tearDown(): void
+    {
+        $this->truncateTablesForAllConnections();
+
+        parent::tearDown();
+    }
+
     public function test_two_concurrent_orders_for_the_last_unit_allow_exactly_one_reservation(): void
     {
         if (! function_exists('proc_open')) {

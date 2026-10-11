@@ -10,6 +10,7 @@ class ReviewSubmissionException extends RuntimeException
         string $message,
         public readonly int $httpStatus,
         public readonly string $errorCode,
+        public readonly array $details = [],
     ) {
         parent::__construct($message);
     }

@@ -52,7 +52,7 @@ class TelegramNotificationTest extends TestCase
             return $request->url() === 'https://api.telegram.org/bottest-bot-token/sendMessage'
                 && $request['chat_id'] === 'test-chat-id'
                 && $request['text'] === 'Hello World'
-                && $request['parse_mode'] === 'Markdown';
+                && $request['parse_mode'] === 'HTML';
         });
     }
 

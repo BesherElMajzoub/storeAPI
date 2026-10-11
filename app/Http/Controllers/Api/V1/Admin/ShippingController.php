@@ -193,6 +193,7 @@ class ShippingController extends Controller
                     'label_url' => $boughtShipment->postage_label->label_url,
                     'tracking_url' => $boughtShipment->tracker->public_url ?? null,
                     'shipment_status' => 'pre_transit',
+                    'shipment_source' => 'easypost',
                     'shipped_at' => now(),
                     'estimated_delivery' => isset($boughtShipment->tracker->est_delivery_date)
                         ? Carbon::parse($boughtShipment->tracker->est_delivery_date)->toDateString()
@@ -422,6 +423,7 @@ class ShippingController extends Controller
             'tracking_number' => $order->tracking_number,
             'label_url' => $order->label_url,
             'shipment' => [
+                'source' => $order->shipment_source,
                 'tracking_number' => $order->tracking_number,
                 'carrier' => $order->shipping_carrier,
                 'service' => $order->shipping_service,

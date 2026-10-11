@@ -17,6 +17,7 @@ return [
 
     'allowed_origins' => array_values(array_unique(array_filter([
         env('FRONTEND_URL', 'https://otantikqueen.com'),
+        env('FRONTEND_WWW_URL', 'https://www.otantikqueen.com'),
         env('STAGING_FRONTEND_URL'),
         in_array(env('APP_ENV', 'production'), ['local', 'testing'], true) ? 'http://localhost:5173' : null,
         in_array(env('APP_ENV', 'production'), ['local', 'testing'], true) ? 'http://localhost:3000' : null,

@@ -153,6 +153,7 @@ class EasyPostShippingTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJsonPath('success', true)
+            ->assertJsonPath('data.shipment.source', 'easypost')
             ->assertJsonPath('data.tracking_number', 'EZ1000000001')
             ->assertJsonPath('data.label_url', 'https://easypost.com/label.png');
 
@@ -161,6 +162,7 @@ class EasyPostShippingTest extends TestCase
             'status' => 'shipped',
             'tracking_number' => 'EZ1000000001',
             'label_url' => 'https://easypost.com/label.png',
+            'shipment_source' => 'easypost',
         ]);
         Mail::assertQueued(OrderShippedMail::class, fn (OrderShippedMail $mail) => $mail->order->is($order));
 

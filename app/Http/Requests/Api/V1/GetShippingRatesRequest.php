@@ -33,6 +33,7 @@ class GetShippingRatesRequest extends FormRequest
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'items.*.variant_id' => ['nullable', 'integer', 'exists:product_variants,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:100'],
+            'coupon_code' => ['nullable', 'string', 'max:64', 'regex:/^[A-Za-z0-9_-]+$/'],
 
             'parcel' => ['required_without:items', 'array'],
             'parcel.length' => ['required_with:parcel', 'numeric', 'between:0.1,200'],

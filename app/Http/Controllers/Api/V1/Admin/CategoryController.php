@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Admin\ReorderCategoryRequest;
 use App\Http\Requests\Api\V1\Admin\StoreCategoryRequest;
 use App\Http\Requests\Api\V1\Admin\UpdateCategoryRequest;
-use App\Http\Resources\CategoryDetailResource;
+use App\Http\Resources\AdminCategoryResource;
 use App\Models\Category;
 use App\Services\CategoryService;
 use App\Services\ImageSanitizer;
@@ -55,7 +55,7 @@ class CategoryController extends Controller
 
         $categories = $query->with('media')->get();
 
-        return $this->success(CategoryDetailResource::collection($categories), 'Categories fetched.');
+        return $this->success(AdminCategoryResource::collection($categories), 'Categories fetched.');
     }
 
     #[OA\Post(
@@ -110,7 +110,7 @@ class CategoryController extends Controller
                 ->toMediaCollection('category_image');
         }
 
-        return $this->success(new CategoryDetailResource($category->load('media')), 'Category created.', 201);
+        return $this->success(new AdminCategoryResource($category->load('media')), 'Category created.', 201);
     }
 
     #[OA\Post(
@@ -171,7 +171,7 @@ class CategoryController extends Controller
                 ->toMediaCollection('category_image');
         }
 
-        return $this->success(new CategoryDetailResource($category->refresh()->load('media')), 'Category updated.');
+        return $this->success(new AdminCategoryResource($category->refresh()->load('media')), 'Category updated.');
     }
 
     #[OA\Delete(
@@ -264,9 +264,9 @@ class CategoryController extends Controller
             $query->with($this->buildChildrenDepth($depth));
         }
 
-        $categories = $query->get();
+        $categories = $query->with('media')->get();
 
-        return $this->success($categories, 'Categories reordered.');
+        return $this->success(AdminCategoryResource::collection($categories), 'Categories reordered.');
     }
 
     #[OA\Get(
@@ -292,7 +292,7 @@ class CategoryController extends Controller
     {
         $category = Category::with('media')->findOrFail($id);
 
-        return $this->success(new CategoryDetailResource($category), 'Category fetched.');
+        return $this->success(new AdminCategoryResource($category), 'Category fetched.');
     }
 
     private function success($data, string $message, int $status = 200): JsonResponse
@@ -312,6 +312,7 @@ class CategoryController extends Controller
 
         for ($i = 1; $i <= $depth; $i++) {
             $relations[] = $relation;
+            $relations[] = $relation.'.media';
             $relation .= '.children';
         }
 

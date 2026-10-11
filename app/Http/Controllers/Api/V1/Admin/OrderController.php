@@ -309,6 +309,21 @@ class OrderController extends Controller
             $data['payment_status'] = 'voided';
         }
 
+        if (($data['status'] ?? null) === 'shipped' && filled($data['tracking_number'] ?? null)) {
+            $data = array_merge($data, [
+                'shipment_source' => 'manual',
+                'shipping_service' => null,
+                'shipment_status' => 'unknown',
+                'tracking_url' => null,
+                'estimated_delivery' => null,
+                'tracking_events' => null,
+                'easypost_shipment_id' => null,
+                'shipping_rate_id' => null,
+                'label_url' => null,
+                'label_path' => null,
+            ]);
+        }
+
         if (($data['status'] ?? null) === 'cancelled' && (string) $order->getRawOriginal('status') === 'pending_payment') {
             try {
                 if (! $this->expirePendingPaymentSession($order, $stripe)) {
@@ -434,6 +449,19 @@ class OrderController extends Controller
     #[OA\Response(response: 200, description: 'Order refunded')]
     #[OA\Response(response: 202, description: 'Refund accepted and awaiting Stripe confirmation')]
     #[OA\Response(response: 409, description: 'Order not eligible for refund')]
+    #[OA\Response(
+        response: 502,
+        description: 'Stripe refused the refund. The order keeps `refund_status = failed` with the reason, so Retry stays available.',
+        content: new OA\JsonContent(properties: [
+            new OA\Property(property: 'success', type: 'boolean', example: false),
+            new OA\Property(property: 'message', type: 'string', example: 'Stripe refund failed.'),
+            new OA\Property(property: 'data', type: 'object', nullable: true, example: null),
+            new OA\Property(property: 'errors', type: 'object', properties: [
+                new OA\Property(property: 'stripe_code', type: 'string', nullable: true, example: 'charge_already_refunded'),
+                new OA\Property(property: 'stripe_message', type: 'string', example: 'Charge ch_123 has already been refunded.'),
+            ]),
+        ])
+    )]
     #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
     public function refund(int $order, StripeCheckoutService $stripe, OrderPaymentService $payments): JsonResponse
     {
@@ -542,9 +570,12 @@ class OrderController extends Controller
                 'order_id' => $order->id,
                 'error' => $e->getMessage(),
             ]);
-            $order->update(['refund_status' => 'failed']);
+            $failure = $payments->recordRefundFailure($order, $e);
 
-            return $this->error('Stripe refund failed.', 502);
+            return $this->error('Stripe refund failed.', 502, [
+                'stripe_code' => $failure['code'],
+                'stripe_message' => $failure['message'],
+            ]);
         }
 
         $data = ['order_id' => $order->id, 'refund_status' => $refundStatus];

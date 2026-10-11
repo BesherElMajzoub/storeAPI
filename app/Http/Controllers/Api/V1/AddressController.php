@@ -270,10 +270,18 @@ class AddressController extends Controller
         ]);
 
         $data = $changes ?? $address;
+        $verifiedLine1 = $verified['street1'] ?? null;
+        $verifiedLine2 = $verified['street2'] ?? null;
+
+        if ($this->normalizedAddressText($verifiedLine2) !== ''
+            && str_contains($this->normalizedAddressText($verifiedLine1), $this->normalizedAddressText($verifiedLine2))) {
+            $verifiedLine2 = null;
+        }
+
         $normalizedFields = [
-            'street' => $verified['street1'] ?? null,
-            'line1' => $verified['street1'] ?? null,
-            'line2' => $verified['street2'] ?? null,
+            'street' => $verifiedLine1,
+            'line1' => $verifiedLine1,
+            'line2' => $verifiedLine2,
             'city' => $verified['city'] ?? null,
             'state' => $verified['state'] ?? null,
             'postal_code' => $verified['zip'] ?? null,
@@ -281,12 +289,54 @@ class AddressController extends Controller
         ];
 
         foreach ($normalizedFields as $field => $value) {
-            if ($value !== null) {
+            if ($value !== null || $field === 'line2') {
                 $data[$field] = $value;
             }
         }
 
+        $canonicalLines = trim(implode(' ', array_filter([$verifiedLine1, $verifiedLine2])));
+        foreach (['building', 'floor', 'apartment'] as $component) {
+            $value = $address[$component] ?? null;
+            if ($this->componentAppearsInCanonicalLines($component, $value, $canonicalLines)) {
+                $data[$component] = null;
+            }
+        }
+
         return $data;
+    }
+
+    private function componentAppearsInCanonicalLines(string $component, mixed $value, string $canonicalLines): bool
+    {
+        $value = $this->normalizedAddressText($value);
+        $lines = $this->normalizedAddressText($canonicalLines);
+        if ($value === '' || $lines === '') {
+            return false;
+        }
+
+        $labels = match ($component) {
+            'apartment' => ['apartment', 'apt', 'unit'],
+            'floor' => ['floor', 'fl'],
+            'building' => ['building', 'bldg'],
+            default => [],
+        };
+
+        foreach ($labels as $label) {
+            if (preg_match('/(?:^| )'.preg_quote($label, '/').' '.preg_quote($value, '/').'(?: |$)/', $lines)) {
+                return true;
+            }
+        }
+
+        if ($component === 'apartment' && preg_match('/(?:^| )'.preg_quote($value, '/').'(?: |$)/', $lines)
+            && preg_match('/#\s*'.preg_quote($value, '/').'(?:\b|$)/i', $canonicalLines)) {
+            return true;
+        }
+
+        return $component === 'building' && mb_strlen($value) >= 3 && str_contains($lines, $value);
+    }
+
+    private function normalizedAddressText(mixed $value): string
+    {
+        return trim(preg_replace('/\s+/', ' ', preg_replace('/[^\pL\pN]+/u', ' ', mb_strtolower((string) $value))) ?? '');
     }
 
     private function addressVerificationFailed(Exception $exception): JsonResponse

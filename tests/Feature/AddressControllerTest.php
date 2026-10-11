@@ -234,6 +234,73 @@ class AddressControllerTest extends TestCase
         $this->assertDatabaseCount('addresses', 0);
     }
 
+    public function test_verified_unit_is_stored_once_when_provider_moves_it_into_line_one(): void
+    {
+        $user = User::factory()->create();
+
+        $this->mock(EasyPostServiceInterface::class, function ($mock): void {
+            $mock->shouldReceive('verifyAddress')->once()->andReturn([
+                'street1' => '500 Main St, APT. 2-B',
+                'street2' => 'apt 2 b',
+                'city' => 'Seattle',
+                'state' => 'WA',
+                'zip' => '98101',
+                'country' => 'US',
+            ]);
+        });
+
+        $this->actingAs($user, 'sanctum')->postJson('/api/v1/profile/addresses', [
+            'label' => 'home',
+            'full_name' => 'Jane Smith',
+            'phone' => '123456789',
+            'country' => 'US',
+            'city' => 'Seattle',
+            'state' => 'WA',
+            'street' => '500 Main St',
+            'apartment' => '2-B',
+            'postal_code' => '98101',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('addresses', [
+            'user_id' => $user->id,
+            'line1' => '500 Main St, APT. 2-B',
+            'line2' => null,
+            'apartment' => null,
+        ]);
+    }
+
+    public function test_distinct_verified_line_two_and_structured_component_are_preserved(): void
+    {
+        $user = User::factory()->create();
+
+        $this->mock(EasyPostServiceInterface::class, function ($mock): void {
+            $mock->shouldReceive('verifyAddress')->once()->andReturn([
+                'street1' => '500 Main St',
+                'street2' => 'Rear entrance',
+                'city' => 'Seattle',
+                'state' => 'WA',
+                'zip' => '98101',
+                'country' => 'US',
+            ]);
+        });
+
+        $this->actingAs($user, 'sanctum')->postJson('/api/v1/profile/addresses', [
+            'label' => 'home',
+            'full_name' => 'Jane Smith',
+            'phone' => '123456789',
+            'country' => 'US',
+            'city' => 'Seattle',
+            'street' => '500 Main St',
+            'building' => 'North Tower',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('addresses', [
+            'user_id' => $user->id,
+            'line2' => 'Rear entrance',
+            'building' => 'North Tower',
+        ]);
+    }
+
     public function test_user_can_update_address()
     {
         $user = User::factory()->create();

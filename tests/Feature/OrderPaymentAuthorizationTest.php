@@ -16,6 +16,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Services\OrderPaymentService;
 use App\Services\StripeCheckoutService;
+use Illuminate\Contracts\Bus\Dispatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
@@ -277,6 +278,8 @@ class OrderPaymentAuthorizationTest extends TestCase
 
         $this->assertSame('cancelled', $order->fresh()->status);
         $this->assertSame('failed', $order->fresh()->refund_status);
+        $this->assertSame('Stripe is down', $order->fresh()->refund_failure_message);
+        $this->assertNotNull($order->fresh()->refund_failed_at);
         Queue::assertPushed(SendAdminAlert::class, 1);
     }
 
@@ -335,6 +338,25 @@ class OrderPaymentAuthorizationTest extends TestCase
             'refund_status' => 'succeeded',
         ]);
         $this->assertSame('accepted', $request->fresh()->status);
+    }
+
+    public function test_queue_dispatch_failure_does_not_undo_an_accepted_cancellation(): void
+    {
+        $order = $this->authorizedOrder(['payment_status' => 'paid', 'paid_at' => now()->subDay(), 'authorized_at' => now()->subDay()]);
+        $request = $this->cancellationRequest($order);
+
+        $this->mock(Dispatcher::class, function ($mock): void {
+            $mock->shouldReceive('dispatch')->andThrow(new RuntimeException('Queue transport unavailable'));
+        });
+
+        $this->actingAs($this->admin(), 'sanctum')
+            ->postJson("/api/v1/admin/cancellation-requests/{$request->id}/accept")
+            ->assertOk();
+
+        $this->assertSame('accepted', $request->fresh()->status);
+        $this->assertSame('cancelled', $order->fresh()->status);
+        $this->assertSame('failed', $order->fresh()->refund_status);
+        $this->assertSame('Queue transport unavailable', $order->fresh()->refund_failure_message);
     }
 
     public function test_a_cancellation_request_cannot_be_accepted_after_the_order_shipped(): void

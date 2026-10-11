@@ -16,7 +16,9 @@ use Database\Seeders\DemoCatalogSeeder;
 use Database\Seeders\DemoCommerceSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Spatie\MediaLibrary\Conversions\Jobs\PerformConversionsJob;
 use Tests\TestCase;
 
 class DemoDatabaseSeederTest extends TestCase
@@ -26,6 +28,7 @@ class DemoDatabaseSeederTest extends TestCase
     public function test_demo_dataset_covers_frontend_catalogue_commerce_and_empty_states(): void
     {
         Storage::fake('public');
+        Queue::fake([PerformConversionsJob::class]);
 
         $this->seed(DatabaseSeeder::class);
 

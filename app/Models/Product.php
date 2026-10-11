@@ -50,32 +50,28 @@ class Product extends Model implements HasMedia
         $this->addMediaCollection('product_images');
     }
 
-    /**
-     * nonQueued() so conversions are generated immediately on upload.
-     * To switch back to queued in production, replace ->nonQueued() with ->queued()
-     * and run a queue worker: php artisan queue:work
-     */
+    /** Product derivatives are generated on the dedicated media queue. */
     public function registerMediaConversions(?Media $media = null): void
     {
-        $this->addMediaConversion('product_thumb')
+        $thumbnail = $this->addMediaConversion('product_thumb')
             ->fit(Fit::Crop, 120, 120)
-            ->format('webp')
-            ->nonQueued();
+            ->format('webp');
+        $thumbnail->queued();
 
-        $this->addMediaConversion('product_card')
+        $card = $this->addMediaConversion('product_card')
             ->fit(Fit::Crop, 600, 800)
-            ->format('webp')
-            ->nonQueued();
+            ->format('webp');
+        $card->queued();
 
-        $this->addMediaConversion('product_detail')
-            ->fit(Fit::Crop, 1000, 1000)
-            ->format('webp')
-            ->nonQueued();
+        $detail = $this->addMediaConversion('product_detail')
+            ->fit(Fit::Contain, 900, 1200)
+            ->format('webp');
+        $detail->queued();
 
-        $this->addMediaConversion('product_zoom')
-            ->fit(Fit::Crop, 1600, 1600)
-            ->format('webp')
-            ->nonQueued();
+        $zoom = $this->addMediaConversion('product_zoom')
+            ->fit(Fit::Contain, 1500, 2000)
+            ->format('webp');
+        $zoom->queued();
     }
 
     /**

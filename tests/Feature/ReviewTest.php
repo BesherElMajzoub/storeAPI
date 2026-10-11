@@ -143,6 +143,97 @@ class ReviewTest extends TestCase
         $this->assertDatabaseCount('reviews', 1);
     }
 
+    public function test_rejected_review_post_returns_actionable_existing_review_contract(): void
+    {
+        Order::factory()->create(['user_id' => $this->user->id, 'status' => 'delivered'])->items()->create([
+            'product_id' => $this->product->id, 'product_name' => $this->product->name,
+            'price' => 150.00, 'quantity' => 1, 'total' => 150.00,
+        ]);
+        $review = Review::create([
+            'user_id' => $this->user->id,
+            'product_id' => $this->product->id,
+            'rating' => 2,
+            'comment' => 'Rejected content.',
+            'status' => 'rejected',
+            'admin_note' => 'Please add useful details.',
+        ]);
+
+        $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/products/{$this->product->id}/reviews", [
+                'rating' => 4,
+                'comment' => 'A new row must not be created.',
+            ])
+            ->assertConflict()
+            ->assertJsonPath('errors.code', 'REVIEW_REJECTED_RESUBMIT')
+            ->assertJsonPath('errors.review_id', $review->id);
+
+        $this->assertDatabaseCount('reviews', 1);
+    }
+
+    public function test_owner_can_edit_an_old_rejected_review_and_resubmit_it(): void
+    {
+        $review = Review::create([
+            'user_id' => $this->user->id,
+            'product_id' => $this->product->id,
+            'rating' => 2,
+            'comment' => 'Rejected content.',
+            'status' => 'rejected',
+            'admin_note' => 'Please add useful details.',
+        ]);
+        $review->forceFill(['created_at' => now()->subDays(90)])->saveQuietly();
+
+        $this->actingAs($this->user, 'sanctum')
+            ->putJson("/api/v1/products/{$this->product->id}/reviews/{$review->id}", [
+                'rating' => 5,
+                'comment' => 'Updated with useful product details.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'pending');
+
+        $this->assertDatabaseHas('reviews', [
+            'id' => $review->id,
+            'status' => 'pending',
+            'admin_note' => null,
+            'rating' => 5,
+        ]);
+        $this->assertDatabaseCount('reviews', 1);
+    }
+
+    public function test_old_non_rejected_review_and_non_owner_remain_blocked(): void
+    {
+        $review = Review::create([
+            'user_id' => $this->user->id,
+            'product_id' => $this->product->id,
+            'rating' => 4,
+            'status' => 'approved',
+        ]);
+        $review->forceFill(['created_at' => now()->subDays(31)])->saveQuietly();
+
+        $this->actingAs($this->user, 'sanctum')
+            ->putJson("/api/v1/products/{$this->product->id}/reviews/{$review->id}", ['rating' => 5])
+            ->assertForbidden();
+
+        $review->forceFill(['status' => 'rejected'])->saveQuietly();
+        $this->actingAs(User::factory()->create(), 'sanctum')
+            ->putJson("/api/v1/products/{$this->product->id}/reviews/{$review->id}", ['rating' => 5])
+            ->assertForbidden();
+    }
+
+    public function test_review_cannot_be_updated_through_another_product_route(): void
+    {
+        $otherProduct = Product::factory()->create();
+        $review = Review::create([
+            'user_id' => $this->user->id,
+            'product_id' => $this->product->id,
+            'rating' => 2,
+            'status' => 'rejected',
+        ]);
+
+        $this->actingAs($this->user, 'sanctum')
+            ->putJson("/api/v1/products/{$otherProduct->id}/reviews/{$review->id}", ['rating' => 5])
+            ->assertNotFound();
+    }
+
     public function test_review_html_and_unicode_are_stored_and_returned_as_inert_json_text(): void
     {
         $order = Order::factory()->create([

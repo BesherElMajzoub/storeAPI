@@ -20,12 +20,13 @@ class Order extends Model
 
     protected $fillable = [
         'order_number', 'user_id', 'coupon_id', 'status', 'payment_status',
-        'subtotal', 'tax', 'shipping_cost', 'carrier_shipping_cost', 'free_shipping_reason', 'discount', 'refunded_amount', 'refund_status', 'total',
+        'subtotal', 'tax', 'shipping_cost', 'carrier_shipping_cost', 'free_shipping_reason', 'discount', 'refunded_amount', 'refund_status',
+        'refund_failure_code', 'refund_failure_message', 'refund_failed_at', 'total',
         'coupon_code', 'shipping_address', 'billing_address', 'notes',
         'stripe_session_id', 'stripe_payment_intent_id', 'authorized_at',
         'paid_at', 'cancelled_at', 'refunded_at', 'stock_reserved_at', 'stock_released_at',
         'easypost_shipment_id', 'shipping_rate_id', 'shipping_carrier', 'shipping_service',
-        'tracking_number', 'shipment_status', 'tracking_url', 'label_url', 'label_path', 'shipped_at', 'fulfillment_started_at',
+        'tracking_number', 'shipment_status', 'shipment_source', 'tracking_url', 'label_url', 'label_path', 'shipped_at', 'fulfillment_started_at',
         'fulfillment_hold', 'capture_attempts', 'capture_failed_at',
         'estimated_delivery', 'tracking_events',
     ];
@@ -44,6 +45,7 @@ class Order extends Model
         'paid_at' => 'datetime',
         'cancelled_at' => 'datetime',
         'refunded_at' => 'datetime',
+        'refund_failed_at' => 'datetime',
         'stock_reserved_at' => 'datetime',
         'stock_released_at' => 'datetime',
         'shipped_at' => 'datetime',
@@ -167,6 +169,7 @@ class Order extends Model
         return $this->hasOne(Payment::class);
     }
 
+    /** @return HasOne<OrderCancellationRequest, $this> */
     public function cancellationRequest(): HasOne
     {
         return $this->hasOne(OrderCancellationRequest::class)->latestOfMany();

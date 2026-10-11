@@ -23,8 +23,8 @@ class CancellationRequestDecidedMail extends Mailable implements ShouldQueue
         $order = $this->cancellationRequest->order;
 
         $subject = $this->decision === 'accepted'
-            ? "Your cancellation request for order #{$order->order_number} has been accepted"
-            : "Your cancellation request for order #{$order->order_number} has been rejected";
+            ? "Your cancellation request for order {$order->order_number} has been accepted"
+            : "Your cancellation request for order {$order->order_number} has been rejected";
 
         return $this
             ->subject($subject)

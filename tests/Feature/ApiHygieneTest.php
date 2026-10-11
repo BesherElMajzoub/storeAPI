@@ -16,12 +16,17 @@ class ApiHygieneTest extends TestCase
 
     public function test_cors_allows_the_storefront_and_rejects_an_unlisted_origin(): void
     {
-        config(['cors.allowed_origins' => ['https://otantikqueen.com']]);
+        config(['cors.allowed_origins' => ['https://otantikqueen.com', 'https://www.otantikqueen.com']]);
 
         $this->options('/api/v1/products', [], [
             'Origin' => 'https://otantikqueen.com',
             'Access-Control-Request-Method' => 'GET',
         ])->assertHeader('Access-Control-Allow-Origin', 'https://otantikqueen.com');
+
+        $this->options('/api/v1/products', [], [
+            'Origin' => 'https://www.otantikqueen.com',
+            'Access-Control-Request-Method' => 'GET',
+        ])->assertHeader('Access-Control-Allow-Origin', 'https://www.otantikqueen.com');
 
         $unlisted = $this->options('/api/v1/products', [], [
             'Origin' => 'https://attacker.example',

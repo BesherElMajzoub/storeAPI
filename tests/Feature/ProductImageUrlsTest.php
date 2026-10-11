@@ -10,7 +10,10 @@ use App\Models\WishlistItem;
 use Database\Seeders\Concerns\CreatesDemoMedia;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Spatie\Image\Enums\Fit;
+use Spatie\MediaLibrary\Conversions\Jobs\PerformConversionsJob;
 use Tests\TestCase;
 
 class ProductImageUrlsTest extends TestCase
@@ -28,8 +31,9 @@ class ProductImageUrlsTest extends TestCase
         $this->product = Product::factory()->create(['category_id' => $category->id]);
     }
 
-    public function test_demo_seeder_media_has_generated_conversions(): void
+    public function test_product_media_queues_conversions_on_the_dedicated_queue(): void
     {
+        Queue::fake();
         $seeder = new class
         {
             use CreatesDemoMedia;
@@ -44,20 +48,29 @@ class ProductImageUrlsTest extends TestCase
         $media = $this->product->fresh()->getMedia('product_images');
         $this->assertCount(2, $media);
         foreach ($media as $item) {
-            foreach (['product_thumb', 'product_card', 'product_detail', 'product_zoom'] as $conversion) {
-                $this->assertTrue($item->hasGeneratedConversion($conversion), "{$conversion} missing");
-                $this->assertFileExists($item->getPath($conversion));
-            }
-            $this->assertSame([$item->file_name, 'conversions'], $this->directoryEntries($item->id));
+            $this->assertFileExists($item->getPath());
         }
+        Queue::assertPushed(PerformConversionsJob::class, 2);
+        Queue::assertPushed(PerformConversionsJob::class, fn (PerformConversionsJob $job): bool => $job->queue === 'media');
+    }
+
+    public function test_detail_and_zoom_conversions_use_aspect_preserving_three_by_four_bounds(): void
+    {
+        $product = new Product;
+        $product->registerMediaConversions();
+        $conversions = collect($product->mediaConversions)->keyBy(fn ($conversion) => $conversion->getName());
+
+        $this->assertSame([Fit::Contain, 900, 1200], $conversions['product_detail']->getManipulations()->getManipulationArgument('fit'));
+        $this->assertSame([Fit::Contain, 1500, 2000], $conversions['product_zoom']->getManipulations()->getManipulationArgument('fit'));
+        $this->assertTrue($conversions['product_detail']->shouldBeQueued());
+        $this->assertTrue($conversions['product_zoom']->shouldBeQueued());
     }
 
     public function test_public_image_urls_fall_back_to_original_until_conversions_exist(): void
     {
+        Queue::fake();
         $media = $this->product->addMedia(UploadedFile::fake()->image('cover.jpg', 50, 50))
             ->toMediaCollection('product_images');
-        $media->generated_conversions = [];
-        $media->save();
 
         $card = $this->getJson('/api/v1/products')->assertOk()->json('data.0.image');
         $this->assertSame($media->getUrl(), $card['card']);

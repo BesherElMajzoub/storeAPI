@@ -425,14 +425,16 @@ class OrderController extends Controller
                     $discount = $couponService->calculateDiscount($coupon, $subtotal);
                 }
 
-                // free-shipping eligibility (automatic threshold OR a free_shipping coupon)
+                // Only Standard can be free. The threshold uses the product
+                // subtotal after monetary discounts and excludes shipping.
                 $carrierShippingCost = (float) $lockedQuote->amount;
-                $freeShippingReason = null;
-                if ($freeShipping->subtotalQualifies(max(0.0, $subtotal - $discount))) {
-                    $freeShippingReason = 'threshold';
-                } elseif ($coupon && $coupon->isFreeShipping()) {
-                    $freeShippingReason = 'coupon';
-                }
+                $method = $lockedQuote->method
+                    ?? (strtoupper($lockedQuote->carrier) === 'USPS' ? 'standard' : 'express');
+                $freeShippingReason = $freeShipping->reasonFor(
+                    $method,
+                    max(0.0, $subtotal - $discount),
+                    $coupon
+                );
 
                 // shipping (the real carrier cost is preserved separately for accounting)
                 $shippingCost = $freeShippingReason ? 0.0 : $carrierShippingCost;

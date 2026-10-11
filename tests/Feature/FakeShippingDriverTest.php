@@ -69,6 +69,7 @@ class FakeShippingDriverTest extends TestCase
         config(['services.easypost.driver' => 'fake']);
         $this->app->forgetInstance(EasyPostServiceInterface::class);
         $product = Product::factory()->create([
+            'price' => 20,
             'status' => 'published',
             'in_stock' => true,
             'stock_qty' => 5,
