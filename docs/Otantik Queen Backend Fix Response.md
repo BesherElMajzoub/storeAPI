@@ -44,7 +44,9 @@ This is the backend team's living response to `Otantik Queen Backend Fix List.md
 | B9 Email templates | 4 | Code complete | Render tests passing | No | Blocked | No API change; order links use numeric `orders.id`. |
 | B10 Rejected review resubmission | 5 | Code complete | Focused passing | No | No | Load `my-review`, then PUT the existing row. |
 | B11 Google verifies linked email | 5 | Verified in baseline | Passing | Baseline | Not live-retested | No change. |
-| H1 Hosting and CORS | 3 | Config complete | Focused passing | No | Blocked | Bare/www origins allowed; hPanel remains an operations action. |
+| H1 Hosting and CORS | 3 | Config complete | Focused passing | No | hPanel verified 2026-10-12; www CORS needs deploy | Bare/www origins allowed after deploy. |
+
+Release commit: `552d794`, pushed to `origin/main` on 2026-10-12. It is **not deployed yet**: live `/api/v1/health` still reports `46e8219`. The frontend can build against the contracts below now, but they only work against production after the deploy.
 
 Since Phase 6, the full suite passes, not only the focused tests: 384 tests and 2,061 assertions, green on two consecutive runs.
 
@@ -193,6 +195,45 @@ All existing success/error envelopes remain unchanged. The fields below are addi
 
 Customer/admin shipment objects add `source: "manual" | "easypost" | null`. Manual shipments keep carrier/tracking number, use status `unknown`, and return EasyPost/service/label/provider URL/ETA/events fields as null or empty. A label download URL exists only for EasyPost shipments with label evidence.
 
+`shipment` is `null` until the order has a tracking number. The order-level `tracking_number` and `shipping_carrier` are filled in both cases, so the shipped email works for manual shipments too. `source` is `null` only for a legacy order the backfill could not classify; treat `null` like `manual`.
+
+Customer order (`GET /orders/{id}`), hand-shipped:
+
+```json
+"shipment": {
+  "source": "manual",
+  "tracking_number": "D20099887766554",
+  "carrier": "OnTrac",
+  "service": null,
+  "tracking_url": null,
+  "shipped_at": "2026-10-12T10:00:00+00:00",
+  "estimated_delivery": null,
+  "status": "unknown"
+}
+```
+
+Admin order (`GET /admin/orders/{id}`), label bought here. The admin `shipment` adds `label_url` and `label_download_url`. `easypost_shipment_id` is a **top-level** field of the admin order, not part of `shipment`:
+
+```json
+"easypost_shipment_id": "shp_123",
+"shipment": {
+  "source": "easypost",
+  "tracking_number": "9400100208192110060039",
+  "carrier": "USPS",
+  "service": "GroundAdvantage",
+  "tracking_url": "https://track.easypost.com/…",
+  "shipped_at": "2026-10-12T10:00:00+00:00",
+  "estimated_delivery": "2026-10-15",
+  "status": "pre_transit",
+  "label_url": "https://easypost-files…/label.pdf",
+  "label_download_url": "https://apis.otantikqueen.com/api/v1/admin/shipments/63/label?expires=…&signature=…"
+}
+```
+
+`label_download_url` is a temporary signed link, so it opens without a bearer token, for example on a phone. Do not cache it; read it again from the order response.
+
+For a hand-shipped admin order, `label_url`, `label_download_url`, `service`, `tracking_url` and the top-level `easypost_shipment_id` are all `null`.
+
 Tracked manual response:
 
 ```json
@@ -223,15 +264,39 @@ The endpoint remains a tree. Every node returns `id`, `name`, `slug`, `descripti
 
 ### Refund failures
 
-Customer resources remain generic. Admin order `refund` objects add nullable `failure_code`, `failure_message`, and `failed_at`. When Stripe refuses a Retry (`POST /admin/orders/{order}/refund`), the response is `502` and the reason sits inside the standard error envelope, not at the top level as in the fix-list example: `{"success":false,"message":"Stripe refund failed.","data":null,"errors":{"stripe_code":"charge_already_refunded","stripe_message":"…"}}`. `stripe_code` is null when the failure did not come from Stripe. They are cleared on a new pending attempt or success. Cancellation acceptance remains successful and atomic even when settlement/email dispatch fails; the failed settlement remains actionable through Retry.
+Customer resources remain generic. Admin order `refund` objects add nullable `failure_code`, `failure_message`, and `failed_at`. Example after Stripe refuses:
+
+```json
+"refund": {
+  "status": "failed",
+  "amount": 305.95,
+  "currency": "usd",
+  "failure_code": "charge_already_refunded",
+  "failure_message": "Charge ch_123 has already been refunded.",
+  "failed_at": "2026-10-12T10:00:00+00:00"
+}
+```
+
+`POST /admin/cancellation-requests/{id}/accept` answers `200` even when the refund later fails. The refund runs in the background, so poll the order's `refund.status`:
+
+- `pending` while the background job runs;
+- then `succeeded` (charge refunded), `released` (an authorized hold was cancelled, so no money was taken), `failed` (show the reason and Retry), or `none` (nothing was paid). When Stripe refuses a Retry (`POST /admin/orders/{order}/refund`), the response is `502` and the reason sits inside the standard error envelope, not at the top level as in the fix-list example: `{"success":false,"message":"Stripe refund failed.","data":null,"errors":{"stripe_code":"charge_already_refunded","stripe_message":"…"}}`. `stripe_code` is null when the failure did not come from Stripe. They are cleared on a new pending attempt or success. Cancellation acceptance remains successful and atomic even when settlement/email dispatch fails; the failed settlement remains actionable through Retry.
 
 ### Address, media, and email
 
 - EasyPost verification failure remains strict HTTP 422 with `errors.address`. Canonical lines deduplicate represented apartment/floor/building components.
+  - The 422 body is `{"success":false,"message":"Address verification failed.","data":null,"errors":{"address":["<EasyPost reason>"]}}`. Show the message and let the shopper correct the address.
+  - On success, the stored `line1` holds the verified street with the unit, for example `179 N HARBOR DR APT 2`. `line2` is `null` when line 1 already contains it. `apartment` / `floor` / `building` are cleared when line 1 already contains them. Display the stored lines as they are, without adding the components again.
 - `product_detail` fits within `900x1200`; `product_zoom` fits within `1500x2000`, both without aspect-ratio cropping.
 - All product conversions run on the `media` queue; resource URLs fall back to the original until ready. HEIC remains rejected.
 - Confirmation, shipped, and cancellation subjects have no `#` before the order number.
 - `reset.blade.php` remains active because `ResetPasswordMail` is still used.
+- The improved templates from `improved/` are in place (commit `7fd8009`). Answers to the four questions in `resources/views/emails/CHANGES.md`:
+  1. The cancellation email receives `$orderUrl = FRONTEND_URL/orders/{id}`, the same as order confirmed.
+  2. Yes, `$order->id` is the `orders` primary key.
+  3. Yes. `tracking_number` and `shipping_carrier` are filled for both bought labels and manual shipping. For manual shipping, `shipping_service` and `tracking_url` are `null`, so the email shows the carrier and number without a tracking button.
+  4. `reset.blade.php` is still sent by `ResetPasswordMail`, so it stays.
+- `GET /shipping/free-shipping` is unchanged.
 
 ### Rejected reviews
 
@@ -326,3 +391,11 @@ Call `GET /api/v1/products/{product}/my-review`, show the rejected content, then
 - API docs: `storage/api-docs/api-docs.json` regenerated, including the refund `502` body.
 - Deployment: not deployed; live remains `46e8219`.
 - Next: Phase 7 (branch, commits, PR) after approval.
+
+### 2026-10-12 — Release committed; hPanel verified
+
+- Commit: `552d794` on `main`, pushed to `origin/main`. It is a single commit pushed straight to `main`, not the sliced branch and PR planned in Phase 7. `ops/deploy-production.sh` deploys `origin/main`, so the next deploy ships it.
+- Tests: the full suite passes on the committed tree.
+- Hostinger: after the hPanel change, scripted requests (`python-requests`, `curl`) to `apis.otantikqueen.com/api/v1/health` and `otantikqueen.com` return `200` with no challenge. The API now reports `x-hcdn-cache-status: BYPASS`. `www` redirects with `301` to the bare domain. Still to do: a first visit in a fresh browser, and the Stripe/EasyPost webhook delivery logs.
+- Deployment: not deployed; live remains `46e8219`, and 32 `demo-*` categories are still public.
+- Frontend: the contracts in this document are final for this release. Build against them now, and verify after the deploy.
