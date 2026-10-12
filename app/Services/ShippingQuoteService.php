@@ -128,20 +128,29 @@ class ShippingQuoteService
         $standard = $byCarrier('USPS')->sortBy(fn ($rate) => (float) $rate->rate)->first()
             ?? $rates->sortBy(fn ($rate) => (float) $rate->rate)->first();
 
-        $expressPool = $byCarrier('UPS');
+        // Ground-class services are never "Express", even when the carrier
+        // reports a 1-day ETA for them (UPS test/short-zone rates do).
+        $nonGround = $rates->reject(fn ($rate) => $this->isGroundService($rate));
+
+        $expressPool = $nonGround->filter(fn ($rate) => str_starts_with(strtoupper((string) $rate->carrier), 'UPS'));
         if ($expressPool->isEmpty()) {
-            $expressPool = $rates->reject(fn ($rate) => $standard && $rate->id === $standard->id);
+            $expressPool = $nonGround->reject(fn ($rate) => $standard && $rate->id === $standard->id);
         }
 
         $express = $expressPool->sortBy($this->fastestThenCheapest())->first();
 
         if ($express && $standard && $express->id === $standard->id) {
-            $express = $rates->reject(fn ($rate) => $rate->id === $standard->id)
+            $express = $nonGround->reject(fn ($rate) => $rate->id === $standard->id)
                 ->sortBy($this->fastestThenCheapest())
                 ->first();
         }
 
         return array_filter(['standard' => $standard, 'express' => $express]);
+    }
+
+    private function isGroundService(object $rate): bool
+    {
+        return str_contains(strtolower((string) ($rate->service ?? '')), 'ground');
     }
 
     /**

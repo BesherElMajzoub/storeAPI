@@ -177,6 +177,44 @@ class ShippingStandardExpressTest extends TestCase
         $this->assertSame('rate_fedex_fast', collect($data)->firstWhere('method', 'express')['rate_id']);
     }
 
+    public function test_ups_ground_is_never_express_even_with_a_one_day_eta(): void
+    {
+        $product = Product::factory()->create();
+        $shipment = (object) ['id' => 'shp_ground', 'rates' => [
+            (object) ['id' => 'rate_usps', 'carrier' => 'USPS', 'service' => 'GroundAdvantage', 'rate' => '5.00', 'currency' => 'USD', 'delivery_days' => 4],
+            (object) ['id' => 'rate_ups_ground', 'carrier' => 'UPSDAP', 'service' => 'Ground', 'rate' => '6.80', 'currency' => 'USD', 'delivery_days' => 1],
+            (object) ['id' => 'rate_ups_2day', 'carrier' => 'UPS', 'service' => '2ndDayAir', 'rate' => '22.00', 'currency' => 'USD', 'delivery_days' => 1],
+        ]];
+
+        $this->mock(EasyPostServiceInterface::class, fn ($mock) => $mock->shouldReceive('getShippingRates')->once()->andReturn($shipment));
+
+        $data = $this->postJson('/api/v1/shipping/rates', [
+            'address' => $this->address(),
+            'items' => [['product_id' => $product->id, 'quantity' => 1]],
+        ])->assertOk()->json('data');
+
+        $this->assertSame('rate_ups_2day', collect($data)->firstWhere('method', 'express')['rate_id']);
+    }
+
+    public function test_express_is_omitted_when_only_ground_services_are_available(): void
+    {
+        $product = Product::factory()->create();
+        $shipment = (object) ['id' => 'shp_only_ground', 'rates' => [
+            (object) ['id' => 'rate_usps', 'carrier' => 'USPS', 'service' => 'GroundAdvantage', 'rate' => '5.00', 'currency' => 'USD', 'delivery_days' => 4],
+            (object) ['id' => 'rate_ups_ground', 'carrier' => 'UPS', 'service' => 'Ground', 'rate' => '6.80', 'currency' => 'USD', 'delivery_days' => 1],
+        ]];
+
+        $this->mock(EasyPostServiceInterface::class, fn ($mock) => $mock->shouldReceive('getShippingRates')->once()->andReturn($shipment));
+
+        $data = $this->postJson('/api/v1/shipping/rates', [
+            'address' => $this->address(),
+            'items' => [['product_id' => $product->id, 'quantity' => 1]],
+        ])->assertOk()->json('data');
+
+        $this->assertCount(1, $data);
+        $this->assertSame('standard', $data[0]['method']);
+    }
+
     public function test_only_one_option_is_returned_when_only_one_distinct_rate_is_available(): void
     {
         $product = Product::factory()->create();
