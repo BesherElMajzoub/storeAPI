@@ -11,6 +11,7 @@ use App\Http\Requests\Api\V1\StoreAddressRequest;
 use App\Http\Requests\Api\V1\UpdateAddressRequest;
 use App\Http\Resources\AddressResource;
 use App\Models\Address;
+use App\Services\AddressUnitDeduplicator;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -307,36 +308,12 @@ class AddressController extends Controller
 
     private function componentAppearsInCanonicalLines(string $component, mixed $value, string $canonicalLines): bool
     {
-        $value = $this->normalizedAddressText($value);
-        $lines = $this->normalizedAddressText($canonicalLines);
-        if ($value === '' || $lines === '') {
-            return false;
-        }
-
-        $labels = match ($component) {
-            'apartment' => ['apartment', 'apt', 'unit'],
-            'floor' => ['floor', 'fl'],
-            'building' => ['building', 'bldg'],
-            default => [],
-        };
-
-        foreach ($labels as $label) {
-            if (preg_match('/(?:^| )'.preg_quote($label, '/').' '.preg_quote($value, '/').'(?: |$)/', $lines)) {
-                return true;
-            }
-        }
-
-        if ($component === 'apartment' && preg_match('/(?:^| )'.preg_quote($value, '/').'(?: |$)/', $lines)
-            && preg_match('/#\s*'.preg_quote($value, '/').'(?:\b|$)/i', $canonicalLines)) {
-            return true;
-        }
-
-        return $component === 'building' && mb_strlen($value) >= 3 && str_contains($lines, $value);
+        return app(AddressUnitDeduplicator::class)->appearsIn($component, $value, $canonicalLines);
     }
 
     private function normalizedAddressText(mixed $value): string
     {
-        return trim(preg_replace('/\s+/', ' ', preg_replace('/[^\pL\pN]+/u', ' ', mb_strtolower((string) $value))) ?? '');
+        return app(AddressUnitDeduplicator::class)->normalizedText($value);
     }
 
     private function addressVerificationFailed(Exception $exception): JsonResponse
