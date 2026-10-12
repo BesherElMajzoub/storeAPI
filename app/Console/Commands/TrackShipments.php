@@ -29,8 +29,10 @@ class TrackShipments extends Command
         $this->info('Starting tracking updates for shipped orders...');
 
         // Query orders that are 'shipped' and have an EasyPost shipment ID
+        // Hand-shipped orders have no EasyPost tracker to poll.
         $orders = Order::where('status', 'shipped')
             ->whereNotNull('easypost_shipment_id')
+            ->where(fn ($query) => $query->whereNull('shipment_source')->orWhere('shipment_source', '!=', 'manual'))
             ->get();
 
         if ($orders->isEmpty()) {
@@ -69,7 +71,9 @@ class TrackShipments extends Command
                 }
             } catch (Exception $e) {
                 $this->error("  Error checking Order #{$order->order_number}: ".$e->getMessage());
-                Log::error("TrackShipments failed for Order #{$order->id}: ".$e->getMessage());
+                // A shipment EasyPost no longer knows about cannot be fixed by retrying; keep it out of the error log.
+                $level = str_contains($e->getMessage(), 'could not be found') ? 'warning' : 'error';
+                Log::{$level}("TrackShipments failed for Order #{$order->id}: ".$e->getMessage());
             }
         }
 
