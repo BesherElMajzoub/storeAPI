@@ -392,6 +392,53 @@ class StripeWebhookSecurityTest extends TestCase
         Queue::assertPushed(SendAdminAlert::class, 1);
     }
 
+    public function test_failed_refund_webhook_records_the_failure_reason_for_admins(): void
+    {
+        $order = Order::factory()->for(User::factory())->create([
+            'status' => 'processing', 'payment_status' => 'paid',
+            'stripe_payment_intent_id' => 'pi_reason', 'total' => 100,
+        ]);
+
+        $this->postSigned([
+            'id' => 'evt_reason', 'object' => 'event', 'type' => 'charge.refund.updated',
+            'data' => ['object' => [
+                'object' => 'refund', 'id' => 're_reason', 'status' => 'failed',
+                'payment_intent' => 'pi_reason', 'failure_reason' => 'lost_or_stolen_card',
+            ]],
+        ])->assertOk();
+
+        $order->refresh();
+        $this->assertSame('failed', $order->refund_status);
+        $this->assertSame('lost_or_stolen_card', $order->refund_failure_code);
+        $this->assertStringContainsString('lost or stolen card', $order->refund_failure_message);
+        $this->assertNotNull($order->refund_failed_at);
+        Queue::assertPushed(SendAdminAlert::class, 1);
+    }
+
+    public function test_refund_updated_webhook_that_did_not_fail_is_ignored_and_duplicates_alert_once(): void
+    {
+        $order = Order::factory()->for(User::factory())->create([
+            'status' => 'processing', 'payment_status' => 'paid',
+            'stripe_payment_intent_id' => 'pi_ignore', 'total' => 100,
+        ]);
+        $refund = ['object' => 'refund', 'id' => 're_ignore', 'payment_intent' => 'pi_ignore'];
+
+        $this->postSigned([
+            'id' => 'evt_ok', 'object' => 'event', 'type' => 'charge.refund.updated',
+            'data' => ['object' => $refund + ['status' => 'succeeded']],
+        ])->assertOk();
+        $this->assertNotSame('failed', $order->fresh()->refund_status);
+        Queue::assertNothingPushed();
+
+        foreach (['evt_f1' => 'refund.failed', 'evt_f2' => 'charge.refund.updated'] as $id => $type) {
+            $this->postSigned([
+                'id' => $id, 'object' => 'event', 'type' => $type,
+                'data' => ['object' => $refund + ['status' => 'failed', 'failure_reason' => 'expired_or_canceled_card']],
+            ])->assertOk();
+        }
+        Queue::assertPushed(SendAdminAlert::class, 1);
+    }
+
     public function test_pending_admin_refund_then_signed_full_refund_releases_stock_once(): void
     {
         $product = Product::factory()->create(['stock_qty' => 0, 'in_stock' => false]);

@@ -23,7 +23,7 @@ class StripeWebhookController extends Controller
     #[OA\Post(
         path: '/api/v1/webhooks/stripe',
         summary: 'Stripe Webhook',
-        description: 'Receives Stripe webhook events. Verifies signature. Handles: `checkout.session.completed`, `checkout.session.expired`, `charge.refunded`. **No authentication required** — secured by Stripe signature.',
+        description: 'Receives Stripe webhook events. Verifies signature. Handles: `checkout.session.completed`, `checkout.session.expired`, `charge.refunded`, `refund.failed` (also `refund.updated` / `charge.refund.updated` when the refund status is failed). **No authentication required** — secured by Stripe signature.',
         tags: ['Webhooks']
     )]
     #[OA\RequestBody(
@@ -61,7 +61,7 @@ class StripeWebhookController extends Controller
             'checkout.session.completed' => $this->handleSessionCompleted($event),
             'checkout.session.expired' => tap(true, fn () => $this->handleSessionExpired($event)),
             'charge.refunded' => tap(true, fn () => $this->handleChargeRefunded($event)),
-            'refund.failed' => tap(true, fn () => $this->handleRefundFailed($event)),
+            'refund.failed', 'refund.updated', 'charge.refund.updated' => tap(true, fn () => $this->handleRefundFailed($event)),
             'payment_intent.canceled' => tap(true, fn () => $this->handlePaymentIntentCanceled($event)),
             default => true,
         };
@@ -333,6 +333,12 @@ class StripeWebhookController extends Controller
     private function handleRefundFailed(Event $event): void
     {
         $refund = $event->data->object;
+
+        // refund.updated / charge.refund.updated fire for every status change; only a failure matters here.
+        if ($event->type !== 'refund.failed' && ($refund->status ?? null) !== 'failed') {
+            return;
+        }
+
         $paymentIntentId = $refund->payment_intent ?? null;
 
         if (! $paymentIntentId) {
@@ -344,7 +350,18 @@ class StripeWebhookController extends Controller
             return;
         }
 
-        $order->update(['refund_status' => 'failed']);
+        // Stripe may send both refund.failed and refund.updated for one failure.
+        if ($order->refund_status === 'failed') {
+            return;
+        }
+
+        $order->forceFill([
+            'refund_status' => 'failed',
+            'refund_failure_code' => $refund->failure_reason ?? null,
+            'refund_failure_message' => 'Stripe could not complete the refund'
+                .(($refund->failure_reason ?? null) ? ': '.str_replace('_', ' ', $refund->failure_reason) : '.'),
+            'refund_failed_at' => now(),
+        ])->save();
 
         Log::critical('Stripe refund failed after it was created.', [
             'order_id' => $order->id,
