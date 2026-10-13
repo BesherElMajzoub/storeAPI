@@ -30,3 +30,6 @@ Thumbs.db
 
 # Deploy / queue-worker locks (ops/)
 /storage/framework/*.lock
+
+# Real catalogue images for CatalogSeeder (local only; uploaded to servers by hand)
+/catalog-images/
