@@ -41,9 +41,15 @@ fi
 
 artisan() { "$PHP_BIN" artisan "$@"; }
 
-git fetch origin "$BRANCH"
-git checkout "$BRANCH"
-git merge --ff-only "origin/$BRANCH"
+if [[ -z "${DEPLOY_PULLED:-}" ]]; then
+    git fetch origin "$BRANCH"
+    git checkout "$BRANCH"
+    git merge --ff-only "origin/$BRANCH"
+
+    # Bash keeps running the copy it already read; continue with the freshly
+    # pulled script so changes to it apply on this deploy, not the next one.
+    DEPLOY_PULLED=1 exec bash "$APP_DIR/ops/deploy-production.sh" "$@"
+fi
 
 "$PHP_BIN" "$(command -v composer)" install \
     --no-dev \
