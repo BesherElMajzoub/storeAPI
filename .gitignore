@@ -27,3 +27,6 @@ Thumbs.db
 
 # IDE language-server temp files
 /storage/framework/lsp-*.php
+
+# Deploy / queue-worker locks (ops/)
+/storage/framework/*.lock
