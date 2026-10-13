@@ -24,3 +24,6 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 /storage/api-docs
+
+# IDE language-server temp files
+/storage/framework/lsp-*.php
