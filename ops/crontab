@@ -6,4 +6,6 @@ SHELL=/bin/bash
 # so a crashed or restarted (queue:restart / --max-time) worker comes back within a minute.
 * * * * * cd __APP_DIR__ && umask 007 && flock -n storage/framework/worker-default.lock __PHP__ artisan queue:work database --queue=notifications,default --sleep=3 --tries=3 --timeout=120 --max-time=3600 >/dev/null 2>&1
 * * * * * cd __APP_DIR__ && umask 007 && flock -n storage/framework/worker-media.lock __PHP__ artisan queue:work database --queue=media --sleep=5 --tries=3 --timeout=300 --max-time=3600 --memory=512 >/dev/null 2>&1
+# Nightly database dump (+ uploads on Sundays) into ~/backups, see ops/backup.sh.
+15 3 * * * bash __APP_DIR__/ops/backup.sh >> $HOME/backups/backup.log 2>&1
 # END storeapi

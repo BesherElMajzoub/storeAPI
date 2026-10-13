@@ -31,3 +31,14 @@ Check them: `ssh queen 'pgrep -af queue:work; crontab -l'`.
 `.env` exists only on the server (`~/htdocs/api.otantikqueen.com/.env`). Edit it there,
 then re-run the deploy script (or `php8.5 artisan config:cache && php8.5 artisan queue:restart`).
 Verify with `php8.5 artisan app:production-readiness`.
+
+## Backups
+
+[`ops/backup.sh`](backup.sh) runs at 03:15 from cron: gzip'd `mysqldump` into `~/backups/databases`
+(kept 14 days) plus, on Sundays, uploads and label PDFs into `~/backups/files` (kept 4 weeks).
+Log: `~/backups/backup.log`. These live on the same server, so also keep an off-site copy
+(Contabo snapshot / Auto Backup, S3, or download with `scp`). Restore:
+
+```bash
+gunzip -c ~/backups/databases/<file>.sql.gz | mysql -uqueenuser -p queen
+```
