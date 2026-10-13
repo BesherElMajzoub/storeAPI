@@ -1,0 +1,9 @@
+# BEGIN storeapi — managed by ops/deploy-production.sh, edit the file in the repo instead
+SHELL=/bin/bash
+# Laravel scheduler (payment capture, abandoned checkouts, shipment tracking, pruning).
+* * * * * cd __APP_DIR__ && umask 007 && __PHP__ artisan schedule:run >/dev/null 2>&1
+# Queue workers, kept alive by cron: flock lets only one instance per queue run,
+# so a crashed or restarted (queue:restart / --max-time) worker comes back within a minute.
+* * * * * cd __APP_DIR__ && umask 007 && flock -n storage/framework/worker-default.lock __PHP__ artisan queue:work database --queue=notifications,default --sleep=3 --tries=3 --timeout=120 --max-time=3600 >/dev/null 2>&1
+* * * * * cd __APP_DIR__ && umask 007 && flock -n storage/framework/worker-media.lock __PHP__ artisan queue:work database --queue=media --sleep=5 --tries=3 --timeout=300 --max-time=3600 --memory=512 >/dev/null 2>&1
+# END storeapi
