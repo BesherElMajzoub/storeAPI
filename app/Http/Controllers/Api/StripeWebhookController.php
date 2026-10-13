@@ -355,13 +355,27 @@ class StripeWebhookController extends Controller
             return;
         }
 
-        $order->forceFill([
+        // charge.refunded fires when the refund is created, so the order may already
+        // read "refunded"; the money never left, so put the payment state back.
+        $restore = $order->payment_status === 'refunded'
+            ? ['payment_status' => 'paid', 'refunded_amount' => 0, 'refunded_at' => null]
+            : [];
+        if ($order->status === 'refunded') {
+            $restore['status'] = $order->shipped_at ? 'delivered' : 'processing';
+        }
+
+        $order->forceFill($restore + [
+            'refund_failures' => (int) $order->refund_failures + 1,
             'refund_status' => 'failed',
             'refund_failure_code' => $refund->failure_reason ?? null,
             'refund_failure_message' => 'Stripe could not complete the refund'
                 .(($refund->failure_reason ?? null) ? ': '.str_replace('_', ' ', $refund->failure_reason) : '.'),
             'refund_failed_at' => now(),
         ])->save();
+
+        if ($restore) {
+            Payment::query()->where('order_id', $order->id)->update(['status' => 'completed', 'updated_at' => now()]);
+        }
 
         Log::critical('Stripe refund failed after it was created.', [
             'order_id' => $order->id,

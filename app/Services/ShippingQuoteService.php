@@ -137,7 +137,10 @@ class ShippingQuoteService
             $expressPool = $nonGround->reject(fn ($rate) => $standard && $rate->id === $standard->id);
         }
 
-        $express = $expressPool->sortBy($this->fastestThenCheapest())->first();
+        // Owner decision: Express is UPS 2nd Day Air whenever UPS quotes it;
+        // the fastest-UPS rule only applies when it is missing.
+        $express = $expressPool->first(fn ($rate) => $this->isUpsSecondDayAir($rate))
+            ?? $expressPool->sortBy($this->fastestThenCheapest())->first();
 
         if ($express && $standard && $express->id === $standard->id) {
             $express = $nonGround->reject(fn ($rate) => $rate->id === $standard->id)
@@ -146,6 +149,13 @@ class ShippingQuoteService
         }
 
         return array_filter(['standard' => $standard, 'express' => $express]);
+    }
+
+    private function isUpsSecondDayAir(object $rate): bool
+    {
+        $service = preg_replace('/[^a-z0-9]/', '', strtolower((string) ($rate->service ?? '')));
+
+        return str_starts_with(strtoupper((string) $rate->carrier), 'UPS') && $service === '2nddayair';
     }
 
     private function isGroundService(object $rate): bool

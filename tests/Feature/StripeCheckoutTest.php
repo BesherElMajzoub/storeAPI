@@ -155,6 +155,28 @@ class StripeCheckoutTest extends TestCase
         $this->assertSame("refund-order-{$order->id}", $stripe->options['idempotency_key']);
     }
 
+    public function test_a_retried_refund_uses_a_new_idempotency_key_after_a_failure(): void
+    {
+        $order = $this->orderWithSingleItem(25);
+        $order->forceFill(['stripe_payment_intent_id' => 'pi_retry', 'refund_failures' => 1])->saveQuietly();
+
+        $stripe = new class extends StripeCheckoutService
+        {
+            public array $options = [];
+
+            protected function createStripeRefund(array $params, array $options): Refund
+            {
+                $this->options = $options;
+
+                return Refund::constructFrom(['id' => 're_retry', 'status' => 'pending']);
+            }
+        };
+
+        $stripe->refundOrder($order->fresh());
+
+        $this->assertSame("refund-order-{$order->id}-1", $stripe->options['idempotency_key']);
+    }
+
     public function test_zero_total_checkout_is_sent_to_stripe_and_the_order_flow_can_roll_it_back(): void
     {
         $order = $this->orderWithSingleItem(0);

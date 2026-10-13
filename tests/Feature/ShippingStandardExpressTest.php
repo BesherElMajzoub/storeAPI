@@ -196,6 +196,26 @@ class ShippingStandardExpressTest extends TestCase
         $this->assertSame('rate_ups_2day', collect($data)->firstWhere('method', 'express')['rate_id']);
     }
 
+    public function test_express_is_pinned_to_ups_second_day_air_over_faster_ups_services(): void
+    {
+        $product = Product::factory()->create();
+        $shipment = (object) ['id' => 'shp_pin', 'rates' => [
+            (object) ['id' => 'rate_usps', 'carrier' => 'USPS', 'service' => 'GroundAdvantage', 'rate' => '5.00', 'currency' => 'USD', 'delivery_days' => 4],
+            (object) ['id' => 'rate_ups_nda_saver', 'carrier' => 'UPS', 'service' => 'NextDayAirSaver', 'rate' => '27.76', 'currency' => 'USD', 'delivery_days' => 1],
+            (object) ['id' => 'rate_ups_2day', 'carrier' => 'UPS', 'service' => '2ndDayAir', 'rate' => '19.00', 'currency' => 'USD', 'delivery_days' => 2],
+            (object) ['id' => 'rate_ups_2day_am', 'carrier' => 'UPS', 'service' => '2ndDayAirAM', 'rate' => '24.00', 'currency' => 'USD', 'delivery_days' => 2],
+        ]];
+
+        $this->mock(EasyPostServiceInterface::class, fn ($mock) => $mock->shouldReceive('getShippingRates')->once()->andReturn($shipment));
+
+        $data = $this->postJson('/api/v1/shipping/rates', [
+            'address' => $this->address(),
+            'items' => [['product_id' => $product->id, 'quantity' => 1]],
+        ])->assertOk()->json('data');
+
+        $this->assertSame('rate_ups_2day', collect($data)->firstWhere('method', 'express')['rate_id']);
+    }
+
     public function test_express_is_omitted_when_only_ground_services_are_available(): void
     {
         $product = Product::factory()->create();

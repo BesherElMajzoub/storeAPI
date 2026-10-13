@@ -659,6 +659,32 @@ class OrderPaymentAuthorizationTest extends TestCase
         $this->assertSame('failed', $order->fresh()->refund_status);
     }
 
+    public function test_a_failed_refund_puts_the_payment_back_to_paid_and_counts_the_failure(): void
+    {
+        $order = $this->authorizedOrder(['payment_status' => 'paid']);
+        $order->forceFill(['status' => 'cancelled', 'refund_status' => 'pending'])->saveQuietly();
+
+        $this->postSigned([
+            'id' => 'evt_refunded_early', 'object' => 'event', 'type' => 'charge.refunded',
+            'data' => ['object' => ['object' => 'charge', 'payment_intent' => 'pi_auth', 'amount_refunded' => 10000]],
+        ])->assertOk();
+        $this->assertSame('refunded', $order->fresh()->payment_status);
+
+        $this->postSigned([
+            'id' => 'evt_refund_failed_2', 'object' => 'event', 'type' => 'refund.failed',
+            'data' => ['object' => ['object' => 'refund', 'id' => 're_y', 'payment_intent' => 'pi_auth', 'failure_reason' => 'expired_or_canceled_card']],
+        ])->assertOk();
+
+        $order = $order->fresh();
+        $this->assertSame('paid', $order->payment_status);
+        $this->assertSame('cancelled', $order->status);
+        $this->assertSame('failed', $order->refund_status);
+        $this->assertSame('expired_or_canceled_card', $order->refund_failure_code);
+        $this->assertEquals(0, $order->refunded_amount);
+        $this->assertNull($order->refunded_at);
+        $this->assertSame(1, $order->refund_failures);
+    }
+
     public function test_admin_cancellation_request_list_links_to_the_order(): void
     {
         $order = $this->authorizedOrder(['authorized_at' => now()->subHours(4)]);

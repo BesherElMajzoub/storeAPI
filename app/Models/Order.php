@@ -21,7 +21,7 @@ class Order extends Model
     protected $fillable = [
         'order_number', 'user_id', 'coupon_id', 'status', 'payment_status',
         'subtotal', 'tax', 'shipping_cost', 'carrier_shipping_cost', 'free_shipping_reason', 'discount', 'refunded_amount', 'refund_status',
-        'refund_failure_code', 'refund_failure_message', 'refund_failed_at', 'total',
+        'refund_failure_code', 'refund_failure_message', 'refund_failed_at', 'refund_failures', 'total',
         'coupon_code', 'shipping_address', 'billing_address', 'notes',
         'stripe_session_id', 'stripe_payment_intent_id', 'authorized_at',
         'paid_at', 'cancelled_at', 'refunded_at', 'stock_reserved_at', 'stock_released_at',

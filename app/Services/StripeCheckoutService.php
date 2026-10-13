@@ -146,7 +146,9 @@ class StripeCheckoutService
         return $this->createStripeRefund([
             'payment_intent' => $order->stripe_payment_intent_id,
         ], [
-            'idempotency_key' => "refund-order-{$order->id}",
+            // A failed refund must be retryable: the same key would make Stripe
+            // replay the original (failed) refund instead of creating a new one.
+            'idempotency_key' => "refund-order-{$order->id}".($order->refund_failures > 0 ? "-{$order->refund_failures}" : ''),
         ]);
     }
 
