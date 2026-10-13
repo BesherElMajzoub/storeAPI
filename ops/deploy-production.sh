@@ -4,9 +4,9 @@
 #
 #   ssh queen 'bash ~/htdocs/api.otantikqueen.com/ops/deploy-production.sh'
 #
-# Pulls origin/main, installs dependencies, migrates (never seeds), rebuilds
-# caches, syncs the crontab block (scheduler + queue workers) and restarts the
-# workers. Safe to re-run.
+# Pulls origin/main, installs dependencies, migrates, ensures roles via
+# ProductionSeeder (never the demo seeders), rebuilds caches, syncs the crontab
+# block (scheduler + queue workers) and restarts the workers. Safe to re-run.
 
 set -Eeuo pipefail
 
@@ -72,6 +72,8 @@ artisan down --retry=15 || true
 trap 'artisan up >/dev/null 2>&1 || true' EXIT
 
 artisan migrate --force --no-interaction
+# Reference data only (roles/permissions), idempotent — never the demo seeders.
+artisan db:seed --class=ProductionSeeder --force --no-interaction
 artisan optimize:clear
 artisan storage:link --force
 artisan l5-swagger:generate

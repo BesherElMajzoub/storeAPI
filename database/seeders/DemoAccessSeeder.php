@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\Address;
-use App\Models\Permission;
 use App\Models\Role;
 use App\Models\SocialAccount;
 use App\Models\User;
@@ -17,45 +16,9 @@ class DemoAccessSeeder extends DemoSeeder
     {
         $this->guardAgainstProduction();
 
-        $permissions = collect([
-            'dashboard.view',
-            'analytics.view',
-            'products.manage',
-            'categories.manage',
-            'orders.manage',
-            'shipping.manage',
-            'coupons.manage',
-            'reviews.moderate',
-            'customers.view',
-            'messages.manage',
-            'settings.manage',
-            'audit.view',
-        ])->mapWithKeys(function (string $name) {
-            $permission = Permission::updateOrCreate(['name' => $name]);
+        $this->call(RolesAndPermissionsSeeder::class);
 
-            return [$name => $permission];
-        });
-
-        $roleDefinitions = [
-            'Owner' => ['label' => 'Store owner', 'permissions' => $permissions->keys()->all()],
-            'Admin' => ['label' => 'Administrator', 'permissions' => $permissions->keys()->all()],
-            'Manager' => [
-                'label' => 'Catalogue and order manager',
-                'permissions' => ['dashboard.view', 'analytics.view', 'products.manage', 'categories.manage', 'orders.manage', 'shipping.manage', 'coupons.manage', 'reviews.moderate', 'customers.view'],
-            ],
-            'Support' => [
-                'label' => 'Customer support',
-                'permissions' => ['dashboard.view', 'orders.manage', 'shipping.manage', 'reviews.moderate', 'customers.view', 'messages.manage'],
-            ],
-            'User' => ['label' => 'Customer', 'permissions' => []],
-        ];
-
-        $roles = collect($roleDefinitions)->mapWithKeys(function (array $definition, string $name) use ($permissions) {
-            $role = Role::updateOrCreate(['name' => $name], ['label' => $definition['label']]);
-            $role->permissions()->sync($permissions->only($definition['permissions'])->pluck('id'));
-
-            return [$name => $role];
-        });
+        $roles = Role::whereIn('name', array_keys(RolesAndPermissionsSeeder::ROLES))->get()->keyBy('name');
 
         $definitions = [
             ['name' => 'Demo Owner', 'email' => 'owner@demo.test', 'phone' => '+12025550101', 'role' => 'Owner'],

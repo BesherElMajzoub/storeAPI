@@ -11,9 +11,10 @@ Push to `main`, then:
 ssh queen 'bash ~/htdocs/api.otantikqueen.com/ops/deploy-production.sh'
 ```
 
-It fast-forwards to `origin/main`, runs `composer install --no-dev`, `migrate --force`
-(never seeds), rebuilds caches, syncs the crontab from [`ops/crontab`](crontab) and
-restarts the queue workers.
+It fast-forwards to `origin/main`, runs `composer install --no-dev`, `migrate --force`,
+the idempotent `ProductionSeeder` (roles and permissions only, never demo data),
+rebuilds caches, syncs the crontab from [`ops/crontab`](crontab) and restarts the
+queue workers.
 
 ## Background processes
 
