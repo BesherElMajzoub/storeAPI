@@ -143,6 +143,11 @@ class AppServiceProvider extends ServiceProvider
             return $user->roles()->whereIn('name', ['Admin', 'Owner', 'Manager', 'Support'])->exists();
         });
 
+        // Voiding a recorded manual refund puts money back on the books: the owner only.
+        Gate::define('void-refund', function ($user) {
+            return $user->roles()->where('name', 'Owner')->exists();
+        });
+
         // ─── Policies ─────────────────────────────────────────────────────────────
         Gate::policy(Address::class, AddressPolicy::class);
         Gate::policy(Review::class, ReviewPolicy::class);

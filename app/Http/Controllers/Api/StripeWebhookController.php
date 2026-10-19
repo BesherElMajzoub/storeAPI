@@ -7,7 +7,7 @@ use App\Mail\OrderConfirmedMail;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Services\OrderPaymentService;
-use App\Support\RefundAdvice;
+use App\Services\RefundService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -24,7 +24,7 @@ class StripeWebhookController extends Controller
     #[OA\Post(
         path: '/api/v1/webhooks/stripe',
         summary: 'Stripe Webhook',
-        description: 'Receives Stripe webhook events. Verifies signature. Handles: `checkout.session.completed`, `checkout.session.expired`, `charge.refunded`, `refund.failed` (also `refund.updated` / `charge.refund.updated` when the refund status is failed). **No authentication required** — secured by Stripe signature.',
+        description: 'Receives Stripe webhook events. Verifies signature. Handles: `checkout.session.completed`, `checkout.session.expired`, `payment_intent.canceled`, `charge.refunded`, `refund.created`, `refund.updated`, `refund.failed` (also `charge.refund.updated`). Each event is recorded once by its Stripe event id. **No authentication required** — secured by Stripe signature.',
         tags: ['Webhooks']
     )]
     #[OA\RequestBody(
@@ -62,7 +62,7 @@ class StripeWebhookController extends Controller
             'checkout.session.completed' => $this->handleSessionCompleted($event),
             'checkout.session.expired' => tap(true, fn () => $this->handleSessionExpired($event)),
             'charge.refunded' => tap(true, fn () => $this->handleChargeRefunded($event)),
-            'refund.failed', 'refund.updated', 'charge.refund.updated' => tap(true, fn () => $this->handleRefundFailed($event)),
+            'refund.created', 'refund.updated', 'refund.failed', 'charge.refund.updated' => tap(true, fn () => $this->handleRefundUpdated($event)),
             'payment_intent.canceled' => tap(true, fn () => $this->handlePaymentIntentCanceled($event)),
             default => true,
         };
@@ -276,39 +276,14 @@ class StripeWebhookController extends Controller
             return;
         }
 
-        $refundedAmount = round(((int) ($charge->amount_refunded ?? 0)) / 100, 2);
+        $order = Order::query()->where('stripe_payment_intent_id', $paymentIntentId)->first();
+        if (! $order) {
+            return;
+        }
 
-        DB::transaction(function () use ($paymentIntentId, $refundedAmount): void {
-            $order = Order::query()
-                ->where('stripe_payment_intent_id', $paymentIntentId)
-                ->lockForUpdate()
-                ->first();
-
-            if (! $order || $order->isRefunded() || $refundedAmount <= (float) $order->refunded_amount) {
-                return;
-            }
-
-            $isFullRefund = $refundedAmount >= (float) $order->total;
-
-            // A cancelled order stays cancelled; refund_status carries the money state.
-            $order->update(array_filter([
-                'refunded_amount' => $refundedAmount,
-                'status' => $isFullRefund && $order->status !== 'cancelled' ? 'refunded' : null,
-                'payment_status' => $isFullRefund ? 'refunded' : null,
-                'refund_status' => $isFullRefund ? 'succeeded' : null,
-                'refunded_at' => $isFullRefund ? now() : null,
-            ], fn ($value) => $value !== null));
-
-            Payment::query()->where('order_id', $order->id)->update([
-                'status' => $isFullRefund ? 'refunded' : 'partially_refunded',
-                'updated_at' => now(),
-            ]);
-
-            Log::info("Stripe refund recorded for order {$order->order_number}.", [
-                'amount' => $refundedAmount,
-                'full_refund' => $isFullRefund,
-            ]);
-        });
+        // Only a refund the shop did not start shows up here as new money; the
+        // refund record decides, so a refund still pending is never marked paid out early.
+        app(RefundService::class)->recordChargeRefunded($order, (int) ($charge->amount_refunded ?? 0), $event->id ?? null);
     }
 
     /**
@@ -331,15 +306,15 @@ class StripeWebhookController extends Controller
         }
     }
 
-    private function handleRefundFailed(Event $event): void
+    /**
+     * refund.created / refund.updated / refund.failed (and the older
+     * charge.refund.updated): move our attempt to what Stripe reports. A
+     * success settles a pending refund; a failure puts the payment back to
+     * paid and tells the owner what to do next.
+     */
+    private function handleRefundUpdated(Event $event): void
     {
         $refund = $event->data->object;
-
-        // refund.updated / charge.refund.updated fire for every status change; only a failure matters here.
-        if ($event->type !== 'refund.failed' && ($refund->status ?? null) !== 'failed') {
-            return;
-        }
-
         $paymentIntentId = $refund->payment_intent ?? null;
 
         if (! $paymentIntentId) {
@@ -351,56 +326,11 @@ class StripeWebhookController extends Controller
             return;
         }
 
-        // Stripe may send both refund.failed and refund.updated for one failure.
-        if ($order->refund_status === 'failed') {
-            return;
+        // refund.failed always means failed, whatever the object says.
+        if ($event->type === 'refund.failed' && ($refund->status ?? null) !== 'failed') {
+            $refund = (object) array_merge($refund->toArray(), ['status' => 'failed']);
         }
 
-        // charge.refunded fires when the refund is created, so the order may already
-        // read "refunded"; the money never left, so put the payment state back.
-        $restore = $order->payment_status === 'refunded'
-            ? ['payment_status' => 'paid', 'refunded_amount' => 0, 'refunded_at' => null]
-            : [];
-        if ($order->status === 'refunded') {
-            $restore['status'] = $order->shipped_at ? 'delivered' : 'processing';
-        }
-
-        $order->forceFill($restore + [
-            'refund_failures' => (int) $order->refund_failures + 1,
-            'refund_status' => 'failed',
-            'refund_failure_code' => $refund->failure_reason ?? null,
-            'refund_failure_message' => 'Stripe could not complete the refund'
-                .(($refund->failure_reason ?? null) ? ': '.str_replace('_', ' ', $refund->failure_reason) : '.'),
-            'refund_failed_at' => now(),
-        ])->save();
-
-        if ($restore) {
-            Payment::query()->where('order_id', $order->id)->update(['status' => 'completed', 'updated_at' => now()]);
-        }
-
-        Log::critical('Stripe refund failed after it was created.', [
-            'order_id' => $order->id,
-            'payment_intent_id' => $paymentIntentId,
-            'refund_id' => $refund->id ?? null,
-            'failure_reason' => $refund->failure_reason ?? null,
-        ]);
-        $advice = RefundAdvice::forFailure($order->refund_failure_code, $order->refund_failure_message, (int) $order->refund_failures);
-        SendAdminAlert::dispatch(
-            "URGENT: Stripe refund {$refund->id} failed for order {$order->order_number}"
-            .($order->refund_failure_code ? " ({$order->refund_failure_code})" : '').'. '
-            .self::nextStepText($advice['next_action']),
-            email: true,
-        )->onQueue('notifications');
-    }
-
-    private static function nextStepText(string $nextAction): string
-    {
-        return match ($nextAction) {
-            RefundAdvice::REFUND_MANUALLY => "The customer's bank refused the refund to the card and the money is back in the Stripe balance: contact the customer within 2 business days and refund by Zelle or PayPal.",
-            RefundAdvice::TOP_UP_THEN_RETRY => 'The Stripe balance was too low: add funds in Stripe, then retry the refund from the admin panel.',
-            RefundAdvice::WAIT_FOR_DISPUTE => 'The customer opened a dispute: Stripe decides where the money goes, do not refund separately.',
-            RefundAdvice::INVESTIGATE => 'The refund does not match Stripe: check the charge in Stripe before refunding anything.',
-            default => 'You can retry the refund from the admin panel.',
-        };
+        app(RefundService::class)->recordStripeRefund($order, $refund, $event->id ?? null);
     }
 }

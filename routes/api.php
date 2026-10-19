@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\V1\Admin\MediaController;
 // Admin Imports
 use App\Http\Controllers\Api\V1\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Api\V1\Admin\ProductController as AdminProductController;
+use App\Http\Controllers\Api\V1\Admin\RefundController as AdminRefundController;
 use App\Http\Controllers\Api\V1\Admin\ReviewController as AdminReviewController;
 use App\Http\Controllers\Api\V1\Admin\SettingController as AdminSettingController;
 use App\Http\Controllers\Api\V1\Admin\ShippingController as AdminShippingController;
@@ -175,6 +176,8 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         Route::get('orders/{id}', [AdminOrderController::class, 'show']);
         Route::post('orders/{id}/status', [AdminOrderController::class, 'updateStatus']);
         Route::post('orders/{order}/refund', [AdminOrderController::class, 'refund']);
+        Route::post('orders/{order}/refund/manual', [AdminRefundController::class, 'recordManual']);
+        Route::post('orders/{order}/refund/attempts/{attempt}/void', [AdminRefundController::class, 'void']);
 
         // Shipping / Label purchase
         Route::post('orders/{order}/ship', [AdminShippingController::class, 'createShipment']);

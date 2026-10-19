@@ -95,6 +95,8 @@ class CancellationRequestController extends Controller
             // Cancel the order. OrderObserver restocks it and, when it was
             // paid or authorized, queues returning the money to the card.
             if ($order->status !== 'cancelled') {
+                $order->refundTrigger = 'request_accepted';
+                $order->refundActorId = $request->user()->id;
                 $order->update(['status' => 'cancelled', 'cancelled_at' => now()]);
             }
 

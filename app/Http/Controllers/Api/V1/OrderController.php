@@ -681,6 +681,8 @@ class OrderController extends Controller
 
             // An unpaid order just closes. A paid/authorized one is picked up
             // by OrderObserver, which queues the hold release or refund.
+            $locked->refundTrigger = 'customer_cancel';
+            $locked->refundActorId = $locked->user_id;
             $locked->update(array_merge(
                 ['status' => 'cancelled', 'cancelled_at' => now()],
                 $locked->payment_status === 'unpaid' ? ['payment_status' => 'voided'] : [],

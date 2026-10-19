@@ -28,6 +28,9 @@ final class RefundAdvice
 
     public const INVESTIGATE = 'investigate';
 
+    /** The shop retries by itself (same attempt, same Stripe key) and nobody has to act yet. */
+    public const AUTO_RETRY = 'auto_retry';
+
     /** Actions that need a person; the admin list filter and dashboard count use them. */
     public const NEEDS_ACTION = [self::RETRY, self::TOP_UP_THEN_RETRY, self::REFUND_MANUALLY, self::INVESTIGATE];
 
@@ -88,6 +91,18 @@ final class RefundAdvice
             'pending' => self::result(self::WAIT),
             'failed' => self::forFailure($code, $message, $failures),
             default => self::result(self::NONE),
+        };
+    }
+
+    /** What the owner has to do, in a sentence for the alert email. */
+    public static function ownerInstruction(string $nextAction): string
+    {
+        return match ($nextAction) {
+            self::REFUND_MANUALLY => "The customer's bank refused the refund to the card and the money is back in the Stripe balance: contact the customer within 2 business days and refund by Zelle or PayPal.",
+            self::TOP_UP_THEN_RETRY => 'The Stripe balance was too low: add funds in Stripe, then retry the refund from the admin panel.',
+            self::WAIT_FOR_DISPUTE => 'The customer opened a dispute: Stripe decides where the money goes, do not refund separately.',
+            self::INVESTIGATE => 'The refund does not match Stripe: check the charge in Stripe before refunding anything.',
+            default => 'You can retry the refund from the admin panel.',
         };
     }
 

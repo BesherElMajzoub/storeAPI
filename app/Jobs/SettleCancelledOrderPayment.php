@@ -2,7 +2,10 @@
 
 namespace App\Jobs;
 
+use App\Exceptions\RefundNotAllowed;
+use App\Exceptions\RefundRefused;
 use App\Models\Order;
+use App\Models\User;
 use App\Services\OrderPaymentService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -22,16 +25,30 @@ class SettleCancelledOrderPayment implements ShouldQueue
 
     public $tries = 6;
 
-    public $backoff = [60, 300, 900, 1800, 3600];
+    /** Seconds before each retry; RefundService shows the next one as next_retry_at. */
+    public const BACKOFF = [60, 300, 900, 1800, 3600];
 
-    public function __construct(public int $orderId) {}
+    public $backoff = self::BACKOFF;
+
+    public function __construct(
+        public int $orderId,
+        public string $trigger = 'system',
+        public ?int $actorId = null,
+    ) {}
 
     public function handle(OrderPaymentService $payments): void
     {
         $order = Order::withTrashed()->find($this->orderId);
 
-        if ($order) {
-            $payments->settleCancellation($order);
+        if (! $order) {
+            return;
+        }
+
+        try {
+            $payments->settleCancellation($order, $this->trigger, $this->actorId ? User::find($this->actorId) : null);
+        } catch (RefundRefused|RefundNotAllowed $e) {
+            // Retrying cannot change the answer; the refund record and the owner alert already say what to do.
+            $this->fail($e);
         }
     }
 
@@ -39,7 +56,7 @@ class SettleCancelledOrderPayment implements ShouldQueue
     {
         $order = Order::withTrashed()->find($this->orderId);
 
-        if (! $order || $order->refund_status !== 'pending') {
+        if (! $order || $order->refund_status !== 'pending' || $e instanceof RefundRefused || $e instanceof RefundNotAllowed) {
             return;
         }
 

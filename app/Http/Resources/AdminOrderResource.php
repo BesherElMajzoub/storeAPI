@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Order;
+use App\Services\RefundService;
 use App\Support\RefundAdvice;
 use Illuminate\Http\Request;
 
@@ -18,10 +19,15 @@ class AdminOrderResource extends OrderResource
             $this->refund_failure_message,
             (int) $this->refund_failures,
         );
+        // With the attempts loaded the page also gets the amounts and the full history.
+        $record = $this->relationLoaded('refundAttempts')
+            ? app(RefundService::class)->present($this->resource, $this->refundAttempts, $this->refundAttempts->every(fn ($a) => $a->relationLoaded('events')))
+            : [];
         $data['refund'] = array_merge($data['refund'], [
             'retryable' => $advice['retryable'],
             'next_action' => $advice['next_action'],
             'requires_reason' => $advice['requires_reason'],
+        ], $record, [
             'failure_code' => $this->refund_failure_code,
             'failure_message' => $this->refund_failure_message,
             'failed_at' => $this->refund_failed_at?->toIso8601String(),

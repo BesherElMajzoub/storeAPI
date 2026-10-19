@@ -29,6 +29,8 @@ class OrderResource extends JsonResource
                 'amount' => $this->refund_status === 'none' ? 0.0
                     : ((float) $this->refunded_amount ?: (float) $this->total),
                 'currency' => config('services.stripe.currency', 'usd'),
+                // stripe | manual | mixed once the money is back; the customer never sees failure codes or notes.
+                'refunded_via' => $this->refunded_via,
             ],
             'total' => (float) $this->total,
             'coupon_id' => $this->coupon_id,

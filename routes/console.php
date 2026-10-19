@@ -20,6 +20,8 @@ Schedule::command('orders:expire-abandoned-checkouts')->everyTenMinutes()->witho
 Schedule::command('orders:capture-authorized-payments')->everyFiveMinutes()->withoutOverlapping();
 // A hold still uncaptured long after the window means the scheduler or Stripe needs attention.
 Schedule::command('orders:alert-stale-authorizations')->hourly()->withoutOverlapping();
+// Compare Stripe's refunds with the refund record (rule R8) and flag refunds pending for over 5 business days.
+Schedule::command('refunds:reconcile')->dailyAt('03:30')->withoutOverlapping();
 Schedule::call(fn () => ShippingRateQuote::where('expires_at', '<', now()->subDay())->delete())
     ->daily()
     ->name('shipping-quotes:prune');

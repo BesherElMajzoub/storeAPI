@@ -139,17 +139,33 @@ class StripeCheckoutService
     }
 
     /**
-     * Refund a paid order via its PaymentIntent.
+     * Refund a paid order via its PaymentIntent. RefundService passes the key
+     * stored on the attempt: the same attempt always reuses its key (so a
+     * repeated call cannot refund twice) and each new attempt gets a new one
+     * (a failed refund is replayed by Stripe under the old key). Without a
+     * key the order's failure counter builds it, as before.
+     *
+     * @param  int|null  $amountCents  a part of the charge; the whole charge when null
      */
-    public function refundOrder(Order $order): Refund
+    public function refundOrder(Order $order, ?string $idempotencyKey = null, ?int $amountCents = null): Refund
     {
-        return $this->createStripeRefund([
+        return $this->createStripeRefund(array_filter([
             'payment_intent' => $order->stripe_payment_intent_id,
-        ], [
-            // A failed refund must be retryable: the same key would make Stripe
-            // replay the original (failed) refund instead of creating a new one.
-            'idempotency_key' => "refund-order-{$order->id}".($order->refund_failures > 0 ? "-{$order->refund_failures}" : ''),
+            'amount' => $amountCents,
+        ], fn ($value) => $value !== null), [
+            'idempotency_key' => $idempotencyKey
+                ?? "refund-order-{$order->id}".($order->refund_failures > 0 ? "-{$order->refund_failures}" : ''),
         ]);
+    }
+
+    /**
+     * Every refund Stripe created since the given time, for the nightly check.
+     *
+     * @return iterable<int, Refund>
+     */
+    public function listRefundsSince(int $timestamp): iterable
+    {
+        return Refund::all(['created' => ['gte' => $timestamp], 'limit' => 100])->autoPagingIterator();
     }
 
     /** @param array<string, mixed> $sessionParams */

@@ -48,7 +48,7 @@ class OrderObserver
                 && in_array($order->payment_status, ['authorized', 'paid'], true)
                 && $order->stripe_payment_intent_id
                 && $order->refund_status === 'none') {
-                app(OrderPaymentService::class)->queueSettlement($order);
+                app(OrderPaymentService::class)->queueSettlement($order, $order->refundTrigger ?? 'system', $order->refundActorId);
             }
 
             if ($order->shipped_at !== null || in_array($previousStatus, ['shipped', 'delivered'], true)) {

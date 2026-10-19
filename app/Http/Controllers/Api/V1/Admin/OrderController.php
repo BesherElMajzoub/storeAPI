@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Admin;
 
+use App\Exceptions\RefundNotAllowed;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Admin\BulkUpdateOrderStatusRequest;
 use App\Http\Requests\Api\V1\Admin\UpdateOrderStatusRequest;
@@ -9,13 +10,14 @@ use App\Http\Resources\AdminOrderResource;
 use App\Mail\OrderShippedMail;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\RefundAttempt;
 use App\Services\OrderPaymentService;
 use App\Services\StripeCheckoutService;
+use App\Support\IdempotentRequest;
 use App\Support\RefundAdvice;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -64,7 +66,7 @@ class OrderController extends Controller
         $perPage = min(max((int) $request->get('per_page', 20), 1), 100);
 
         $orders = Order::query()
-            ->with(['user', 'items.product.media', 'items.variant', 'payment', 'cancellationRequest'])
+            ->with(['user', 'items.product.media', 'items.variant', 'payment', 'cancellationRequest', 'refundAttempts'])
             ->when($request->filled('status'), fn ($q) => $q->status($request->input('status')))
             ->when($request->filled('payment_status'), fn ($q) => $q->paymentStatus($request->input('payment_status')))
             ->when($request->filled('user_id'), fn ($q) => $q->where('user_id', (int) $request->input('user_id')))
@@ -101,7 +103,7 @@ class OrderController extends Controller
     #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
     public function show($id)
     {
-        $order = Order::with(['items', 'user', 'payment', 'cancellationRequest'])->findOrFail($id);
+        $order = Order::with(['items', 'user', 'payment', 'cancellationRequest', 'refundAttempts.creator', 'refundAttempts.events'])->findOrFail($id);
 
         return $this->success(new AdminOrderResource($order), 'Order fetched.');
     }
@@ -346,6 +348,10 @@ class OrderController extends Controller
             if (($data['status'] ?? null) === 'shipped' && $order->shipped_at === null) {
                 $data['shipped_at'] = now();
             }
+            if (($data['status'] ?? null) === 'cancelled') {
+                $order->refundTrigger = 'admin_cancel';
+                $order->refundActorId = request()->user()?->id;
+            }
             $order->update($data);
 
             return $order->refresh()->load(['items', 'user', 'payment', 'cancellationRequest']);
@@ -444,17 +450,22 @@ class OrderController extends Controller
     #[OA\Post(
         path: '/api/v1/admin/orders/{order}/refund',
         summary: 'Admin Refund Order',
-        description: 'Issue a full Stripe refund for a paid order and mark it as refunded. For a **cancelled** order this returns its money instead (releases the card hold or refunds the charge) and keeps the order cancelled; use it to retry when `refund_status` is `failed`. An authorized-but-uncaptured order must be cancelled instead.',
+        description: 'Refund an order through Stripe as a **new attempt**. For a **cancelled** order this returns its money (releases the card hold or refunds the charge) and keeps the order cancelled; for a paid order it refunds it and marks it refunded. Offer it only when the order `refund.retryable` is true: a closed, expired or lost card is refused with `refund_not_retryable` and the refund goes out by Zelle or PayPal (`POST /admin/orders/{order}/refund/manual`). Send an `Idempotency-Key` header to make a double click harmless; it never reaches Stripe. An authorized-but-uncaptured order must be cancelled instead.',
         security: [['bearerAuth' => []]],
         tags: ['Admin Orders']
     )]
     #[OA\Parameter(name: 'order', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))]
+    #[OA\Parameter(name: 'Idempotency-Key', in: 'header', required: false, schema: new OA\Schema(type: 'string'))]
+    #[OA\RequestBody(required: false, content: new OA\JsonContent(properties: [
+        new OA\Property(property: 'reason', type: 'string', description: 'Required when `refund.requires_reason` is true (the refund was cancelled in the Stripe Dashboard).', nullable: true),
+    ]))]
     #[OA\Response(response: 200, description: 'Order refunded')]
     #[OA\Response(response: 202, description: 'Refund accepted and awaiting Stripe confirmation')]
-    #[OA\Response(response: 409, description: 'Order not eligible for refund')]
+    #[OA\Response(response: 409, description: 'Not eligible: `refund_in_progress`, `refund_not_retryable` (with `next_action`), `nothing_owed`, or the order is not paid')]
+    #[OA\Response(response: 422, description: '`reason` missing')]
     #[OA\Response(
         response: 502,
-        description: 'Stripe refused the refund. The order keeps `refund_status = failed` with the reason, so Retry stays available.',
+        description: 'Stripe refused the refund or could not be reached. The order keeps `refund_status = failed` with the reason; `refund.next_action` says what to do.',
         content: new OA\JsonContent(properties: [
             new OA\Property(property: 'success', type: 'boolean', example: false),
             new OA\Property(property: 'message', type: 'string', example: 'Stripe refund failed.'),
@@ -462,13 +473,24 @@ class OrderController extends Controller
             new OA\Property(property: 'errors', type: 'object', properties: [
                 new OA\Property(property: 'stripe_code', type: 'string', nullable: true, example: 'charge_already_refunded'),
                 new OA\Property(property: 'stripe_message', type: 'string', example: 'Charge ch_123 has already been refunded.'),
+                new OA\Property(property: 'next_action', type: 'string', example: 'refund_manually'),
             ]),
         ])
     )]
     #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
-    public function refund(Request $request, int $order, StripeCheckoutService $stripe, OrderPaymentService $payments): JsonResponse
+    public function refund(Request $request, int $order, OrderPaymentService $payments): JsonResponse
     {
         $order = Order::findOrFail($order);
+
+        return IdempotentRequest::run($request, "refund:{$order->id}", fn (): JsonResponse => $this->startRefund($request, $order, $payments));
+    }
+
+    private function startRefund(Request $request, Order $order, OrderPaymentService $payments): JsonResponse
+    {
+        // R2: a refund Stripe is still working on is never sent again.
+        if (RefundAttempt::query()->where('order_id', $order->id)->where('status', RefundAttempt::PENDING)->exists()) {
+            return $this->error('A refund for this order is already in progress.', 409, ['code' => 'refund_in_progress']);
+        }
 
         if ($order->refund_status === 'failed') {
             $advice = RefundAdvice::forRefundState('failed', $order->refund_failure_code, $order->refund_failure_message, (int) $order->refund_failures);
@@ -485,90 +507,57 @@ class OrderController extends Controller
             }
         }
 
+        $reason = filled($request->input('reason')) ? trim((string) $request->input('reason')) : null;
+
         if ($order->status === 'cancelled' && $order->stripe_payment_intent_id) {
-            return $this->settleCancelledOrder($order, $payments);
+            return $this->settleCancelledOrder($order, $payments, $request->user(), $reason);
         }
 
         if ($order->isAuthorized()) {
             return $this->error('This payment is only authorized, not captured. Cancel the order to release it.', 409);
         }
 
-        try {
-            return Cache::lock("order:{$order->id}:refund", 60)->block(5, function () use ($order, $stripe): JsonResponse {
-                $order->refresh();
-                $requiresRefund = Payment::query()
-                    ->where('order_id', $order->id)
-                    ->value('status') === 'requires_refund';
+        $order->refresh();
+        $requiresRefund = Payment::query()
+            ->where('order_id', $order->id)
+            ->value('status') === 'requires_refund';
 
-                if (! $order->isPaid() && ! $requiresRefund) {
-                    return $this->error('Order is not paid and cannot be refunded.', 409);
-                }
-
-                if ($order->isRefunded()) {
-                    return $this->error('Order has already been refunded.', 409);
-                }
-
-                if (! $order->stripe_payment_intent_id) {
-                    return $this->error('No Stripe PaymentIntent found for this order.', 409);
-                }
-
-                try {
-                    $refund = $stripe->refundOrder($order);
-
-                    if ($refund->status !== 'succeeded') {
-                        if (! in_array($refund->status, ['failed', 'canceled'], true)) {
-                            Log::warning('Stripe refund is pending confirmation.', [
-                                'order_id' => $order->id,
-                                'refund_status' => $refund->status,
-                            ]);
-
-                            $order->update(['refund_status' => 'pending']);
-
-                            return $this->success([
-                                'order_id' => $order->id,
-                                'refund_status' => $refund->status,
-                            ], 'Refund is pending confirmation from Stripe.', 202);
-                        }
-
-                        Log::warning('Stripe refund is pending confirmation.', [
-                            'order_id' => $order->id,
-                            'refund_status' => $refund->status,
-                        ]);
-
-                        return $this->error('Stripe refund failed.', 502);
-                    }
-                } catch (\Throwable $e) {
-                    Log::error('Stripe refund failed', [
-                        'order_id' => $order->id,
-                        'error' => $e->getMessage(),
-                    ]);
-
-                    return $this->error('Stripe refund failed.', 502);
-                }
-
-                $order->update([
-                    'status' => 'refunded',
-                    'payment_status' => 'refunded',
-                    'refund_status' => 'succeeded',
-                    'refunded_amount' => $order->total,
-                    'refunded_at' => now(),
-                ]);
-                $order->payment()?->update([
-                    'status' => 'refunded',
-                    'amount' => $order->total,
-                ]);
-
-                return $this->success(
-                    ['message' => "Order #{$order->order_number} has been refunded successfully."],
-                    'Order refunded.'
-                );
-            });
-        } catch (LockTimeoutException) {
-            return $this->error('A refund request is already in progress. Please try again.', 409);
+        if (! $order->isPaid() && ! $requiresRefund) {
+            return $this->error($order->isRefunded() ? 'Order has already been refunded.' : 'Order is not paid and cannot be refunded.', 409);
         }
+
+        if (! $order->stripe_payment_intent_id) {
+            return $this->error('No Stripe PaymentIntent found for this order.', 409);
+        }
+
+        try {
+            $result = $payments->refundPaidOrder(
+                $order,
+                $order->refund_status === 'failed' ? 'admin_retry' : 'admin_refund',
+                $request->user(),
+                $reason,
+            );
+        } catch (RefundNotAllowed $e) {
+            return $this->error($e->getMessage(), $e->httpStatus, $e->toErrors());
+        } catch (LockTimeoutException) {
+            return $this->error('A refund request is already in progress. Please try again.', 409, ['code' => 'refund_in_progress']);
+        } catch (\Throwable $e) {
+            Log::error('Stripe refund failed', ['order_id' => $order->id, 'error' => $e->getMessage()]);
+
+            return $this->stripeFailure($order, $payments, $e);
+        }
+
+        if ($result === 'pending') {
+            return $this->success(['order_id' => $order->id, 'refund_status' => 'pending'], 'Refund is pending confirmation from Stripe.', 202);
+        }
+
+        return $this->success(
+            ['message' => "Order #{$order->order_number} has been refunded successfully."],
+            'Order refunded.'
+        );
     }
 
-    private function settleCancelledOrder(Order $order, OrderPaymentService $payments): JsonResponse
+    private function settleCancelledOrder(Order $order, OrderPaymentService $payments, $actor, ?string $reason): JsonResponse
     {
         if (in_array($order->refund_status, ['released', 'succeeded'], true)) {
             return $this->error('The payment for this cancelled order has already been returned.', 409);
@@ -580,20 +569,23 @@ class OrderController extends Controller
         }
 
         try {
-            $refundStatus = $payments->settleCancellation($order);
+            $refundStatus = $payments->settleCancellation(
+                $order,
+                $order->refund_status === 'failed' ? 'admin_retry' : 'admin_cancel',
+                $actor,
+                $reason,
+            );
+        } catch (RefundNotAllowed $e) {
+            return $this->error($e->getMessage(), $e->httpStatus, $e->toErrors());
         } catch (LockTimeoutException) {
-            return $this->error('A refund request is already in progress. Please try again.', 409);
+            return $this->error('A refund request is already in progress. Please try again.', 409, ['code' => 'refund_in_progress']);
         } catch (\Throwable $e) {
             Log::error('Returning payment for a cancelled order failed.', [
                 'order_id' => $order->id,
                 'error' => $e->getMessage(),
             ]);
-            $failure = $payments->recordRefundFailure($order, $e);
 
-            return $this->error('Stripe refund failed.', 502, [
-                'stripe_code' => $failure['code'],
-                'stripe_message' => $failure['message'],
-            ]);
+            return $this->stripeFailure($order, $payments, $e);
         }
 
         $data = ['order_id' => $order->id, 'refund_status' => $refundStatus];
@@ -601,6 +593,18 @@ class OrderController extends Controller
         return $refundStatus === 'pending'
             ? $this->success($data, 'Refund is pending confirmation from Stripe.', 202)
             : $this->success($data, $refundStatus === 'released' ? 'Card hold released.' : 'Order refunded.');
+    }
+
+    private function stripeFailure(Order $order, OrderPaymentService $payments, \Throwable $e): JsonResponse
+    {
+        $failure = $payments->recordRefundFailure($order, $e);
+        $advice = RefundAdvice::forFailure($failure['code'], $failure['message'], (int) $order->fresh()->refund_failures);
+
+        return $this->error('Stripe refund failed.', 502, [
+            'stripe_code' => $failure['code'],
+            'stripe_message' => $failure['message'],
+            'next_action' => $advice['next_action'],
+        ]);
     }
 
     private function expirePendingPaymentSession(Order $order, StripeCheckoutService $stripe): bool

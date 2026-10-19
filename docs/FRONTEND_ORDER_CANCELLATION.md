@@ -41,6 +41,8 @@ The rest of this document describes exactly what to change.
 ### Admin panel
 - [ ] Show `refund.status` on cancelled orders and highlight `failed`.
 - [ ] Add a "Retry refund" action that calls `POST /admin/orders/{id}/refund`.
+      **Superseded:** show it only when `refund.retryable` is true. A closed, lost
+      or declined card cannot be retried; see `docs/FRONTEND_REFUND_FAILURE.md`.
 - [ ] Handle the new `409` responses when buying a label or accepting a
       cancellation request (section 7).
 

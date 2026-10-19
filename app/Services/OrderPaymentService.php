@@ -2,10 +2,12 @@
 
 namespace App\Services;
 
+use App\Exceptions\RefundRefused;
 use App\Jobs\SendAdminAlert;
 use App\Jobs\SettleCancelledOrderPayment;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -24,7 +26,10 @@ class OrderPaymentService
     /** PaymentIntent states in which a held payment can never be captured. */
     private const UNCAPTURABLE_INTENT_STATUSES = ['canceled', 'requires_payment_method'];
 
-    public function __construct(private readonly StripeCheckoutService $stripe) {}
+    public function __construct(
+        private readonly StripeCheckoutService $stripe,
+        private readonly RefundService $refunds,
+    ) {}
 
     /**
      * Capture an authorized payment. Returns true when the order ends up paid.
@@ -154,7 +159,7 @@ class OrderPaymentService
      * Mark a cancelled order's money as owed back and queue the Stripe call.
      * The order stays cancelled whatever Stripe does; retries live in the job.
      */
-    public function queueSettlement(Order $order): void
+    public function queueSettlement(Order $order, string $trigger = 'system', ?int $actorId = null): void
     {
         $order->forceFill([
             'refund_status' => 'pending',
@@ -164,7 +169,7 @@ class OrderPaymentService
         ])->saveQuietly();
 
         try {
-            SettleCancelledOrderPayment::dispatch($order->id)->afterCommit();
+            SettleCancelledOrderPayment::dispatch($order->id, $trigger, $actorId)->afterCommit();
         } catch (Throwable $e) {
             $this->recordRefundFailure($order, $e);
             Log::critical('Unable to queue settlement for a cancelled order.', [
@@ -179,9 +184,9 @@ class OrderPaymentService
      * resulting refund_status. Throws when Stripe has not settled yet, so the
      * caller (queue job) retries.
      */
-    public function settleCancellation(Order $order): string
+    public function settleCancellation(Order $order, string $trigger = 'system', ?User $actor = null, ?string $reason = null): string
     {
-        return $this->withPaymentLock($order, function () use ($order): string {
+        return $this->withPaymentLock($order, function () use ($order, $trigger, $actor, $reason): string {
             $order->refresh();
 
             if (! in_array($order->refund_status, ['pending', 'failed'], true)) {
@@ -223,46 +228,30 @@ class OrderPaymentService
                 throw new RuntimeException("PaymentIntent for order {$order->id} is still {$intent->status}.");
             }
 
-            $refund = $this->stripe->refundOrder($order);
-
-            if ($refund->status === 'succeeded') {
-                $this->markRefunded($order);
-
-                return 'succeeded';
-            }
-
-            if (in_array($refund->status, ['pending', 'requires_action'], true)) {
-                // The charge.refunded / refund.failed webhook records the outcome.
-                return 'pending';
-            }
-
-            throw new RuntimeException("Stripe refund for order {$order->id} ended as {$refund->status}.");
+            // A pending refund is settled by the refund.updated / refund.failed webhook.
+            return $this->refunds->sendToStripe($order, $trigger, $actor, $reason);
         });
     }
 
-    private function markRefunded(Order $order): void
+    /**
+     * Refund a paid order that is not cancelled (an admin's return refund).
+     * Returns 'succeeded' or 'pending'.
+     */
+    public function refundPaidOrder(Order $order, string $trigger, ?User $actor = null, ?string $reason = null): string
     {
-        DB::transaction(function () use ($order): void {
-            $order->update([
-                'refund_status' => 'succeeded',
-                'payment_status' => 'refunded',
-                'refunded_amount' => $order->total,
-                'refunded_at' => now(),
-                'refund_failure_code' => null,
-                'refund_failure_message' => null,
-                'refund_failed_at' => null,
-            ]);
-            Payment::query()->where('order_id', $order->id)->update([
-                'status' => 'refunded',
-                'amount' => $order->total,
-                'updated_at' => now(),
-            ]);
-        });
+        return $this->withPaymentLock($order, fn (): string => $this->refunds->sendToStripe($order, $trigger, $actor, $reason));
     }
 
     /** @return array{code: ?string, message: string} */
     public function recordRefundFailure(Order $order, Throwable $exception): array
     {
+        // The refund service already closed the attempt and recalculated the order.
+        if ($exception instanceof RefundRefused) {
+            return ['code' => $exception->failureCode, 'message' => $exception->getMessage()];
+        }
+
+        $this->refunds->markRetryable($order, $exception);
+
         $code = $exception instanceof ApiErrorException ? $exception->getStripeCode() : null;
         $message = trim(preg_replace('/\s+/', ' ', $exception->getMessage()) ?? '');
         $message = mb_substr($message !== '' ? $message : 'Payment provider error.', 0, 1000);

@@ -466,24 +466,33 @@ class StripeWebhookSecurityTest extends TestCase
             ->postJson("/api/v1/admin/orders/{$order->id}/refund")
             ->assertAccepted();
 
+        // charge.refunded fires when the refund is created: a refund still pending is not money returned yet.
         $this->postSigned([
             'id' => 'evt_full_refund', 'object' => 'event', 'type' => 'charge.refunded',
             'data' => ['object' => [
                 'object' => 'charge', 'payment_intent' => 'pi_full_refund', 'amount_refunded' => 10000,
             ]],
         ])->assertOk();
+        $this->assertSame(0, $product->fresh()->stock_qty);
+        $this->assertDatabaseHas('orders', ['id' => $order->id, 'payment_status' => 'paid', 'refund_status' => 'pending']);
+
+        $succeeded = [
+            'id' => 'evt_full_refund_done', 'object' => 'event', 'type' => 'refund.updated',
+            'data' => ['object' => [
+                'object' => 'refund', 'id' => 're_pending_full', 'payment_intent' => 'pi_full_refund',
+                'status' => 'succeeded', 'amount' => 10000,
+            ]],
+        ];
+        $this->postSigned($succeeded)->assertOk();
         $releasedAt = $order->fresh()->stock_released_at;
         $this->assertSame(1, $product->fresh()->stock_qty);
+        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'refunded', 'payment_status' => 'refunded', 'refund_status' => 'succeeded']);
         $this->assertDatabaseHas('payments', ['order_id' => $order->id, 'status' => 'refunded', 'amount' => 100]);
 
-        $this->postSigned([
-            'id' => 'evt_full_refund', 'object' => 'event', 'type' => 'charge.refunded',
-            'data' => ['object' => [
-                'object' => 'charge', 'payment_intent' => 'pi_full_refund', 'amount_refunded' => 10000,
-            ]],
-        ])->assertOk();
+        $this->postSigned($succeeded)->assertOk();
         $this->assertSame(1, $product->fresh()->stock_qty);
         $this->assertEquals($releasedAt, $order->fresh()->stock_released_at);
+        $this->assertDatabaseCount('refund_attempts', 1);
     }
 
     public function test_out_of_order_partial_refund_webhooks_do_not_reduce_the_recorded_refund_amount(): void

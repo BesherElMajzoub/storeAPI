@@ -15,6 +15,14 @@ class Order extends Model
 {
     use HasFactory, SoftDeletes;
 
+    /**
+     * Why this request is cancelling the order, for the refund record. Not
+     * stored on the order: OrderObserver reads it when it queues the refund.
+     */
+    public ?string $refundTrigger = null;
+
+    public ?int $refundActorId = null;
+
     protected $attributes = [
         'refund_status' => 'none',
     ];
@@ -22,7 +30,7 @@ class Order extends Model
     protected $fillable = [
         'order_number', 'user_id', 'coupon_id', 'status', 'payment_status',
         'subtotal', 'tax', 'shipping_cost', 'carrier_shipping_cost', 'free_shipping_reason', 'discount', 'refunded_amount', 'refund_status',
-        'refund_failure_code', 'refund_failure_message', 'refund_failed_at', 'refund_failures', 'total',
+        'refund_failure_code', 'refund_failure_message', 'refund_failed_at', 'refund_failures', 'refunded_via', 'total',
         'coupon_code', 'shipping_address', 'billing_address', 'notes',
         'stripe_session_id', 'stripe_payment_intent_id', 'authorized_at',
         'paid_at', 'cancelled_at', 'refunded_at', 'stock_reserved_at', 'stock_released_at',
@@ -181,6 +189,24 @@ class Order extends Model
     public function payment(): HasOne
     {
         return $this->hasOne(Payment::class);
+    }
+
+    /** @return HasMany<RefundAttempt, $this> */
+    public function refundAttempts(): HasMany
+    {
+        return $this->hasMany(RefundAttempt::class)->orderBy('attempt_no');
+    }
+
+    /** @return HasMany<RefundEvent, $this> */
+    public function refundEvents(): HasMany
+    {
+        return $this->hasMany(RefundEvent::class)->orderBy('id');
+    }
+
+    /** What the customer paid, in whole cents (rule R9). */
+    public function totalCents(): int
+    {
+        return (int) round(((float) $this->total) * 100);
     }
 
     /** @return HasOne<OrderCancellationRequest, $this> */
