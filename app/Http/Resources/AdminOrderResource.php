@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Order;
+use App\Support\RefundAdvice;
 use Illuminate\Http\Request;
 
 /** @mixin Order */
@@ -11,7 +12,16 @@ class AdminOrderResource extends OrderResource
     public function toArray(Request $request): array
     {
         $data = parent::toArray($request);
+        $advice = RefundAdvice::forRefundState(
+            (string) $this->refund_status,
+            $this->refund_failure_code,
+            $this->refund_failure_message,
+            (int) $this->refund_failures,
+        );
         $data['refund'] = array_merge($data['refund'], [
+            'retryable' => $advice['retryable'],
+            'next_action' => $advice['next_action'],
+            'requires_reason' => $advice['requires_reason'],
             'failure_code' => $this->refund_failure_code,
             'failure_message' => $this->refund_failure_message,
             'failed_at' => $this->refund_failed_at?->toIso8601String(),

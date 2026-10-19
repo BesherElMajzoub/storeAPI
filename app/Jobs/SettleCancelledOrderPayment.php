@@ -49,6 +49,6 @@ class SettleCancelledOrderPayment implements ShouldQueue
             'order_id' => $order->id,
             'error' => $e->getMessage(),
         ]);
-        SendAdminAlert::dispatch("URGENT: could not return payment for cancelled order {$order->order_number}. Retry it from the admin panel.");
+        SendAdminAlert::dispatch("URGENT: could not return payment for cancelled order {$order->order_number}. Retry it from the admin panel.", email: true);
     }
 }

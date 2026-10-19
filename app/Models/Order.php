@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\RefundAdvice;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -56,6 +57,19 @@ class Order extends Model
         'estimated_delivery' => 'date:Y-m-d',
         'tracking_events' => 'array',
     ];
+
+    // ── Scopes ────────────────────────────────────────────────────────────────
+
+    /**
+     * Orders whose money has not come back and that wait for a person: a failed
+     * refund, except one that waits for a dispute decided by Stripe.
+     */
+    public function scopeRefundNeedsAction($query)
+    {
+        return $query->where('refund_status', 'failed')
+            ->where(fn ($q) => $q->whereNull('refund_failure_code')
+                ->orWhereNotIn('refund_failure_code', RefundAdvice::DISPUTE));
+    }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 

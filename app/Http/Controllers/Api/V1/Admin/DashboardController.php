@@ -48,6 +48,7 @@ class DashboardController extends Controller
                     properties: [
                         new OA\Property(property: 'low_stock', type: 'integer', example: 3, description: 'Same as GET /admin/products?low_stock=1 (stock_qty < 3)'),
                         new OA\Property(property: 'pending_orders', type: 'integer', example: 5, description: 'Awaiting payment. Same as GET /admin/orders?status=pending_payment'),
+                        new OA\Property(property: 'refunds_needing_action', type: 'integer', example: 0, description: 'A card refund failed and waits for an admin. Same as GET /admin/orders?refund_action=needed'),
                         new OA\Property(property: 'payment_holds', type: 'integer', example: 0, description: 'Payment could not be captured; do not ship. Same as GET /admin/orders?status=processing&payment_status=failed'),
                     ]
                 ),
@@ -72,12 +73,14 @@ class DashboardController extends Controller
                 'low_stock' => Product::where('stock_qty', '<', Product::LOW_STOCK_THRESHOLD)->count(),
                 'pending_orders' => Order::where('status', 'pending_payment')->count(),
                 'payment_holds' => Order::where('status', 'processing')->where('payment_status', 'failed')->count(),
+                'refunds_needing_action' => Order::refundNeedsAction()->count(),
             ],
             'filters' => [
                 'current_orders_count' => 'status=processing&payment_status=authorized,paid',
                 'low_stock' => 'low_stock=1',
                 'pending_orders' => 'status=pending_payment',
                 'payment_holds' => 'status=processing&payment_status=failed',
+                'refunds_needing_action' => 'refund_action=needed',
             ],
         ]);
     }

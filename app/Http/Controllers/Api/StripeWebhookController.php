@@ -7,6 +7,7 @@ use App\Mail\OrderConfirmedMail;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Services\OrderPaymentService;
+use App\Support\RefundAdvice;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -383,7 +384,23 @@ class StripeWebhookController extends Controller
             'refund_id' => $refund->id ?? null,
             'failure_reason' => $refund->failure_reason ?? null,
         ]);
-        SendAdminAlert::dispatch("URGENT: Stripe refund {$refund->id} failed for order {$order->order_number}; manual follow-up is required.")
-            ->onQueue('notifications');
+        $advice = RefundAdvice::forFailure($order->refund_failure_code, $order->refund_failure_message, (int) $order->refund_failures);
+        SendAdminAlert::dispatch(
+            "URGENT: Stripe refund {$refund->id} failed for order {$order->order_number}"
+            .($order->refund_failure_code ? " ({$order->refund_failure_code})" : '').'. '
+            .self::nextStepText($advice['next_action']),
+            email: true,
+        )->onQueue('notifications');
+    }
+
+    private static function nextStepText(string $nextAction): string
+    {
+        return match ($nextAction) {
+            RefundAdvice::REFUND_MANUALLY => "The customer's bank refused the refund to the card and the money is back in the Stripe balance: contact the customer within 2 business days and refund by Zelle or PayPal.",
+            RefundAdvice::TOP_UP_THEN_RETRY => 'The Stripe balance was too low: add funds in Stripe, then retry the refund from the admin panel.',
+            RefundAdvice::WAIT_FOR_DISPUTE => 'The customer opened a dispute: Stripe decides where the money goes, do not refund separately.',
+            RefundAdvice::INVESTIGATE => 'The refund does not match Stripe: check the charge in Stripe before refunding anything.',
+            default => 'You can retry the refund from the admin panel.',
+        };
     }
 }

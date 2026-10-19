@@ -11,6 +11,7 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Services\OrderPaymentService;
 use App\Services\StripeCheckoutService;
+use App\Support\RefundAdvice;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,6 +35,7 @@ class OrderController extends Controller
     #[OA\Parameter(name: 'payment_status', in: 'query', schema: new OA\Schema(type: 'string'))]
     #[OA\Parameter(name: 'user_id', in: 'query', schema: new OA\Schema(type: 'integer'))]
     #[OA\Parameter(name: 'search', in: 'query', schema: new OA\Schema(type: 'string'))]
+    #[OA\Parameter(name: 'refund_action', in: 'query', description: '`needed` = the refund failed and waits for an admin (retry, top up, refund by Zelle or PayPal, or check).', schema: new OA\Schema(type: 'string', enum: ['needed']))]
     #[OA\Parameter(name: 'date_from', in: 'query', schema: new OA\Schema(type: 'string', format: 'date'))]
     #[OA\Parameter(name: 'date_to', in: 'query', schema: new OA\Schema(type: 'string', format: 'date'))]
     #[OA\Response(
@@ -67,6 +69,7 @@ class OrderController extends Controller
             ->when($request->filled('payment_status'), fn ($q) => $q->paymentStatus($request->input('payment_status')))
             ->when($request->filled('user_id'), fn ($q) => $q->where('user_id', (int) $request->input('user_id')))
             ->when($request->filled('search'), fn ($q) => $q->search($request->input('search')))
+            ->when($request->input('refund_action') === 'needed', fn ($q) => $q->refundNeedsAction())
             ->dateRange($request->input('date_from'), $request->input('date_to'))
             ->latest()
             ->paginate($perPage);
@@ -463,9 +466,24 @@ class OrderController extends Controller
         ])
     )]
     #[OA\Response(response: 404, ref: '#/components/responses/NotFoundResponse')]
-    public function refund(int $order, StripeCheckoutService $stripe, OrderPaymentService $payments): JsonResponse
+    public function refund(Request $request, int $order, StripeCheckoutService $stripe, OrderPaymentService $payments): JsonResponse
     {
         $order = Order::findOrFail($order);
+
+        if ($order->refund_status === 'failed') {
+            $advice = RefundAdvice::forRefundState('failed', $order->refund_failure_code, $order->refund_failure_message, (int) $order->refund_failures);
+
+            if (! $advice['retryable']) {
+                return $this->error('This refund cannot be retried through Stripe.', 409, [
+                    'code' => 'refund_not_retryable',
+                    'next_action' => $advice['next_action'],
+                ]);
+            }
+
+            if ($advice['requires_reason'] && trim((string) $request->input('reason')) === '') {
+                return $this->error('A reason is required to retry this refund.', 422, ['reason' => ['A reason is required.']]);
+            }
+        }
 
         if ($order->status === 'cancelled' && $order->stripe_payment_intent_id) {
             return $this->settleCancelledOrder($order, $payments);
