@@ -546,7 +546,8 @@ class RefundRecordTest extends TestCase
 
         $response = $this->actingAs($this->customer, 'sanctum')->getJson("/api/v1/orders/{$order->id}")->assertOk()
             ->assertJsonPath('data.refund.status', 'succeeded')
-            ->assertJsonPath('data.refund.refunded_via', 'manual');
+            ->assertJsonPath('data.refund.refunded_via', 'manual')
+            ->assertJsonPath('data.refund.method', 'zelle');
 
         $json = json_encode($response->json());
         $this->assertStringNotContainsString('expired_or_canceled_card', $json);

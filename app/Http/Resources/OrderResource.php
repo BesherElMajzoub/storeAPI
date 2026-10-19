@@ -31,6 +31,8 @@ class OrderResource extends JsonResource
                 'currency' => config('services.stripe.currency', 'usd'),
                 // stripe | manual | mixed once the money is back; the customer never sees failure codes or notes.
                 'refunded_via' => $this->refunded_via,
+                // zelle | paypal when the money (or part of it) went back by hand; the customer email and page name it.
+                'method' => $this->refunded_method,
             ],
             'total' => (float) $this->total,
             'coupon_id' => $this->coupon_id,

@@ -29,6 +29,7 @@ interface CustomerRefund {
   amount: number;
   currency: string;
   refunded_via: RefundVia;          // NEW
+  method: 'zelle' | 'paypal' | null; // NEW: how a manual refund was sent (null for card refunds)
 }
 
 // Admin order (GET /admin/orders, /admin/orders/{id}).
@@ -85,7 +86,7 @@ interface RefundAttempt {
 | `refund_manually` | The bank refused the card (closed, expired, lost, declined) | The customer's bank refused the refund to their card, and the money is back in your Stripe balance. Refund the customer by Zelle or PayPal, then record it here. | **Record a manual refund** | We are processing your refund manually and will contact you. |
 | `investigate` | The record disagrees with Stripe | The refund record does not match Stripe. Check it in Stripe before refunding anything. | none | Refund in progress |
 
-Customer texts (Arabic, suggested): in progress "جارٍ معالجة استرداد مبلغك" · manual "نعالج استرداد مبلغك يدويًا وسنتواصل معك" · refunded by card "تم إرجاع مبلغ ‎{amount}‎ إلى بطاقتك، وقد يستغرق ظهوره من 5 إلى 10 أيام عمل" · refunded manually "تم إرسال مبلغ ‎{amount}‎ عبر ‎{Zelle/PayPal}‎ بتاريخ ‎{date}‎". Use `refund.refunded_via` to pick between the two refunded texts. Customer pages read `refund.status`, never `next_action`.
+Customer texts (Arabic, suggested): in progress "جارٍ معالجة استرداد مبلغك" · manual "نعالج استرداد مبلغك يدويًا وسنتواصل معك" · refunded by card "تم إرجاع مبلغ ‎{amount}‎ إلى بطاقتك، وقد يستغرق ظهوره من 5 إلى 10 أيام عمل" · refunded manually "تم إرسال مبلغ ‎{amount}‎ عبر ‎{Zelle/PayPal}‎ بتاريخ ‎{date}‎". Use `refund.refunded_via` to pick between the two refunded texts and `refund.method` for the name (Zelle or PayPal). Customer pages read `refund.status`, never `next_action`.
 
 Orders list: filter **`GET /admin/orders?refund_action=needed`** returns the orders that wait for a person (a failed refund, except one waiting for a dispute). The dashboard has the same count: `alerts.refunds_needing_action` and `filters.refunds_needing_action = "refund_action=needed"`.
 

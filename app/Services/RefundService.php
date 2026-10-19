@@ -746,6 +746,7 @@ class RefundService
         $attributes = [
             'refunded_amount' => $doneCents / 100,
             'refunded_via' => $channels->count() > 1 ? 'mixed' : $channels->first(),
+            'refunded_method' => $done->filter(fn (RefundAttempt $a) => $a->isManual())->last()?->method,
             'refund_failures' => $attempts->where('status', RefundAttempt::FAILED)->reject->isManual()->count(),
         ];
         $clearFailure = ['refund_failure_code' => null, 'refund_failure_message' => null, 'refund_failed_at' => null];
