@@ -7,7 +7,7 @@ Backend review of the "Better Address Suggestions" proposal (19 Oct 2026). Writt
 | Topic | Backend view |
 | --- | --- |
 | Diagnosis | **Confirmed.** `GeoapifyService::autocomplete` sends Geoapify only `text`, `lang`, `limit`. There is no country filter and no location bias, so suggestions can come from anywhere. |
-| US-only filter | Agreed. It is a one-line change and ships **before launch**, together with `lang=en`. |
+| US-only filter | **Done in code** (not yet deployed): autocomplete sends `filter=countrycode:us&lang=en`, and place details are also requested in English. |
 | Hints from the frontend (`country`, `postal_code`, `state`) | Agreed. **The frontend can ship this now:** the backend ignores unknown query parameters today, so sending them changes nothing until the backend uses them. |
 | Bias order | Agreed, with one change: a chosen **state does not override the IP** when the IP is inside that state (section 4). There is no frontend impact. |
 | Quote shipping only for a finished street | Agreed. This is frontend only (section 5). |
@@ -33,9 +33,10 @@ The response is unchanged: `data[]` of `{ place_id, description, main_text, seco
 | Form state | `postal_code` | `state` |
 | --- | --- | --- |
 | Editing an address, or the ZIP is already filled | the form's ZIP | the form's state |
-| New address, signed-in customer with a default address | the **default address's** ZIP | the form's state, if chosen |
+| New address, signed-in customer with a default address | the **default address's** ZIP, unless the form's state differs from the default address's state | the form's state, if chosen |
 | New address, guest | omit | the form's state, if chosen |
 
+- When the customer chooses a state other than their home state, the home ZIP is dropped, because the ZIP comes first and would pull results back home. The request then has `country` and `state` only.
 - Always send `country` (the form's country, `US` today).
 - Omit a hint when it is empty. Do not send `postal_code=` or `state=`.
 - A malformed hint will be **ignored, not rejected**: the backend will not answer `422` for a bad `postal_code` or `state`. Validation stays on the form fields themselves.

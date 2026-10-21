@@ -30,13 +30,13 @@ class GeoapifyService implements LocationServiceInterface
         }
 
         try {
-            $lang = app()->getLocale(); // Default to app locale (e.g. 'ar' or 'en')
-
+            // The shop ships to the US only, and shipping labels need English place names.
             $response = Http::timeout(10)
                 ->retry(2, 500)
                 ->get("{$this->baseUrl}/v1/geocode/autocomplete", [
                     'text' => $query,
-                    'lang' => $lang,
+                    'filter' => 'countrycode:us',
+                    'lang' => 'en',
                     'limit' => 5,
                     'apiKey' => $this->apiKey,
                 ]);
@@ -93,6 +93,7 @@ class GeoapifyService implements LocationServiceInterface
                 ->retry(2, 500)
                 ->get("{$this->baseUrl}/v2/place-details", [
                     'id' => $placeId,
+                    'lang' => 'en',
                     'apiKey' => $this->apiKey,
                 ]);
 

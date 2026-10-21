@@ -30,7 +30,8 @@ return [
     'allowed_headers' => ['*'],
 
     // Date lets the storefront align countdowns with the server clock.
-    'exposed_headers' => ['Date'],
+    // Idempotent-Replay tells the admin page a repeated click got the first answer back.
+    'exposed_headers' => ['Date', 'Idempotent-Replay'],
 
     'max_age' => 0,
 

@@ -44,6 +44,19 @@ class GeoapifyAddressControllerTest extends TestCase
             ->assertJsonPath('data.0.main_text', '123 Main St');
     }
 
+    public function test_geoapify_autocomplete_asks_for_us_addresses_in_english_whatever_the_locale()
+    {
+        Http::fake(['api.geoapify.com/*' => Http::response(['features' => []], 200)]);
+
+        $this->withHeader('Accept-Language', 'ar')
+            ->getJson("/api/v1/address/autocomplete?q=179+N+Harbor&session={$this->session}")
+            ->assertOk();
+
+        Http::assertSent(fn ($request) => $request['text'] === '179 N Harbor'
+            && $request['filter'] === 'countrycode:us'
+            && $request['lang'] === 'en');
+    }
+
     public function test_geoapify_details_success()
     {
         Http::fake([
