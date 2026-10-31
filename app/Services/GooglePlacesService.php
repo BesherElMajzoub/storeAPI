@@ -21,7 +21,7 @@ class GooglePlacesService implements LocationServiceInterface
     /**
      * Get address suggestions using Google Places Autocomplete API (New).
      */
-    public function autocomplete(string $query, string $sessionToken): array
+    public function autocomplete(string $query, string $sessionToken, ?array $bias = null): array
     {
         if (empty($this->apiKey)) {
             Log::error('Google Places API key is missing.');

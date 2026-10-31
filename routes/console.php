@@ -25,3 +25,6 @@ Schedule::command('refunds:reconcile')->dailyAt('03:30')->withoutOverlapping();
 Schedule::call(fn () => ShippingRateQuote::where('expires_at', '<', now()->subDay())->delete())
     ->daily()
     ->name('shipping-quotes:prune');
+
+// DB-IP publishes a fresh free "IP to City Lite" file each month; it is only used to favour nearby address suggestions.
+Schedule::command('geo:refresh-ip-database')->monthlyOn(3, '04:30')->withoutOverlapping();

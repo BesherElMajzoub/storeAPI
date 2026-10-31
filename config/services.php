@@ -80,6 +80,13 @@ return [
         'base_url' => env('GEOAPIFY_BASE_URL', 'https://api.geoapify.com'),
     ],
 
+    // Address-suggestion bias: ZIP centres come from the zip_centroids table, IP areas from a local DB-IP file.
+    'geo' => [
+        'ip_database' => env('GEO_IP_DATABASE', storage_path('app/geo/dbip-city-lite.mmdb')),
+        'zip_source_url' => env('GEO_ZIP_SOURCE_URL', 'https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2024_Gazetteer/2024_Gaz_zcta_national.zip'),
+        'ip_source_url' => env('GEO_IP_SOURCE_URL', 'https://download.db-ip.com/free/dbip-city-lite-{month}.mmdb.gz'),
+    ],
+
     'easypost' => [
         'driver' => env('EASYPOST_DRIVER', 'easypost'),
         'api_key' => env('EASYPOST_API_KEY'),

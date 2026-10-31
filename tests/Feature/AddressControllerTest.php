@@ -103,7 +103,7 @@ class AddressControllerTest extends TestCase
             ->assertJsonValidationErrors(['place_id', 'session']);
     }
 
-    public function test_google_api_failure()
+    public function test_provider_failure_answers_an_empty_list_instead_of_an_error()
     {
         Http::fake([
             'places.googleapis.com/v1/places:autocomplete' => Http::response(['error' => 'Bad request'], 400),
@@ -111,9 +111,9 @@ class AddressControllerTest extends TestCase
 
         $response = $this->getJson("/api/v1/address/autocomplete?q=123+Main&session={$this->session}");
 
-        $response->assertStatus(504)
-            ->assertJsonPath('success', false)
-            ->assertJsonPath('message', 'A connection timeout or unexpected error occurred.');
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data', []);
     }
 
     public function test_user_can_list_addresses()

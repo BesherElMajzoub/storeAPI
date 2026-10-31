@@ -21,7 +21,7 @@ class GeoapifyService implements LocationServiceInterface
     /**
      * Get address suggestions using Geoapify Address Autocomplete API.
      */
-    public function autocomplete(string $query, string $sessionToken): array
+    public function autocomplete(string $query, string $sessionToken, ?array $bias = null): array
     {
         if (empty($this->apiKey)) {
             Log::error('Geoapify API key is missing.');
@@ -31,15 +31,21 @@ class GeoapifyService implements LocationServiceInterface
 
         try {
             // The shop ships to the US only, and shipping labels need English place names.
+            $params = [
+                'text' => $query,
+                'filter' => 'countrycode:us',
+                'lang' => 'en',
+                'limit' => 5,
+                'apiKey' => $this->apiKey,
+            ];
+            // A bias only reorders the results; it never hides an address elsewhere. Longitude comes first.
+            if ($bias) {
+                $params['bias'] = "proximity:{$bias['lng']},{$bias['lat']}";
+            }
+
             $response = Http::timeout(10)
                 ->retry(2, 500)
-                ->get("{$this->baseUrl}/v1/geocode/autocomplete", [
-                    'text' => $query,
-                    'filter' => 'countrycode:us',
-                    'lang' => 'en',
-                    'limit' => 5,
-                    'apiKey' => $this->apiKey,
-                ]);
+                ->get("{$this->baseUrl}/v1/geocode/autocomplete", $params);
 
             if ($response->failed()) {
                 Log::error('Geoapify Autocomplete failed.', ['response' => $response->json()]);

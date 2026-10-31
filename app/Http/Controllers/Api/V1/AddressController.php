@@ -11,6 +11,7 @@ use App\Http\Requests\Api\V1\StoreAddressRequest;
 use App\Http\Requests\Api\V1\UpdateAddressRequest;
 use App\Http\Resources\AddressResource;
 use App\Models\Address;
+use App\Services\Address\AddressSuggestionService;
 use App\Services\AddressUnitDeduplicator;
 use Exception;
 use Illuminate\Http\JsonResponse;
@@ -438,11 +439,14 @@ class AddressController extends Controller
     #[OA\Get(
         path: '/api/v1/address/autocomplete',
         summary: 'Address Autocomplete',
-        description: 'Get address autocomplete suggestions using Google Places API proxy.',
+        description: 'Get US address suggestions. The optional hints (postal_code, state, and the caller IP read from the request) make nearby addresses come first; they only reorder results. Any provider failure answers 200 with an empty list.',
         tags: ['Addresses'],
         parameters: [
             new OA\Parameter(name: 'q', in: 'query', required: true, description: 'Search query', schema: new OA\Schema(type: 'string', minLength: 2, maxLength: 255)),
             new OA\Parameter(name: 'session', in: 'query', required: true, description: 'Session UUID to link related autocomplete and details requests', schema: new OA\Schema(type: 'string', format: 'uuid')),
+            new OA\Parameter(name: 'country', in: 'query', required: false, description: 'ISO 3166-1 alpha-2. Suggestions are always limited to US.', schema: new OA\Schema(type: 'string', example: 'US')),
+            new OA\Parameter(name: 'postal_code', in: 'query', required: false, description: '5-digit ZIP or ZIP+4. Ignored when malformed.', schema: new OA\Schema(type: 'string', example: '90277')),
+            new OA\Parameter(name: 'state', in: 'query', required: false, description: '2-letter USPS state code. Ignored when unknown.', schema: new OA\Schema(type: 'string', example: 'CA')),
         ],
         responses: [
             new OA\Response(
@@ -469,29 +473,23 @@ class AddressController extends Controller
             ),
             new OA\Response(response: 422, ref: '#/components/responses/ValidationErrorResponse'),
             new OA\Response(response: 429, description: 'Too Many Requests'),
-            new OA\Response(response: 502, description: 'Bad Gateway - Google API Error'),
         ]
     )]
-    public function autocomplete(AddressAutocompleteRequest $request): JsonResponse
+    public function autocomplete(AddressAutocompleteRequest $request, AddressSuggestionService $suggestions): JsonResponse
     {
-        $result = $this->locationService->autocomplete(
-            $request->query('q'),
-            $request->query('session')
-        );
-
-        if ($result['status'] !== 200) {
-            return response()->json([
-                'success' => false,
-                'message' => $result['error'],
-                'data' => null,
-                'errors' => null,
-            ], $result['status']);
-        }
+        // The hints are advice, not input to validate: anything that is not a plain string is ignored.
+        $hint = fn (string $key): ?string => is_string($request->query($key)) ? $request->query($key) : null;
 
         return response()->json([
             'success' => true,
             'message' => 'Address suggestions fetched successfully',
-            'data' => $result['data'],
+            'data' => $suggestions->suggest(
+                $request->query('q'),
+                $request->query('session'),
+                $hint('postal_code'),
+                $hint('state'),
+                $request->ip(),
+            ),
             'errors' => null,
         ]);
     }
