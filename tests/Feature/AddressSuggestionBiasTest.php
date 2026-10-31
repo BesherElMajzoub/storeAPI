@@ -226,19 +226,20 @@ class AddressSuggestionBiasTest extends TestCase
         $this->fakeIp(['lat' => 34.05, 'lng' => -118.24, 'state' => 'CA']);
         $this->fakeGeoapify();
 
-        Log::spy();
+        $file = tempnam(sys_get_temp_dir(), 'addr').'.log';
+        config(['logging.channels.address' => ['driver' => 'single', 'path' => $file, 'level' => 'info']]);
+        Log::forgetChannel('address');
+
         $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.9'])->autocomplete()->assertOk();
 
-        Log::shouldHaveReceived('info')->withArgs(function ($message, $context = []) {
-            $flat = json_encode($context);
-
-            return $message === 'address.autocomplete'
-                && $context['bias'] === 'ip'
-                && $context['results'] === 1
-                && $context['cached'] === false
-                && ! str_contains($flat, 'Harbor')
-                && ! str_contains($flat, '203.0.113.9');
-        })->once();
+        $line = file_get_contents($file);
+        $this->assertStringContainsString('address.autocomplete', $line);
+        $this->assertStringContainsString('"bias":"ip"', $line);
+        $this->assertStringContainsString('"results":1', $line);
+        $this->assertStringContainsString('"cached":false', $line);
+        $this->assertStringNotContainsString('Harbor', $line);
+        $this->assertStringNotContainsString('203.0.113.9', $line);
+        unlink($file);
     }
 
     public function test_the_ip_locator_is_quiet_when_the_database_file_is_missing(): void

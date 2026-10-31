@@ -73,6 +73,16 @@ return [
             'replace_placeholders' => true,
         ],
 
+        // Which bias each address suggestion used (zip, state, ip, none) and how many results.
+        // Kept off LOG_LEVEL on purpose, so it stays readable when the main log only records errors.
+        'address' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/address.log'),
+            'level' => 'info',
+            'days' => 30,
+            'replace_placeholders' => true,
+        ],
+
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),

@@ -54,7 +54,7 @@ class AddressSuggestionService
     // Which bias was used and how many results, never the address text or the IP.
     private function log(string $bias, int $results, bool $cached, ?int $providerStatus = null): void
     {
-        Log::info('address.autocomplete', array_filter([
+        Log::channel('address')->info('address.autocomplete', array_filter([
             'bias' => $bias,
             'results' => $results,
             'cached' => $cached,
