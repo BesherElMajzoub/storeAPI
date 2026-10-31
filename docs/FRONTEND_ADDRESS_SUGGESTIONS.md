@@ -1,17 +1,17 @@
 # Frontend Integration: Better Address Suggestions
 
-Backend review of the "Better Address Suggestions" proposal (19 Oct 2026). Written for the frontend developer. **Nothing in this document is live yet.** It says what the backend will change, what the frontend should send, and how the field should behave in the meantime.
+Backend review of the "Better Address Suggestions" proposal (19 Oct 2026). Written for the frontend developer. **Everything in this document is live** on staging (`apis.otantikqueen.com`) and production (`api.otantikqueen.com`) since 31 Oct 2026. It says what the frontend should send and how the field behaves.
 
 ## 1. In one minute
 
 | Topic | Backend view |
 | --- | --- |
-| Diagnosis | **Confirmed.** `GeoapifyService::autocomplete` sends Geoapify only `text`, `lang`, `limit`. There is no country filter and no location bias, so suggestions can come from anywhere. |
-| US-only filter | **Done in code** (not yet deployed): autocomplete sends `filter=countrycode:us&lang=en`, and place details are also requested in English. |
-| Hints from the frontend (`country`, `postal_code`, `state`) | Agreed. **The frontend can ship this now:** the backend ignores unknown query parameters today, so sending them changes nothing until the backend uses them. |
-| Bias order | Agreed, with one change: a chosen **state does not override the IP** when the IP is inside that state (section 4). There is no frontend impact. |
+| Diagnosis | **Confirmed and fixed.** Autocomplete used to send Geoapify only the text, with no country filter and no location bias, so suggestions could come from anywhere. |
+| US-only filter | **Live:** autocomplete sends `filter=countrycode:us&lang=en`, and place details are also requested in English. |
+| Hints from the frontend (`country`, `postal_code`, `state`) | **Live.** The backend now uses them. Bad or unknown values are ignored, never rejected. |
+| Bias order | **Live**, with one change: a chosen **state does not override the IP** when the IP is inside that state (section 4). There is no frontend impact. |
 | Quote shipping only for a finished street | Agreed. This is frontend only (section 5). |
-| Outage answer | The backend will answer `200` with an empty list. **Until then it answers 429/500/502/504**, so the field must already treat any error as "no suggestions" (section 3). |
+| Outage answer | **Live.** A Geoapify failure, quota error, timeout or missing key answers `200` with an empty list. Keep treating any non-`200` as "no suggestions" (section 3). |
 
 ## 2. Request
 
@@ -53,15 +53,15 @@ interface AddressHints {
 
 ## 3. Errors and outages
 
-| Today | After the backend change |
+| Case | Answer |
 | --- | --- |
-| `422` when `q` or `session` is invalid | same |
-| `429` when our limit (60/min) is reached, or Geoapify's quota is used up | `429` only for our own limit; a Geoapify quota error becomes an empty list |
-| `500` when the Geoapify key is missing, `502` when Geoapify fails, `504` on a timeout | `200` with `data: []` |
+| `q` or `session` is invalid | `422` |
+| Our own limit (60/min) is reached | `429` |
+| Geoapify fails, is over quota, times out or its key is missing | `200` with `data: []` |
 
-**Frontend rule, from now on:** any non-`200` answer means "no suggestions". Close the dropdown, show no error message, and let the customer type the address by hand. The order must never depend on a suggestion.
+**Frontend rule:** any non-`200` answer means "no suggestions". Close the dropdown, show no error message, and let the customer type the address by hand. The order must never depend on a suggestion.
 
-## 4. What the backend will do (for reference, no frontend work)
+## 4. What the backend does (for reference, no frontend work)
 
 The backend picks one location to favour. The first rule that has an answer wins:
 
@@ -73,15 +73,17 @@ The backend picks one location to favour. The first rule that has an answer wins
 A bias only **reorders** the results. It never hides an address in another state, so gift addresses are still found.
 
 The backend also does the following:
-- Requests to Geoapify always include `filter=countrycode:us` and `lang=en`. Today the language follows the app locale, so an Arabic session could get Arabic place names. After the change, all suggestions are in English.
+- Requests to Geoapify always include `filter=countrycode:us` and `lang=en`. The language no longer follows the app locale: all suggestions are in English.
 - Identical requests are cached for 24 hours. The cache key is the text and the bias point rounded to about 10 km, never the IP.
 - Every request logs which bias was used (`zip`, `state`, `ip`, `none`) and the result count, without the address text.
 
-**Timing:** before launch, the US filter and `lang=en`. In the first week after launch, the hints, the ZIP/state/IP bias, the cache, the outage answer and the logging.
+**Status:** all of the above is live on staging and production. The ZIP table and the IP file are refreshed on the servers (the IP file monthly, on the 3rd). The bias used per request is written to `storage/logs/address.log` (no address text, no IP).
+
+**Known limit:** a state with no ZIP and no usable IP (a visitor abroad, a VPN) is biased to the state's centre only. For a common street name such as "200 Main St" that is a weak hint and results can still come from other states. A ZIP or an IP inside the state gives a strong one.
 
 ## 5. Shipping quote: only for a finished street
 
-Today, every 400 ms pause in the street field requests a new shipping quote once city, state and ZIP are filled. A half-typed street gets quoted, then quoted again.
+Every 400 ms pause (the old behaviour) in the street field requests a new shipping quote once city, state and ZIP are filled. A half-typed street gets quoted, then quoted again.
 
 The street counts for the quote only when:
 1. a suggestion is chosen, or
@@ -103,16 +105,16 @@ No change. Country stays before the street, and the street stays before city, st
 
 ## 8. What to test
 
-| ID | Do | Expect | Needs backend change |
+| ID | Do | Expect | Backend part |
 | --- | --- | --- | --- |
-| ADDR-01 | Signed-in customer with a Redondo Beach default address adds a new address, types "179 N Harbor" | Redondo Beach, CA in the first three suggestions; the request has `postal_code=90277` | yes |
-| ADDR-02 | Guest in Los Angeles, no ZIP or state, types "200 Main St" | Southern California first | yes |
-| ADDR-03 | ZIP 10001 entered, then the street typed | New York first; the request has `postal_code=10001` | yes |
-| ADDR-04 | Gift: full street and city in another state | That address is still found | yes |
+| ADDR-01 | Signed-in customer with a Redondo Beach default address adds a new address, types "179 N Harbor" | Redondo Beach, CA in the first three suggestions; the request has `postal_code=90277` | live |
+| ADDR-02 | Guest in Los Angeles, no ZIP or state, types "200 Main St" | Southern California first | live |
+| ADDR-03 | ZIP 10001 entered, then the street typed | New York first; the request has `postal_code=10001` | live |
+| ADDR-04 | Gift: full street and city in another state | That address is still found | live |
 | ADDR-05 | Any query | No suggestion outside the US | US filter only |
 | ADDR-06 | Geoapify unreachable | No suggestions, no error message; the order can be placed | no (frontend rule, section 3) |
 | ADDR-07 | Saved city, state, ZIP; retype the street slowly | No shipping request while typing; one on choosing a suggestion or leaving the field | no |
 | ADDR-09 | Saved city, state, ZIP; type a new street and press Enter without leaving the field | One quote for the new street; no "rates changed" notice; no second press | no |
-| ADDR-11 | Guest in Los Angeles chooses state CA, then types the street | Los Angeles results first, not central California | yes |
+| ADDR-11 | Guest in Los Angeles chooses state CA, then types the street | Los Angeles results first, not central California | live |
 
-ADDR-08 (cache) and ADDR-10 (real client IP on the production server) are backend checks.
+ADDR-08 (cache) and ADDR-10 (real client IP) are backend checks, both done: Laravel sees the visitor's real IP on staging and production.
